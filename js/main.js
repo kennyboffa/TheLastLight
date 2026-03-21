@@ -119,17 +119,31 @@ function gameLoop(timestamp) {
   lastTime = timestamp;
   frameCount++;
 
-  // Clear
   ctx.clearRect(0, 0, CFG.W, CFG.H);
   ctx.imageSmoothingEnabled = false;
 
-  // Update & render
-  update(dt);
-  render(ctx);
+  try {
+    update(dt);
+    render(ctx);
+  } catch (e) {
+    // Show error on screen so it's visible even without devtools open
+    ctx.fillStyle = '#0e0e18';
+    ctx.fillRect(0, 0, CFG.W, CFG.H);
+    ctx.fillStyle = '#cc3333';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('ERROR: ' + e.message, 20, 40);
+    ctx.fillStyle = '#666';
+    ctx.font = '9px monospace';
+    const lines = (e.stack || '').split('\n').slice(0, 8);
+    lines.forEach((l, i) => ctx.fillText(l, 20, 60 + i * 12));
+    ctx.textAlign = 'left';
+    console.error(e);
+    // Don't call requestAnimationFrame — freeze on error so it's readable
+    return;
+  }
 
-  // Reset click state
   GS.mouse.clicked = false;
-
   requestAnimationFrame(gameLoop);
 }
 

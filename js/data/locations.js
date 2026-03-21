@@ -168,8 +168,8 @@ function rollLoot(tableId) {
   return result;
 }
 
-function buildEncounter(locationDifficulty, zone) {
-  const key = zone.canHunt ? 'forest' : Math.min(4, locationDifficulty);
+function buildEncounter(locationDifficulty, zone, locCanHunt) {
+  const key = (locCanHunt || zone.canHunt) ? 'forest' : Math.min(4, locationDifficulty);
   const group = ENCOUNTER_GROUPS[key];
   const enemies = [];
   for (const [templateId, min, max] of group) {

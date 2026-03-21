@@ -11,6 +11,11 @@ function tickStats(gs, dt) {
   // ── Advance time ────────────────────────────────────────────────────────────
   gs.time += mins;
   if (gs.time >= CFG.DAY_END) {
+    // Auto-return from exploration before starting day transition
+    if (gs.screen === 'explore') {
+      endExploration(gs);
+      notify('Night falls — returned to shelter.', 'warn');
+    }
     startDayTransition(gs);
     return;
   }

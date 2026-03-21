@@ -333,6 +333,7 @@ function resetGame() {
     gameOverReason: '',
   });
   initIntro();
+  initCharCreate();
   // Reset shelter UI
   shelterUI.activeMenu   = null;
   shelterUI.selectedRoom = null;

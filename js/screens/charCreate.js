@@ -68,10 +68,13 @@ function renderCharCreate(ctx, gs) {
   if (cc.step > 0) {
     drawButton(ctx, 40, CFG.H - 32, 80, 20, '< Back', hitTest(mx, my, 40, CFG.H-32, 80, 20));
   }
-  const canNext = cc.step < 2 || (cc.attrPts === 0 && cc.skillPts === 0);
+  const nextDisabledStep0 = cc.step === 0 && !cc.name.trim();
+  const nextDisabledStep1 = cc.step === 1 && cc.attrPts > 0;
+  const nextDisabledStep2 = cc.step === 2 && cc.skillPts > 0;
   const nextLabel = cc.step === 2 ? 'Begin →' : 'Next >';
   drawButton(ctx, CFG.W - 120, CFG.H - 32, 80, 20, nextLabel,
-    hitTest(mx, my, CFG.W-120, CFG.H-32, 80, 20), false, cc.step === 0 && !cc.name.trim());
+    hitTest(mx, my, CFG.W-120, CFG.H-32, 80, 20), false,
+    nextDisabledStep0 || nextDisabledStep1 || nextDisabledStep2);
 }
 
 // ── Step 0: Gender & Name ─────────────────────────────────────────────────────
@@ -202,7 +205,9 @@ function charCreateClick(mx, my, gs) {
   const cx = CFG.W / 2;
 
   // Navigation
-  const nextDisabled = cc.step === 0 && !cc.name.trim();
+  const nextDisabled = (cc.step === 0 && !cc.name.trim())
+                    || (cc.step === 1 && cc.attrPts > 0)
+                    || (cc.step === 2 && cc.skillPts > 0);
   if (hitTest(mx, my, CFG.W - 120, CFG.H - 32, 80, 20) && !nextDisabled) {
     if (cc.step < 2) {
       cc.step++;

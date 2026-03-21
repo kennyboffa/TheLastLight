@@ -34,10 +34,11 @@ function startExploration(gs) {
   for (const zone of loc.zones) {
     if (chance(zone.enemyChance)) {
       encounters.push({
-        wx:       zone.x + Math.floor(zone.w * 0.6) + randInt(-20, 20),
+        wx:        zone.x + Math.floor(zone.w * 0.6) + randInt(-20, 20),
         triggered: false,
         distance:  80,
         difficulty: loc.difficulty,
+        locCanHunt: !!loc.canHunt,
         zone,
       });
     }
@@ -131,7 +132,7 @@ function updateExplore(gs, dt) {
   for (const enc of es.encounters) {
     if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance) {
       enc.triggered = true;
-      const enemies = buildEncounter(enc.difficulty, enc.zone);
+      const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt);
       if (enemies.length > 0) {
         startCombat(gs, enemies);
         gs.screen = 'combat';
@@ -251,6 +252,9 @@ function renderExplore(ctx, gs) {
 
   // Notifications
   drawNotifications(ctx, gs);
+
+  // Day transition overlay (if day ends while exploring)
+  drawDayTransition(ctx, gs);
 }
 
 // ── Explore HUD ───────────────────────────────────────────────────────────────

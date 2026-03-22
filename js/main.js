@@ -190,8 +190,8 @@ function update(dt) {
   if (gs.screen === 'intro')      updateIntro(dt);
   if (gs.screen === 'explore')    updateExplore(gs, dt);
 
-  // Shelter ambient events
-  if (gs.screen === 'shelter') {
+  // Shelter ambient events (skip if day transition just started this frame)
+  if (gs.screen === 'shelter' && !gs.dayFade.active) {
     maybeFireShelterEvent(gs);
     autoFeedLogic(gs);
     updateShelterAmbient(gs);

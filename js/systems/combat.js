@@ -55,6 +55,8 @@ function startCombat(gs, enemies) {
     resultTimer: 0,
     fleeAttempted: false,
     victoryLoot: [],
+    pendingAction: null,  // queued action: 'enemy' | 'victory' | 'defeat' | 'fled'
+    pendingTimer: 0,
   };
 
   combatLog(gs, 'Combat started!', 'warn');
@@ -122,7 +124,7 @@ function playerAttack(gs, targetIdx) {
 
   // End player turn
   c.turn = 'enemy';
-  setTimeout(() => enemyTurn(gs), 700);
+  c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
 }
 
 function playerReload(gs) {
@@ -137,7 +139,7 @@ function playerReload(gs) {
   if (spares <= 0) {
     combatLog(gs, 'No spare ammo!', 'danger');
     c.turn = 'enemy';
-    setTimeout(() => enemyTurn(gs), 700);
+    c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
     return;
   }
   const needed = c.player.magazineSize - c.player.magazine;
@@ -148,7 +150,7 @@ function playerReload(gs) {
   combatLog(gs, `Reloaded (${c.player.magazine}/${c.player.magazineSize}).`, 'good');
 
   c.turn = 'enemy';
-  setTimeout(() => enemyTurn(gs), 700);
+  c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
 }
 
 function playerUseItem(gs, itemId) {
@@ -166,7 +168,7 @@ function playerUseItem(gs, itemId) {
   c.player.hp = clamp(p.health, 0, p.maxHealth);
 
   c.turn = 'enemy';
-  setTimeout(() => enemyTurn(gs), 700);
+  c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
 }
 
 function playerFlee(gs) {
@@ -176,19 +178,19 @@ function playerFlee(gs) {
   if (chance(fleeChance)) {
     combatLog(gs, 'Escaped!', 'good');
     c.phase = 'fled';
-    setTimeout(() => endCombat(gs, 'fled'), 1200);
+    c.pendingAction = 'fled'; c.pendingTimer = 1.2;
   } else {
     combatLog(gs, 'Couldn\'t escape!', 'danger');
     c.turn = 'enemy';
-    setTimeout(() => enemyTurn(gs), 700);
+    c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
   }
 }
 
-// ── Enemy turn ────────────────────────────────────────────────────────────────
+// ── Enemy turn (called from game loop via pendingAction) ──────────────────────
 
 function enemyTurn(gs) {
   const c = gs.combat;
-  if (c.phase !== 'action') return;
+  if (!c || c.phase !== 'action') return;
 
   for (const enemy of c.enemies) {
     if (enemy.dead) continue;
@@ -202,7 +204,7 @@ function enemyTurn(gs) {
       if (c.player.hp <= 0) {
         c.phase = 'defeat';
         combatLog(gs, `${gs.parent.name} has fallen.`, 'danger');
-        setTimeout(() => endCombat(gs, 'defeat'), 1500);
+        c.pendingAction = 'defeat'; c.pendingTimer = 1.5;
         return;
       }
     } else {
@@ -242,10 +244,25 @@ function checkCombatVictory(gs) {
       }
     }
     combatLog(gs, 'Victory!', 'good');
-    setTimeout(() => endCombat(gs, 'victory'), 1500);
+    c.pendingAction = 'victory'; c.pendingTimer = 1.5;
     return true;
   }
   return false;
+}
+
+// ── Game-loop update (replaces setTimeout-based turn scheduling) ──────────────
+
+function updateCombat(gs, dt) {
+  const c = gs.combat;
+  if (!c || !c.pendingAction) return;
+  c.pendingTimer -= dt;
+  if (c.pendingTimer > 0) return;
+  const action = c.pendingAction;
+  c.pendingAction = null;
+  if      (action === 'enemy')   enemyTurn(gs);
+  else if (action === 'victory') endCombat(gs, 'victory');
+  else if (action === 'defeat')  endCombat(gs, 'defeat');
+  else if (action === 'fled')    endCombat(gs, 'fled');
 }
 
 function endCombat(gs, result) {

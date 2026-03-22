@@ -27,11 +27,12 @@ function initCharCreate() {
   GS.cc = {
     step: 0,
     gender: 'father',
-    name: '',
+    name: 'Survivor',
     attrPts: 2,
-    skillPts: 5,
+    skillPts: 3,
     attrs:  { strength:5, agility:5, perception:5, intelligence:5, charisma:5 },
-    skills: { scavenging:1, stealth:1, exploration:1, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },
+    // Half of 5 skill pts pre-allocated: scavenging+1, exploration+1
+    skills: { scavenging:2, stealth:1, exploration:2, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },
     nameInputActive: false,
     hoveredItem: null,
   };
@@ -68,9 +69,9 @@ function renderCharCreate(ctx, gs) {
   if (cc.step > 0) {
     drawButton(ctx, 40, CFG.H - 32, 80, 20, '< Back', hitTest(mx, my, 40, CFG.H-32, 80, 20));
   }
-  const nextDisabledStep0 = cc.step === 0 && !cc.name.trim();
+  const nextDisabledStep0 = false; // default name always valid
   const nextDisabledStep1 = cc.step === 1 && cc.attrPts > 0;
-  const nextDisabledStep2 = cc.step === 2 && cc.skillPts > 0;
+  const nextDisabledStep2 = false; // can proceed with unspent skill pts
   const nextLabel = cc.step === 2 ? 'Begin →' : 'Next >';
   drawButton(ctx, CFG.W - 120, CFG.H - 32, 80, 20, nextLabel,
     hitTest(mx, my, CFG.W-120, CFG.H-32, 80, 20), false,
@@ -111,8 +112,8 @@ function renderStep0(ctx, gs, cx) {
   fillRect(ctx, nameX, y, nameW, nameH, '#0a0a14');
   strokeRect(ctx, nameX, y, nameW, nameH, cc.nameInputActive ? C.border2 : C.border);
 
-  const displayName = cc.name || (cc.nameInputActive ? '' : 'Click to enter name');
-  const nameColor = cc.name ? C.textBright : C.textDim;
+  const displayName = cc.name || (cc.nameInputActive ? '' : 'Click to change name');
+  const nameColor = C.textBright;
   drawText(ctx, displayName, nameX + nameW/2, y + nameH - 5, nameColor, 10, 'center');
   if (cc.nameInputActive && Math.floor(Date.now() / 500) % 2 === 0) {
     ctx.font = '10px monospace';
@@ -168,7 +169,7 @@ function renderStep2(ctx, gs, cx) {
   const ptsColor = cc.skillPts > 0 ? C.textWarn : C.textGood;
   drawText(ctx, `Skill points: ${cc.skillPts}`, cx, y, ptsColor, 9, 'center', true);
   y += 14;
-  drawText(ctx, '(All skills start at 1. More points earned by leveling up.)', cx, y, C.textDim, 7, 'center');
+  drawText(ctx, '(2 pts pre-allocated. Spend remaining or save for leveling up.)', cx, y, C.textDim, 7, 'center');
   y += 14;
 
   for (const skill of SKILLS_LIST) {
@@ -205,9 +206,7 @@ function charCreateClick(mx, my, gs) {
   const cx = CFG.W / 2;
 
   // Navigation
-  const nextDisabled = (cc.step === 0 && !cc.name.trim())
-                    || (cc.step === 1 && cc.attrPts > 0)
-                    || (cc.step === 2 && cc.skillPts > 0);
+  const nextDisabled = (cc.step === 1 && cc.attrPts > 0);
   if (hitTest(mx, my, CFG.W - 120, CFG.H - 32, 80, 20) && !nextDisabled) {
     if (cc.step < 2) {
       cc.step++;
@@ -271,9 +270,10 @@ function showNameInput(gs) {
   const inp  = document.getElementById('name-input');
   wrap.style.display = 'block';
   inp.value = gs.cc.name;
+  inp.select();
   inp.focus();
-  inp.oninput = () => { gs.cc.name = inp.value; };
-  inp.onblur  = () => { wrap.style.display = 'none'; gs.cc.nameInputActive = false; };
+  inp.oninput = () => { gs.cc.name = inp.value || 'Survivor'; };
+  inp.onblur  = () => { wrap.style.display = 'none'; gs.cc.nameInputActive = false; if (!gs.cc.name.trim()) gs.cc.name = 'Survivor'; };
   inp.onkeydown = (e) => { if (e.key === 'Enter') inp.blur(); };
 }
 

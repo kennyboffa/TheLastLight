@@ -78,6 +78,25 @@ function drawStatsPanel(ctx, gs) {
     y += 10;
   }
 
+  // ── SUPPLIES mini-panel ───────────────────────────────────────────────────
+  const suppliesY = h - 112;
+  drawDivider(ctx, x + 6, suppliesY - 4, w - 12, C.border2);
+  drawText(ctx, 'SUPPLIES', x + 8, suppliesY + 8, C.textDim, 7, 'left', true);
+
+  // Count food items
+  const foodIds = ['canned_beans','canned_soup','canned_meat','canned_fruit','energy_bar',
+    'cooked_meat','heated_beans','heated_soup','mushroom','dried_berries','jerky','raw_meat'];
+  const waterIds = ['water_bottle','purified_water','dirty_water'];
+  let totalFood = 0, totalWater = 0;
+  for (const fid of foodIds)  totalFood  += countInInventory(gs.shelter.storage, fid);
+  for (const wid of waterIds) totalWater += countInInventory(gs.shelter.storage, wid);
+
+  const foodColor  = totalFood  > 10 ? '#3aaa50' : totalFood  >= 5 ? '#cc8830' : '#cc2828';
+  const waterColor = totalWater > 10 ? '#2878cc' : totalWater >= 5 ? '#cc8830' : '#cc2828';
+
+  drawText(ctx, `Food: ${totalFood}`, x + 8,       suppliesY + 20, foodColor,  8, 'left');
+  drawText(ctx, `Water: ${totalWater}`, x + w / 2, suppliesY + 20, waterColor, 8, 'left');
+
   // ── Suspicion meter ────────────────────────────────────────────────────────
   const suspY = h - 80;
   drawDivider(ctx, x + 6, suspY - 6, w - 12, C.border2);

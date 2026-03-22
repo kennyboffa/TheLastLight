@@ -3,6 +3,7 @@
 
 // Each event: { id, title, text, condition(gs), choices: [{ label, action(gs) }] }
 // action returns a result string displayed to player.
+// Dialogue events: { id, title, text, condition(gs), type:'dialogue' } — no choices
 
 const EVENTS_DB = [
 

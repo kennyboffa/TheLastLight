@@ -68,6 +68,9 @@ function renderEvent(ctx, gs) {
       }
     }
   }
+
+  // Allow day-fade overlay to complete even if an event is showing
+  drawDayTransition(ctx, gs);
 }
 
 // ── Event click handler ────────────────────────────────────────────────────────

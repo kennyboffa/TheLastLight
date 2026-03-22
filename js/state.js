@@ -138,11 +138,17 @@ const GS = {
     done: false, waitForInput: false,
   },
 
+  // ── Location persistence ──────────────────────────────────────────────────
+  locationStates: {},   // { [locId]: saved container/loot/encounter state }
+
+  // ── Companion missions ────────────────────────────────────────────────────
+  missions: [],
+
   cc: {
     step: 0,     // 0=gender/name  1=attributes  2=skills
     gender: 'father',
     name:   '',
-    attrPts: 5,   // distributable attribute points above base
+    attrPts: 2,   // distributable attribute points above base
     skillPts: 10, // distributable skill points
     attrs:  { strength:5, agility:5, perception:5, intelligence:5, charisma:5 },
     skills: { scavenging:1, stealth:1, exploration:1, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },

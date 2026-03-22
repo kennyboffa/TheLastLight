@@ -297,7 +297,7 @@ const _STARS = [
   [58,16],[142,8],[268,3],[432,10],[90,5],[200,14],[330,9],[480,6],
 ];
 
-function drawSurface(ctx, scrollOffset) {
+function drawSurface(ctx, scrollOffset, time) {
   const H = CFG.SURFACE_H;
   const W = CFG.W - CFG.PANEL_W;
   const t = _getDayT();
@@ -413,12 +413,13 @@ function drawEarth(ctx, x, y, w, h) {
 
 // ── Exploration environment ───────────────────────────────────────────────────
 
-function drawExploreBackground(ctx, scrollX, zone, worldH) {
+function drawExploreBackground(ctx, scrollX, zone, worldH, time) {
   const W = CFG.W;
   const H = worldH;
 
   // Sky
   fillRect(ctx, 0, 0, W, H * 0.45, C.sky);
+  if (time !== undefined) fillRect(ctx, 0, 0, W, H * 0.45, '#2a3850', dayFactor(time) * 0.35);
   // Ground
   fillRect(ctx, 0, H * 0.45, W, H * 0.55, C.ground);
 

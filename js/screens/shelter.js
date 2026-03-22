@@ -37,7 +37,7 @@ function renderShelter(ctx, gs) {
   fillRect(ctx, 0, 0, MAIN_W, CFG.H, C.bg);
 
   // Surface scene
-  drawSurface(ctx, gs.day * 30);
+  drawSurface(ctx, gs.day * 30, gs.time);
   drawHatch(ctx, MAIN_W / 2, CFG.SURFACE_H - 2);
 
   // Weather overlay on surface
@@ -215,6 +215,12 @@ function drawShelterCharacters(ctx, gs) {
     if (s.animTimer % 28 === 0) s.animFrame = (s.animFrame || 0) + 1;
     const sx   = Math.round(s.shelterX !== undefined ? s.shelterX : 82 + i * 26);
     const ssel = shelterUI.selectedChar === s.id;
+    if (s.onMission) {
+      // Draw AWAY placeholder — not clickable
+      drawText(ctx, s.name, sx, groundY - 24, '#444450', 6, 'center');
+      drawText(ctx, 'AWAY', sx, groundY - 14, '#404060', 7, 'center');
+      return;
+    }
     if (ssel) {
       ctx.save(); ctx.globalAlpha = 0.18;
       fillRect(ctx, sx - 9, groundY - 22, 20, 26, '#88ff88');
@@ -310,6 +316,11 @@ function drawCharPanel(ctx, gs, mx, my) {
     addBtn('Play with Lily',  'play',    !noTask);
     addBtn('Explore...',      'explore', !noTask || who.isExploring);
   }
+  if (sel !== 'parent' && sel !== 'child') {
+    const onMission = who.onMission;
+    const tooWeak = who.hunger > 60 || who.thirst > 60 || who.tiredness > 75 || who.health < 30;
+    addBtn(onMission ? 'On Mission...' : 'Send on Mission', 'mission', onMission || tooWeak);
+  }
 
   const closeY   = py + PH - 22;
   const closeHov = hitTest(mx, my, px + PW - 58, closeY, 50, 16);
@@ -389,6 +400,36 @@ function handleCharTask(taskId, gs) {
         gs.screen = 'exploreSelect';
       }
       break;
+
+    case 'mission': {
+      const loc = randChoice(LOCATIONS_DB);
+      const durationMins = randInt(480, 4320); // 8 hours to 3 days
+      const returnMinutes = gs.day * 1440 + gs.time + durationMins;
+      const returnDay  = Math.floor(returnMinutes / 1440);
+      const returnTime = returnMinutes % 1440;
+      const injuryChance = 10 + loc.difficulty * 5;
+      const lostChance   = 1 + loc.difficulty;
+      // Roll loot from location tables
+      const loot = [];
+      for (const zone of loc.zones.slice(0, 3)) {
+        for (const item of rollLoot(zone.lootTable)) loot.push(item);
+      }
+      gs.missions.push({
+        id: uid(), survivorId: who.id, survivorName: who.name,
+        locId: loc.id, locName: loc.name,
+        startDay: gs.day, startTime: gs.time,
+        returnDay, returnTime,
+        status: 'active',
+        injuryChance, lostChance,
+        loot,
+        injured: false, lost: false,
+      });
+      who.onMission = true;
+      shelterUI.activeMenu = null;
+      shelterUI.selectedChar = null;
+      addLog(`${who.name} sent to scavenge ${loc.name}. Returns in ~${Math.round(durationMins/60)}h.`, 'info');
+      break;
+    }
   }
 }
 

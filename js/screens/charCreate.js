@@ -280,7 +280,7 @@ function showNameInput(gs) {
 function finalizeCharacter(gs) {
   const cc = gs.cc;
   Object.assign(gs.parent, {
-    name:    cc.name.trim() || (cc.gender === 'father' ? 'David' : 'Sarah'),
+    name:    cc.name.trim() || (cc.gender === 'father' ? 'Mark' : 'Amanda'),
     gender:  cc.gender,
     strength: cc.attrs.strength, agility: cc.attrs.agility,
     perception: cc.attrs.perception, intelligence: cc.attrs.intelligence,

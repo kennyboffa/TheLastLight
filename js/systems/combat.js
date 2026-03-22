@@ -201,6 +201,12 @@ function enemyTurn(gs) {
       c.player.hp -= dealt;
       gs.parent.health = Math.max(0, gs.parent.health - dealt);
       combatLog(gs, `${enemy.name} hits ${gs.parent.name} for ${dealt} dmg.`, 'danger');
+      // Small chance of infection from wound
+      if (!gs.parent.infected && chance(5)) {
+        gs.parent.infected = true;
+        combatLog(gs, 'Wound may be infected!', 'danger');
+        notify('Infection risk — treat with antibiotics.', 'danger');
+      }
       if (c.player.hp <= 0) {
         c.phase = 'defeat';
         combatLog(gs, `${gs.parent.name} has fallen.`, 'danger');
@@ -231,11 +237,6 @@ function checkCombatVictory(gs) {
   const c = gs.combat;
   if (c.enemies.every(e => e.dead)) {
     c.phase = 'victory';
-    // Apply loot to parent inventory
-    for (const item of c.victoryLoot) {
-      addToInventory(gs.parent.inventory, item.id, item.qty);
-      combatLog(gs, `Found: ${item.qty}x ${getItemDef(item.id)?.name || item.id}`, 'good');
-    }
     // Suspicion: destroying AI units
     const aiKills = c.enemies.filter(e => e.type === 'machine' && e.dead);
     for (const e of aiKills) {
@@ -243,7 +244,7 @@ function checkCombatVictory(gs) {
         gs.suspicion = clamp(gs.suspicion + e.reward.suspicion, 0, CFG.SUSPICION_MAX);
       }
     }
-    combatLog(gs, 'Victory!', 'good');
+    combatLog(gs, 'Victory! Loot available.', 'good');
     c.pendingAction = 'victory'; c.pendingTimer = 1.5;
     return true;
   }
@@ -279,6 +280,12 @@ function endCombat(gs, result) {
   if (result === 'victory' && c._encRef) {
     c._encRef.killed = true;
   }
-  gs.combat = null;
-  gs.screen  = 'explore';
+
+  if (result === 'victory' && c.victoryLoot.length > 0) {
+    // Show loot pickup screen — combat object kept alive until player is done
+    gs.screen = 'lootPickup';
+  } else {
+    gs.combat = null;
+    gs.screen = 'explore';
+  }
 }

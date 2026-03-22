@@ -32,6 +32,104 @@ let shelterUI = {
   charPanelX: 60, charPanelY: 100,
 };
 
+// ── Room furniture drawing ─────────────────────────────────────────────────────
+
+function drawRoomFurniture(ctx, roomId, r, level) {
+  const fl = r.y + r.h - 14;  // floor line
+  const cx = r.x;
+
+  if (roomId === 'bedroom') {
+    // Bed frame (upgradable)
+    const bx = cx + 8, by = fl - 20, bw = level >= 2 ? 54 : 42, bh = 18;
+    // Frame
+    fillRect(ctx, bx, by, bw, bh, level >= 2 ? '#3a2a18' : '#2a1e10');
+    strokeRect(ctx, bx, by, bw, bh, '#4a3a22');
+    // Mattress
+    fillRect(ctx, bx + 2, by + 3, bw - 4, bh - 6, level >= 2 ? '#4a3a50' : '#2a2230');
+    // Pillow
+    fillRect(ctx, bx + 3, by + 4, 10, 7, level >= 2 ? '#6a5a70' : '#3a2f40');
+    strokeRect(ctx, bx + 3, by + 4, 10, 7, '#50405a');
+    // Headboard
+    fillRect(ctx, bx, by - 6, 4, bh + 6, level >= 2 ? '#4a3a22' : '#352a18');
+    if (level >= 2) {
+      // Upgraded: footboard + side table
+      fillRect(ctx, bx + bw - 4, by, 4, bh, '#4a3a22');
+      // Small side table
+      fillRect(ctx, bx + bw + 4, by + 8, 10, 10, '#2a2015');
+      strokeRect(ctx, bx + bw + 4, by + 8, 10, 10, '#3a3020');
+      // Candle on table
+      fillRect(ctx, bx + bw + 8, by + 3, 3, 6, '#d4aa30');
+    }
+    // Level badge
+    drawText(ctx, level >= 2 ? 'Lvl 2' : 'Cot', cx + r.w/2, fl - 2, '#4a3a28', 6, 'center');
+
+  } else if (roomId === 'main') {
+    // Storage container/barrel (left side)
+    const bx = cx + 6, by = fl - 22;
+    fillRect(ctx, bx, by, 18, 22, '#1e2830');
+    strokeRect(ctx, bx, by, 18, 22, '#2a3a45');
+    // Barrel bands
+    fillRect(ctx, bx, by + 7, 18, 2, '#2a3a45');
+    fillRect(ctx, bx, by + 14, 18, 2, '#2a3a45');
+    // Lid
+    fillRect(ctx, bx - 1, by, 20, 4, '#253340');
+    drawText(ctx, 'Box', bx + 9, fl - 2, '#2a3a45', 6, 'center');
+
+    // Water canister (next to barrel)
+    const wx = bx + 22, wy = fl - 18;
+    fillRect(ctx, wx, wy, 12, 18, '#1a2e40');
+    strokeRect(ctx, wx, wy, 12, 18, '#204060');
+    // Handle
+    ctx.strokeStyle = '#204060';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(wx + 6, wy, 4, Math.PI, 0);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    // Label stripe
+    fillRect(ctx, wx + 1, wy + 5, 10, 4, '#163050');
+    drawText(ctx, 'H2O', wx + 6, fl - 2, '#1a3050', 6, 'center');
+
+    // Field cooking kit (right area, compact)
+    const kx = cx + r.w - 36, ky = fl - 16;
+    // Small camp stove
+    fillRect(ctx, kx, ky + 4, 22, 12, '#202020');
+    strokeRect(ctx, kx, ky + 4, 22, 12, '#303030');
+    // Burner grate
+    fillRect(ctx, kx + 3, ky + 4, 16, 3, '#282828');
+    strokeRect(ctx, kx + 3, ky + 4, 16, 3, '#383838');
+    // Pot on stove
+    fillRect(ctx, kx + 5, ky, 12, 6, '#1a1a24');
+    strokeRect(ctx, kx + 5, ky, 12, 6, '#252530');
+    // Pot handle
+    ctx.strokeStyle = '#252530';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(kx + 5, ky + 2); ctx.lineTo(kx + 2, ky + 1);
+    ctx.stroke();
+    drawText(ctx, 'Stove', kx + 11, fl - 2, '#303030', 6, 'center');
+
+    // Table + chairs (center-right of main room)
+    const tx = cx + r.w/2 - 14, ty = fl - 14;
+    // Table top
+    fillRect(ctx, tx, ty, 28, 5, '#2a2215');
+    strokeRect(ctx, tx, ty, 28, 5, '#3a3020');
+    // Table legs
+    fillRect(ctx, tx + 1, ty + 5, 3, 9, '#221c10');
+    fillRect(ctx, tx + 24, ty + 5, 3, 9, '#221c10');
+    // Chair left
+    fillRect(ctx, tx - 8, ty + 2, 7, 10, '#1e1a0e');
+    strokeRect(ctx, tx - 8, ty + 2, 7, 10, '#2e2a18');
+    fillRect(ctx, tx - 7, ty - 4, 6, 7, '#1e1a0e');
+    strokeRect(ctx, tx - 7, ty - 4, 6, 7, '#2e2a18');
+    // Chair right
+    fillRect(ctx, tx + 29, ty + 2, 7, 10, '#1e1a0e');
+    strokeRect(ctx, tx + 29, ty + 2, 7, 10, '#2e2a18');
+    fillRect(ctx, tx + 29, ty - 4, 6, 7, '#1e1a0e');
+    strokeRect(ctx, tx + 29, ty - 4, 6, 7, '#2e2a18');
+  }
+}
+
 function renderShelter(ctx, gs) {
   // Background
   fillRect(ctx, 0, 0, MAIN_W, CFG.H, C.bg);
@@ -67,6 +165,7 @@ function renderShelter(ctx, gs) {
       drawRoomInterior(ctx, r.x, r.y, r.w, r.h, room.unlocked, sel || hov);
 
       if (room.unlocked) {
+        drawRoomFurniture(ctx, roomId, r, room.level || 1);
         drawText(ctx, def.name, r.x + r.w/2, r.y + 12, C.textDim, 8, 'center', true);
       } else {
         drawText(ctx, def.name, r.x + r.w/2, r.y + r.h/2 - 2, '#303035', 8, 'center', false);
@@ -443,6 +542,8 @@ const CTRL_BUTTONS = [
   { id: 'sleep',    label: 'Sleep',     w: 52 },
   { id: 'play',     label: 'Play',      w: 52 },
   { id: 'endday',   label: 'End Day',   w: 62 },
+  { id: 'save',     label: 'Save',      w: 46 },
+  { id: 'load',     label: 'Load',      w: 46 },
 ];
 
 function drawShelterControls(ctx, gs, mx, my) {
@@ -690,6 +791,16 @@ function handleControlBtn(id, gs, mx, my) {
       break;
     case 'endday':
       startDayTransition(gs);
+      break;
+    case 'save':
+      saveGame(gs);
+      break;
+    case 'load':
+      if (hasSave()) {
+        loadGame(gs);
+      } else {
+        notify('No save file found.', 'warn');
+      }
       break;
   }
 }

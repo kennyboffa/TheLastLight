@@ -310,7 +310,7 @@ function updateExplore(gs, dt) {
     if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance) {
       enc.triggered = true;
       const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt);
-      if (enemies.length > 0) { startCombat(gs, enemies); gs.combat._encRef = enc; gs.screen = 'combat'; return; }
+      if (enemies.length > 0) { gs.mouse.down = false; startCombat(gs, enemies); gs.combat._encRef = enc; gs.screen = 'combat'; return; }
     }
   }
 
@@ -320,7 +320,7 @@ function updateExplore(gs, dt) {
       ev.triggered = true;
       const eventData = pickEvent(gs, 'explore');
       if (eventData) {
-        gs.event = eventData; gs.screen = 'event'; gs._returnTo = 'explore'; return;
+        gs.mouse.down = false; eventUI.openLockFrames = 3; gs.event = eventData; gs.screen = 'event'; gs._returnTo = 'explore'; return;
       }
     }
   }

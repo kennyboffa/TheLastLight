@@ -4,10 +4,12 @@
 const eventUI = {
   resultText:  null,
   resultTimer: 0,
+  openLockFrames: 0,  // ignore clicks for N frames after an event opens
 };
 
 function renderEvent(ctx, gs) {
   if (!gs.event) return;
+  if (eventUI.openLockFrames > 0) eventUI.openLockFrames--;
   const ev = gs.event;
 
   // Dark overlay background
@@ -77,15 +79,11 @@ function renderEvent(ctx, gs) {
 
 function eventClick(mx, my, gs) {
   if (!gs.event) return;
+  if (eventUI.openLockFrames > 0) return;
 
   if (eventUI.resultText) {
-    // Any click on continue closes
-    if (gs._eventContinueBounds) {
-      const b = gs._eventContinueBounds;
-      if (hitTest(mx, my, b.x, b.y, b.w, b.h)) closeEvent(gs);
-    } else {
-      closeEvent(gs);
-    }
+    // Any click anywhere closes the event result
+    closeEvent(gs);
     return;
   }
 
@@ -108,8 +106,10 @@ function closeEvent(gs) {
   gs.event = null;
   eventUI.resultText  = null;
   eventUI.resultTimer = 0;
+  eventUI.openLockFrames = 0;
   gs._eventChoiceBounds = null;
   gs._eventContinueBounds = null;
+  gs.mouse.down = false;
 
   const returnTo = gs._returnTo || 'shelter';
   gs._returnTo   = null;
@@ -131,5 +131,6 @@ function maybeFireShelterEvent(gs) {
   gs.event     = ev;
   gs.screen    = 'event';
   gs._returnTo = 'shelter';
+  eventUI.openLockFrames = 3;
   _eventCooldown = 60 * 45; // ~45 second cooldown at 60fps
 }

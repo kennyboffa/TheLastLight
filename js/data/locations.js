@@ -93,6 +93,27 @@ const LOCATIONS_DB = [
     ],
   },
   {
+    id: 'pharmacy',
+    name: 'City Pharmacy',
+    desc: 'A strip of medical shops and a small pharmacy. Stripped bare in the early days — but dedicated scavengers found hidden stockrooms.',
+    difficulty: 2,
+    bgTheme: 'urban',
+    ambientDesc: 'Broken glass underfoot. Empty shelves. The smell of antiseptic lingers.',
+    zones: [
+      { id:'street',   name:'Back Street',     x:0,    w:400, bgColor:'#0d0d0f', lootTable:'medical_light', enemyChance:15 },
+      { id:'frontage', name:'Shop Frontage',   x:400,  w:500, bgColor:'#0b0b10', lootTable:'pharmacy_main', enemyChance:20,
+        buildings:[
+          { relX:120, label:'Pharmacy A',    numFloors:1, theme:'pharmacy', lootQuality:'pharma',  enemyChance:18 },
+          { relX:320, label:'Medical Clinic',numFloors:2, theme:'hospital', lootQuality:'medical', enemyChance:22 },
+        ]},
+      { id:'stockroom',name:'Hidden Stockroom',x:900,  w:500, bgColor:'#090910', lootTable:'pharmacy_rare', enemyChance:30, requiresLockpick:true,
+        buildings:[
+          { relX:160, label:'Storage Depot', numFloors:1, theme:'pharmacy', lootQuality:'pharma_rare', enemyChance:25 },
+        ]},
+      { id:'alley',    name:'Service Alley',   x:1400, w:400, bgColor:'#0b0b0d', lootTable:'medical_light', enemyChance:25 },
+    ],
+  },
+  {
     id: 'suburb',
     name: 'Suburban Ruins',
     desc: 'Rows of collapsed houses. Personal belongings scattered everywhere. Moderate danger.',
@@ -138,6 +159,8 @@ const LOOT_TABLES = {
   nature_heavy:    [['wood',2,5],['raw_meat',1,2],['mushroom',1,3],['dried_berries',0,2]],
   nature_rare:     [['raw_meat',1,3],['rope',1,3],['mushroom',1,4],['jerky',0,2]],
   water_heavy:     [['dirty_water',2,4],['raw_meat',0,2]],
+  pharmacy_main:   [['bandage',2,4],['painkiller',1,3],['antibiotics',0,1],['cloth',1,3]],
+  pharmacy_rare:   [['bandage',3,6],['medkit',1,2],['antibiotics',1,3],['painkiller',2,4],['chemicals',1,2]],
 };
 
 // ── Building interior loot tables (per theme+quality) ─────────────────────────
@@ -152,9 +175,11 @@ const BUILDING_LOOT = {
   mall_mall:      [['cloth',2,6],['rope',0,2],['bandage',0,2],['canned_beans',0,3],['bat',0,1],['energy_bar',0,2]],
   hospital_medical:[['bandage',1,4],['painkiller',0,2],['medkit',0,1],['antibiotics',0,1],['chemicals',0,2]],
   hospital_rare:  [['medkit',1,2],['antibiotics',0,2],['chemicals',1,3]],
-  house_home:     [['cloth',1,4],['canned_beans',0,3],['book',0,1],['toy',0,1],['matches',0,2],['bandage',0,2]],
-  generic_light:  [['cloth',0,2],['matches',0,1],['batteries',0,2]],
-  generic_medium: [['cloth',0,3],['canned_beans',0,2],['bandage',0,2],['rope',0,1]],
+  house_home:        [['cloth',1,4],['canned_beans',0,3],['book',0,1],['toy',0,1],['matches',0,2],['bandage',0,2]],
+  pharmacy_pharma:   [['bandage',2,5],['painkiller',1,3],['medkit',0,1],['antibiotics',0,2],['chemicals',0,2]],
+  pharmacy_pharma_rare:[['medkit',1,3],['antibiotics',1,3],['bandage',3,6],['painkiller',2,4],['chemicals',1,3]],
+  generic_light:     [['cloth',0,2],['matches',0,1],['batteries',0,2]],
+  generic_medium:    [['cloth',0,3],['canned_beans',0,2],['bandage',0,2],['rope',0,1]],
 };
 
 // ── Enemy Templates ────────────────────────────────────────────────────────────

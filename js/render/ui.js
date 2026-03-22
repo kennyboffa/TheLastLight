@@ -42,8 +42,8 @@ function drawStatsPanel(ctx, gs) {
   y = drawPersonStats(ctx, gs.child, x + 8, y, w - 16);
   y += 4;
 
-  // Survivors
-  if (gs.survivors.length > 0) {
+  // Survivors (hidden during combat — player fights alone)
+  if (gs.survivors.length > 0 && gs.screen !== 'combat') {
     drawDivider(ctx, x + 6, y, w - 12, C.border2);
     y += 5;
     for (const s of gs.survivors) {
@@ -96,11 +96,15 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
   drawStatBar(ctx, x, y, w, bh, person.depression, 100, dcolor, null, 'Depr.');
   y += gap;
 
-  // Warning icons
-  if (person.hunger > CFG.HUNGER_WARN)  { drawText(ctx, '! HUNGRY', x + w - 38, y + 0, C.textWarn, 7); }
+  // Warning icons (right side: needs, left side: conditions)
+  if (person.hunger > CFG.HUNGER_WARN)  { drawText(ctx, '! HUNGRY',  x + w - 38, y + 0, C.textWarn, 7); }
   if (person.thirst > CFG.THIRST_WARN)  { drawText(ctx, '! THIRSTY', x + w - 42, y + 0, C.textWarn, 7); }
-  if (person.tiredness > 75)            { drawText(ctx, '! TIRED',   x + w - 35, y + 0, C.textDim, 7); }
-  if (person.depression > CFG.DEPR_WARN){ drawText(ctx, '! DEPR',    x,          y + 0, C.depression, 7); }
+  if (person.tiredness > 75)            { drawText(ctx, '! TIRED',    x + w - 35, y + 0, C.textDim, 7); }
+  if (person.depression > CFG.DEPR_WARN){ drawText(ctx, '! DEPR',     x,          y + 0, C.depression, 7); }
+  if (person.infected) {
+    y += 8;
+    drawText(ctx, '☣ INFECTED', x, y + 0, '#cc3388', 7);
+  }
 
   return y + (compact ? 0 : 4);
 }

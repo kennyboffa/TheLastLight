@@ -114,6 +114,7 @@ function renderCombat(ctx, gs) {
   // Right stats panel
   drawStatsPanel(ctx, gs);
   drawNotifications(ctx, gs);
+  drawDayTransition(ctx, gs);
 }
 
 function drawEnemySprite(ctx, x, y, enemy) {

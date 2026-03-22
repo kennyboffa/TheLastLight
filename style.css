@@ -4,9 +4,17 @@
   box-sizing: border-box;
 }
 
-html, body {
+html {
   width: 100%;
   height: 100%;
+  /* iOS Safari fills available height excluding address bar */
+  height: -webkit-fill-available;
+}
+
+body {
+  width: 100%;
+  height: 100%;
+  min-height: -webkit-fill-available;
   background: #0e0e18;
   overflow: hidden;
   font-family: 'Courier New', Courier, monospace;
@@ -19,6 +27,9 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Respect device notch / safe areas */
+  padding: env(safe-area-inset-top)  env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 #canvas {
@@ -26,7 +37,47 @@ html, body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   cursor: default;
+  /* Prevent browser pan/zoom from intercepting touch events */
+  touch-action: none;
+  /* Prevent long-press context menu on mobile */
+  -webkit-touch-callout: none;
+  user-select: none;
 }
+
+/* ── Portrait-mode warning ──────────────────────────────────────────────────── */
+
+#portrait-warning {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #0e0e18;
+  color: #e0e0c8;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  text-align: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 999;
+}
+
+#portrait-warning .rotate-icon {
+  font-size: 48px;
+  animation: spin 2s ease-in-out infinite alternate;
+}
+
+@keyframes spin {
+  from { transform: rotate(-20deg); }
+  to   { transform: rotate(20deg);  }
+}
+
+@media (orientation: portrait) {
+  #portrait-warning { display: flex; }
+  #game-wrap canvas { display: none; }
+}
+
+/* ── Name input overlay ─────────────────────────────────────────────────────── */
 
 #name-input-wrap {
   position: absolute;
@@ -40,7 +91,7 @@ html, body {
   background: #0e0e18;
   border: 1px solid #3a3a50;
   color: #e0e0c8;
-  font-family: 'Courier New', monospace;
+  font-family: 'Courier New', Courier, monospace;
   font-size: 16px;
   padding: 6px 12px;
   outline: none;

@@ -9,7 +9,11 @@ const ctx    = canvas.getContext('2d');
 let SCALE = 1;
 
 function resizeCanvas() {
-  const ww = window.innerWidth, wh = window.innerHeight;
+  // visualViewport gives the true visible area on mobile (excludes address bar,
+  // on-screen keyboard, etc.). Fall back to window dimensions on desktop.
+  const vp = window.visualViewport;
+  const ww = vp ? vp.width  : window.innerWidth;
+  const wh = vp ? vp.height : window.innerHeight;
   SCALE = Math.min(ww / CFG.W, wh / CFG.H);
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
@@ -18,6 +22,12 @@ function resizeCanvas() {
 }
 
 window.addEventListener('resize', resizeCanvas);
+// Fires when the phone rotates
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+// Fires when iOS address bar shows/hides
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resizeCanvas);
+}
 resizeCanvas();
 
 // ── Input handling ────────────────────────────────────────────────────────────
@@ -186,6 +196,10 @@ function gameLoop(timestamp) {
   try {
     update(dt);
     render(ctx);
+    // Click handled AFTER render so bounds are always fresh
+    if (GS.mouse.clicked) {
+      handleClick(GS.mouse.clickX, GS.mouse.clickY, GS);
+    }
   } catch (e) {
     // Show error on screen so it's visible even without devtools open
     ctx.fillStyle = '#0e0e18';
@@ -223,6 +237,7 @@ function update(dt) {
   // Screen-specific update
   if (gs.screen === 'intro')      updateIntro(dt);
   if (gs.screen === 'explore')    updateExplore(gs, dt);
+  if (gs.screen === 'combat')     updateCombat(gs, dt);
 
   // Shelter ambient events (skip if day transition just started this frame)
   if (gs.screen === 'shelter' && !gs.dayFade.active) {
@@ -231,11 +246,8 @@ function update(dt) {
     updateShelterAmbient(gs);
   }
 
-  // Handle pending click
-  if (gs.mouse.clicked) {
-    handleClick(gs.mouse.clickX, gs.mouse.clickY, gs);
-  }
 }
+
 
 function render(ctx) {
   const gs = GS;
@@ -261,6 +273,9 @@ function render(ctx) {
       break;
     case 'combat':
       renderCombat(ctx, gs);
+      break;
+    case 'lootPickup':
+      renderLootPickup(ctx, gs);
       break;
     case 'event':
       renderEvent(ctx, gs);
@@ -304,6 +319,9 @@ function handleClick(mx, my, gs) {
       break;
     case 'combat':
       combatClick(mx, my, gs);
+      break;
+    case 'lootPickup':
+      lootPickupClick(mx, my, gs);
       break;
     case 'event':
       eventClick(mx, my, gs);

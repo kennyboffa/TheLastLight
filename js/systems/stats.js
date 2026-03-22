@@ -41,6 +41,20 @@ function tickStats(gs, dt) {
   if (p.hunger  >= CFG.HUNGER_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
   if (p.thirst  >= CFG.THIRST_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
 
+  // Infection: slow health drain (3 HP/hour), notify once per hour
+  if (p.infected) {
+    p.health = Math.max(1, p.health - 3 * hrs);
+    // Periodic reminder (roughly once per game hour)
+    if (!p._infNotifyTimer) p._infNotifyTimer = 0;
+    p._infNotifyTimer -= hrs;
+    if (p._infNotifyTimer <= 0) {
+      notify(`${p.name} is infected — use antibiotics!`, 'danger');
+      p._infNotifyTimer = 1;
+    }
+  } else {
+    p._infNotifyTimer = 0;
+  }
+
   // Forced sleep if too tired
   if (p.tiredness >= CFG.TIRE_FORCED_SLEEP && !p.isSleeping) {
     p.isSleeping = true;
@@ -62,6 +76,15 @@ function tickStats(gs, dt) {
 
   if (ch.hunger  >= CFG.HUNGER_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
   if (ch.thirst  >= CFG.THIRST_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
+  if (ch.infected) {
+    ch.health = Math.max(1, ch.health - 3 * hrs);
+    if (!ch._infNotifyTimer) ch._infNotifyTimer = 0;
+    ch._infNotifyTimer -= hrs;
+    if (ch._infNotifyTimer <= 0) {
+      notify(`${gs.child.name} is infected — needs antibiotics!`, 'danger');
+      ch._infNotifyTimer = 1;
+    }
+  } else { ch._infNotifyTimer = 0; }
 
   // Child depression: rises when alone, falls when with parent
   ch.isAlone = p.isExploring;

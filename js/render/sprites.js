@@ -257,27 +257,24 @@ function drawRoomInterior(ctx, x, y, w, h, unlocked, selected) {
 
 // ── Day / Night cycle helpers ─────────────────────────────────────────────────
 
-const _DAY_CYCLE_MS = 5 * 60 * 1000; // 5-minute real-time loop
-
-function _getDayT() { return (Date.now() % _DAY_CYCLE_MS) / _DAY_CYCLE_MS; }
-
 function _lerpHex(a, b, t) {
   const p = s => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
   const [ar,ag,ab] = p(a), [br,bg,bb] = p(b);
   return `rgb(${Math.round(ar+(br-ar)*t)},${Math.round(ag+(bg-ag)*t)},${Math.round(ab+(bb-ab)*t)})`;
 }
 
-// Key frames: [t, skyTop, skyBottom]
+// Key frames mapped to 24h clock: t = game_minutes / 1440
+// [t,  skyTop,    skyBottom]
 const _SKY_KF = [
-  [0.00, '#050408', '#08080f'],
-  [0.18, '#12081a', '#1e0e24'],
-  [0.25, '#281028', '#3c1830'],
-  [0.35, '#120d1e', '#181428'],
-  [0.50, '#0c1520', '#10192a'],
-  [0.65, '#0d0f1a', '#131420'],
-  [0.75, '#1a0916', '#280d1e'],
-  [0.85, '#0d060f', '#120810'],
-  [1.00, '#050408', '#08080f'],
+  [0.00, '#050408', '#080810'],  // 00:00 midnight — near black
+  [0.17, '#0a0614', '#0d0820'],  // 04:00 deep night
+  [0.25, '#1e0c28', '#2c1238'],  // 06:00 dawn — dark purple
+  [0.33, '#2a1830', '#1a2040'],  // 08:00 morning — purple-blue
+  [0.50, '#182838', '#1e3450'],  // 12:00 noon — overcast blue-grey
+  [0.67, '#1a2030', '#1c2840'],  // 16:00 afternoon
+  [0.75, '#28101c', '#3a1428'],  // 18:00 dusk — warm purple
+  [0.88, '#0e060e', '#140810'],  // 21:00 evening
+  [1.00, '#050408', '#080810'],  // 24:00 midnight
 ];
 
 function _getSkyColors(t) {
@@ -300,15 +297,16 @@ const _STARS = [
 function drawSurface(ctx, scrollOffset, time) {
   const H = CFG.SURFACE_H;
   const W = CFG.W - CFG.PANEL_W;
-  const t = _getDayT();
+  // Use in-game clock (minutes 0-1440) when available, else fall back to 6am
+  const t = (time !== undefined) ? time / 1440 : 0.25;
   const [skyTop, skyBot] = _getSkyColors(t);
 
   // Sky base
   fillRect(ctx, 0, 0, W, H, skyTop);
   fillRect(ctx, 0, H * 0.4, W, H * 0.6, skyBot);
 
-  // Stars — fade in at night (t<0.22 or t>0.82), fade at dawn/dusk
-  const starA = t < 0.18 ? 1 : t < 0.28 ? 1-(t-0.18)/0.1 : t > 0.82 ? (t-0.82)/0.08 : 0;
+  // Stars — visible at night (t<0.22 or t>0.83), fade near dawn/dusk
+  const starA = t < 0.17 ? 1 : t < 0.27 ? 1-(t-0.17)/0.10 : t > 0.83 ? (t-0.83)/0.09 : 0;
   if (starA > 0.01) {
     ctx.save();
     ctx.fillStyle = '#ccc8e0';
@@ -320,12 +318,12 @@ function drawSurface(ctx, scrollOffset, time) {
     ctx.restore();
   }
 
-  // Moon (night) or Sun (day)
-  const isNight = t < 0.26 || t > 0.80;
+  // Moon (night) or dim sun (day)
+  const isNight = t < 0.25 || t > 0.80;
   if (isNight) {
-    const mt = t < 0.26 ? t / 0.26 : (t - 0.80) / 0.20;
+    const mt = t < 0.25 ? t / 0.25 : (t - 0.80) / 0.20;
     const mx2 = 30 + mt * (W - 60);
-    const mAlpha = Math.min(1, t < 0.20 ? 1 : t < 0.26 ? 1-(t-0.20)/0.06 : t > 0.88 ? 1 : (t-0.80)/0.08);
+    const mAlpha = Math.min(1, t < 0.20 ? 1 : t < 0.25 ? 1-(t-0.20)/0.05 : t > 0.88 ? 1 : (t-0.80)/0.08);
     ctx.save();
     ctx.globalAlpha = mAlpha * 0.85;
     ctx.fillStyle = '#d4cce8';
@@ -335,15 +333,26 @@ function drawSurface(ctx, scrollOffset, time) {
     ctx.globalAlpha = 1;
     ctx.restore();
   } else {
-    const dayFrac = (t - 0.26) / 0.54;
+    const dayFrac = (t - 0.25) / 0.55;
     const sunX = 30 + dayFrac * (W - 60);
-    const sunA = t < 0.36 ? (t-0.26)/0.1 : t > 0.72 ? 1-(t-0.72)/0.08 : 1;
+    const sunA = t < 0.35 ? (t-0.25)/0.10 : t > 0.70 ? 1-(t-0.70)/0.10 : 1;
+    // Ambient daylight wash over the sky
     ctx.save();
-    ctx.globalAlpha = sunA * 0.35; // hazy post-apoc sun
-    ctx.fillStyle = '#b09858';
-    ctx.beginPath(); ctx.arc(sunX, 15, 7, 0, Math.PI*2); ctx.fill();
-    ctx.globalAlpha = sunA * 0.10;
-    ctx.beginPath(); ctx.arc(sunX, 15, 14, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = sunA * 0.18;
+    ctx.fillStyle = '#c8a850';
+    ctx.fillRect(0, 0, W, H);
+    // Sun disc
+    ctx.globalAlpha = sunA * 0.75;
+    ctx.fillStyle = '#d4b060';
+    ctx.beginPath(); ctx.arc(sunX, 15, 10, 0, Math.PI*2); ctx.fill();
+    // Inner bright core
+    ctx.globalAlpha = sunA * 0.55;
+    ctx.fillStyle = '#ffe8a0';
+    ctx.beginPath(); ctx.arc(sunX, 15, 5, 0, Math.PI*2); ctx.fill();
+    // Halo
+    ctx.globalAlpha = sunA * 0.18;
+    ctx.fillStyle = '#c8a040';
+    ctx.beginPath(); ctx.arc(sunX, 15, 22, 0, Math.PI*2); ctx.fill();
     ctx.globalAlpha = 1;
     ctx.restore();
   }

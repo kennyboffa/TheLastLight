@@ -770,12 +770,20 @@ function updateShelterAmbient(gs) {
     if (dp.x > MAIN_W + 40 || dp.x < -40) {
       dp.active = false;
       dp.timer  = 0;
-      // Suspicion affects how soon next patrol arrives
-      const base = gs.suspicion > 70 ? 90 : gs.suspicion > 40 ? 200 : 420;
-      dp.nextPatrol = base + randInt(0, 120);
+      // Suspicion heavily controls patrol frequency
+      const sus = gs.suspicion || 0;
+      let base;
+      if      (sus >= 80) base = 60;         // very frequent
+      else if (sus >= 60) base = 130;
+      else if (sus >= 40) base = 280;
+      else if (sus >= 20) base = 700;        // rare
+      else                base = 1600;       // almost never
+      dp.nextPatrol = base + randInt(0, Math.floor(base * 0.25));
     }
   } else {
     dp.timer++;
+    // Skip entirely when suspicion is very low (< 10)
+    if ((gs.suspicion || 0) < 10) { dp.timer = 0; return; }
     if (dp.timer >= dp.nextPatrol) {
       dp.active = true;
       dp.timer  = 0;

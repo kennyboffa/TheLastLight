@@ -255,15 +255,101 @@ function drawRoomInterior(ctx, x, y, w, h, unlocked, selected) {
   }
 }
 
+// ── Day / Night cycle helpers ─────────────────────────────────────────────────
+
+const _DAY_CYCLE_MS = 5 * 60 * 1000; // 5-minute real-time loop
+
+function _getDayT() { return (Date.now() % _DAY_CYCLE_MS) / _DAY_CYCLE_MS; }
+
+function _lerpHex(a, b, t) {
+  const p = s => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+  const [ar,ag,ab] = p(a), [br,bg,bb] = p(b);
+  return `rgb(${Math.round(ar+(br-ar)*t)},${Math.round(ag+(bg-ag)*t)},${Math.round(ab+(bb-ab)*t)})`;
+}
+
+// Key frames: [t, skyTop, skyBottom]
+const _SKY_KF = [
+  [0.00, '#050408', '#08080f'],
+  [0.18, '#12081a', '#1e0e24'],
+  [0.25, '#281028', '#3c1830'],
+  [0.35, '#120d1e', '#181428'],
+  [0.50, '#0c1520', '#10192a'],
+  [0.65, '#0d0f1a', '#131420'],
+  [0.75, '#1a0916', '#280d1e'],
+  [0.85, '#0d060f', '#120810'],
+  [1.00, '#050408', '#08080f'],
+];
+
+function _getSkyColors(t) {
+  for (let i = 1; i < _SKY_KF.length; i++) {
+    if (t <= _SKY_KF[i][0]) {
+      const [pt, pa, pb] = _SKY_KF[i-1], [nt, na, nb] = _SKY_KF[i];
+      const f = (t - pt) / (nt - pt);
+      return [_lerpHex(pa, na, f), _lerpHex(pb, nb, f)];
+    }
+  }
+  return [_SKY_KF[0][1], _SKY_KF[0][2]];
+}
+
+// Static star positions
+const _STARS = [
+  [28,7],[65,13],[118,4],[175,11],[238,6],[295,9],[352,7],[408,13],[450,5],
+  [58,16],[142,8],[268,3],[432,10],[90,5],[200,14],[330,9],[480,6],
+];
+
 function drawSurface(ctx, scrollOffset) {
   const H = CFG.SURFACE_H;
   const W = CFG.W - CFG.PANEL_W;
+  const t = _getDayT();
+  const [skyTop, skyBot] = _getSkyColors(t);
 
-  // Sky gradient
-  fillRect(ctx, 0, 0, W, H, C.sky);
-  fillRect(ctx, 0, H * 0.4, W, H * 0.6, C.sky2);
+  // Sky base
+  fillRect(ctx, 0, 0, W, H, skyTop);
+  fillRect(ctx, 0, H * 0.4, W, H * 0.6, skyBot);
+
+  // Stars — fade in at night (t<0.22 or t>0.82), fade at dawn/dusk
+  const starA = t < 0.18 ? 1 : t < 0.28 ? 1-(t-0.18)/0.1 : t > 0.82 ? (t-0.82)/0.08 : 0;
+  if (starA > 0.01) {
+    ctx.save();
+    ctx.fillStyle = '#ccc8e0';
+    for (const [sx, sy] of _STARS) {
+      ctx.globalAlpha = starA * (0.4 + ((sx * sy) % 7) * 0.08);
+      ctx.fillRect(sx, sy, (sx + sy) % 4 === 0 ? 2 : 1, (sx + sy) % 4 === 0 ? 2 : 1);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Moon (night) or Sun (day)
+  const isNight = t < 0.26 || t > 0.80;
+  if (isNight) {
+    const mt = t < 0.26 ? t / 0.26 : (t - 0.80) / 0.20;
+    const mx2 = 30 + mt * (W - 60);
+    const mAlpha = Math.min(1, t < 0.20 ? 1 : t < 0.26 ? 1-(t-0.20)/0.06 : t > 0.88 ? 1 : (t-0.80)/0.08);
+    ctx.save();
+    ctx.globalAlpha = mAlpha * 0.85;
+    ctx.fillStyle = '#d4cce8';
+    ctx.beginPath(); ctx.arc(mx2, 14, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = skyTop; // crescent shadow
+    ctx.beginPath(); ctx.arc(mx2+2, 13, 4, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  } else {
+    const dayFrac = (t - 0.26) / 0.54;
+    const sunX = 30 + dayFrac * (W - 60);
+    const sunA = t < 0.36 ? (t-0.26)/0.1 : t > 0.72 ? 1-(t-0.72)/0.08 : 1;
+    ctx.save();
+    ctx.globalAlpha = sunA * 0.35; // hazy post-apoc sun
+    ctx.fillStyle = '#b09858';
+    ctx.beginPath(); ctx.arc(sunX, 15, 7, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = sunA * 0.10;
+    ctx.beginPath(); ctx.arc(sunX, 15, 14, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
   // Distant building silhouettes
+  const winBright = isNight ? 0.55 : 0.12;
   ctx.globalAlpha = 0.35;
   const buildings = [
     { x: 20, w: 40, h: 55 }, { x: 70, w: 30, h: 45 }, { x: 105, w: 50, h: 65 },
@@ -276,11 +362,12 @@ function drawSurface(ctx, scrollOffset) {
   for (const b of buildings) {
     const bx = ((b.x - so) % (W + 100) + W + 100) % (W + 100) - 50;
     ctx.fillRect(Math.round(bx), Math.round(H - b.h), Math.round(b.w), Math.round(b.h));
-    // Windows (some lit faintly)
-    ctx.fillStyle = '#202028';
+    // Windows
+    ctx.fillStyle = `rgba(200,200,140,${winBright})`;
     for (let wi = 4; wi < b.w - 4; wi += 8) {
       for (let wj = 8; wj < b.h - 6; wj += 10) {
-        ctx.fillRect(Math.round(bx + wi), Math.round(H - b.h + wj), 4, 5);
+        if ((b.x + wi + wj) % 3 !== 0) // some windows dark
+          ctx.fillRect(Math.round(bx + wi), Math.round(H - b.h + wj), 4, 5);
       }
     }
     ctx.fillStyle = '#14141a';

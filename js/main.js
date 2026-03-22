@@ -340,6 +340,7 @@ function resetGame() {
       name:'Lily', health:80, maxHealth:80,
       hunger:20, thirst:20, tiredness:25, depression:15,
       isAlone:false, infected:false,
+      isSleeping:false, task:null, taskProgress:0, taskDuration:0,
       x:65, y:0, facing:1, animFrame:0, animTimer:0,
     },
     survivors: [],
@@ -374,6 +375,7 @@ function resetGame() {
   // Reset shelter UI
   shelterUI.activeMenu   = null;
   shelterUI.selectedRoom = null;
+  shelterUI.selectedChar = null;
   // Reset event UI
   eventUI.resultText  = null;
   eventUI.resultTimer = 0;

@@ -52,6 +52,8 @@ const GS = {
     depression: 15,
     isAlone: false,
     infected: false,
+    isSleeping: false,
+    task: null, taskProgress: 0, taskDuration: 0,
     x: 65, y: 0, facing: 1, animFrame: 0, animTimer: 0,
   },
 

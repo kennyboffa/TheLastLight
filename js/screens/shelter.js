@@ -20,7 +20,7 @@ function roomRect(col, row) {
 // ── Shelter action menus ───────────────────────────────────────────────────────
 
 let shelterUI = {
-  activeMenu: null,    // null | 'room' | 'crafting' | 'storage' | 'cooking'
+  activeMenu: null,    // null | 'room' | 'crafting' | 'storage' | 'cooking' | 'char'
   selectedRoom: null,
   contextItem: null,
   storageScroll: 0,
@@ -28,6 +28,8 @@ let shelterUI = {
   menuX: 0, menuY: 0,
   tooltip: null,
   tooltipX: 0, tooltipY: 0,
+  selectedChar: null,    // null | 'parent' | 'child' | survivor.id
+  charPanelX: 60, charPanelY: 100,
 };
 
 function renderShelter(ctx, gs) {
@@ -120,12 +122,44 @@ function renderShelter(ctx, gs) {
   drawDayTransition(ctx, gs);
 }
 
+// ── Character idle wandering ──────────────────────────────────────────────────
+
+function updateCharWander(gs) {
+  const speed = 0.45;
+
+  function wander(who, defaultX) {
+    if (who.shelterX === undefined) {
+      who.shelterX       = defaultX;
+      who.shelterTargetX = defaultX;
+      who.wanderTimer    = randInt(60, 300);
+    }
+    if (who.isSleeping || who.task) return;  // busy chars stay put
+    who.wanderTimer--;
+    if (who.wanderTimer <= 0) {
+      who.shelterTargetX = randInt(10, 195);
+      who.wanderTimer    = randInt(150, 480);
+    }
+    const dx = who.shelterTargetX - who.shelterX;
+    if (Math.abs(dx) > 0.5) {
+      who.shelterX += Math.sign(dx) * Math.min(speed, Math.abs(dx));
+      who.facing    = dx > 0 ? 1 : -1;
+    }
+  }
+
+  if (!gs.parent.isExploring) wander(gs.parent, 28);
+  wander(gs.child, 52);
+  gs.survivors.forEach((s, i) => { if (!s.isExploring) wander(s, 82 + i * 26); });
+}
+
 // ── Characters in rooms ───────────────────────────────────────────────────────
 
 function drawShelterCharacters(ctx, gs) {
-  const p = gs.parent;
-  const ch = gs.child;
+  updateCharWander(gs);
+
+  const p     = gs.parent;
+  const ch    = gs.child;
   const mainR = roomRect(0, 0);
+  const groundY = mainR.y + mainR.h - 12;
 
   // Animate
   p.animTimer++;
@@ -133,36 +167,219 @@ function drawShelterCharacters(ctx, gs) {
   if (p.animTimer  % 30 === 0) p.animFrame++;
   if (ch.animTimer % 25 === 0) ch.animFrame++;
 
+  gs._charHitBounds = [];
+
+  // ── Parent ──────────────────────────────────────────────────────────────────
   if (!p.isExploring) {
-    const px = mainR.x + 30;
-    const py = mainR.y + mainR.h - 12;
-    drawParent(ctx, px, py, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender);
-    if (p.isSleeping) {
-      drawText(ctx, 'zzz', px + 8, py - 20, C.textDim, 7);
+    const px  = Math.round(p.shelterX !== undefined ? p.shelterX : 28);
+    const sel = shelterUI.selectedChar === 'parent';
+    if (sel) {
+      ctx.save(); ctx.globalAlpha = 0.18;
+      fillRect(ctx, px - 10, groundY - 24, 22, 28, '#8888ff');
+      ctx.globalAlpha = 1; ctx.restore();
+      strokeRect(ctx, px - 10, groundY - 24, 22, 28, '#8888ff');
     }
+    drawParent(ctx, px, groundY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender);
+    if (p.isSleeping) drawText(ctx, 'zzz', px + 10, groundY - 26, C.textDim, 7);
     if (p.isWorking && p.task) {
       const prog = p.taskProgress / p.taskDuration;
-      drawStatBar(ctx, px - 10, py - 25, 30, 4, prog * 100, 100, C.textGood);
-      drawText(ctx, 'working', px, py - 28, C.textDim, 6, 'center');
+      drawStatBar(ctx, px - 10, groundY - 29, 30, 4, prog * 100, 100, C.textGood);
+      drawText(ctx, 'working', px, groundY - 32, C.textDim, 6, 'center');
     }
+    drawText(ctx, p.name, px, groundY - 26, sel ? '#aaaaff' : C.textDim, 6, 'center');
+    gs._charHitBounds.push({ id: 'parent', x: px - 10, y: groundY - 24, w: 22, h: 28 });
   }
 
-  // Child
-  const cpy = mainR.y + mainR.h - 12;
-  const cpx = mainR.x + 60;
-  drawChild(ctx, cpx, cpy, 2, ch.facing, ch.animFrame);
+  // ── Child ───────────────────────────────────────────────────────────────────
+  const cpx  = Math.round(ch.shelterX !== undefined ? ch.shelterX : 52);
+  const csel = shelterUI.selectedChar === 'child';
+  if (csel) {
+    ctx.save(); ctx.globalAlpha = 0.18;
+    fillRect(ctx, cpx - 8, groundY - 20, 18, 24, '#ff88ff');
+    ctx.globalAlpha = 1; ctx.restore();
+    strokeRect(ctx, cpx - 8, groundY - 20, 18, 24, '#cc88cc');
+  }
+  drawChild(ctx, cpx, groundY, 2, ch.facing, ch.animFrame);
+  if (ch.isSleeping) drawText(ctx, 'zzz', cpx + 8, groundY - 20, C.textDim, 7);
+  drawText(ctx, ch.name, cpx, groundY - 22, csel ? '#ffaaff' : C.textDim, 6, 'center');
+  gs._charHitBounds.push({ id: 'child', x: cpx - 8, y: groundY - 20, w: 18, h: 24 });
 
-  // Dog
+  // ── Dog ─────────────────────────────────────────────────────────────────────
   if (gs.dog && gs.dog.alive) {
-    const dogX = mainR.x + 90;
-    drawDog(ctx, dogX, cpy, 2, 1, ch.animFrame);
+    drawDog(ctx, Math.round(cpx + 22), groundY, 2, 1, ch.animFrame);
   }
 
-  // Survivors
+  // ── Survivors ───────────────────────────────────────────────────────────────
   gs.survivors.forEach((s, i) => {
-    const sx = mainR.x + 100 + i * 28;
-    drawSurvivor(ctx, sx, cpy, 2, s.facing, s.animFrame, i);
+    s.animTimer = (s.animTimer || 0) + 1;
+    if (s.animTimer % 28 === 0) s.animFrame = (s.animFrame || 0) + 1;
+    const sx   = Math.round(s.shelterX !== undefined ? s.shelterX : 82 + i * 26);
+    const ssel = shelterUI.selectedChar === s.id;
+    if (ssel) {
+      ctx.save(); ctx.globalAlpha = 0.18;
+      fillRect(ctx, sx - 9, groundY - 22, 20, 26, '#88ff88');
+      ctx.globalAlpha = 1; ctx.restore();
+      strokeRect(ctx, sx - 9, groundY - 22, 20, 26, '#88cc88');
+    }
+    drawSurvivor(ctx, sx, groundY, 2, s.facing, s.animFrame, i);
+    if (s.isSleeping) drawText(ctx, 'zzz', sx + 8, groundY - 22, C.textDim, 7);
+    if (s.task && s.taskDuration > 0) {
+      const prog = s.taskProgress / s.taskDuration;
+      drawStatBar(ctx, sx - 9, groundY - 27, 24, 3, prog * 100, 100, C.textGood);
+    }
+    drawText(ctx, s.name, sx, groundY - 24, ssel ? '#aaffaa' : C.textDim, 6, 'center');
+    gs._charHitBounds.push({ id: s.id, x: sx - 9, y: groundY - 22, w: 20, h: 26 });
   });
+}
+
+// ── Character task panel ──────────────────────────────────────────────────────
+
+function drawCharPanel(ctx, gs, mx, my) {
+  const sel = shelterUI.selectedChar;
+  if (!sel) return;
+
+  let who, role, selColor;
+  if (sel === 'parent') {
+    who = gs.parent; role = parentTitle(); selColor = '#8888ff';
+  } else if (sel === 'child') {
+    who = gs.child; role = 'Child'; selColor = '#cc88cc';
+  } else {
+    who = gs.survivors.find(s => s.id === sel);
+    role = 'Survivor'; selColor = '#88cc88';
+  }
+  if (!who) { shelterUI.selectedChar = null; shelterUI.activeMenu = null; return; }
+
+  const PW = 184, PH = sel === 'parent' ? 242 : 202;
+  const px = clamp(shelterUI.charPanelX, 2, MAIN_W - PW - 2);
+  const py = clamp(shelterUI.charPanelY, 2, CFG.H - PH - 36);
+
+  fillRect(ctx, px, py, PW, PH, C.panelBg);
+  strokeRect(ctx, px, py, PW, PH, selColor);
+  fillRect(ctx, px, py, PW, 18, '#0a0a18');
+  drawText(ctx, `${who.name.toUpperCase()}  (${role})`, px + PW/2, py + 12, selColor, 8, 'center', true);
+
+  let y = py + 24;
+  const sw = PW - 16;
+  drawStatBar(ctx, px+8, y, sw, 5, who.health, who.maxHealth, C.hp,         null, 'HP');      y += 9;
+  drawStatBar(ctx, px+8, y, sw, 5, who.hunger,        100,    C.hunger,     null, 'Hunger');   y += 9;
+  drawStatBar(ctx, px+8, y, sw, 5, who.thirst,        100,    C.thirst,     null, 'Thirst');   y += 9;
+  drawStatBar(ctx, px+8, y, sw, 5, who.tiredness,     100,    C.tiredness,  null, 'Tired');    y += 9;
+  drawStatBar(ctx, px+8, y, sw, 5, who.depression,    100,    C.depression, null, 'Depr.');    y += 10;
+
+  const taskLabel = who.isSleeping ? 'Sleeping...'
+    : who.task ? (who.task.type[0].toUpperCase() + who.task.type.slice(1) + '...')
+    : 'Idle';
+  drawText(ctx, `Task: ${taskLabel}`, px+8, y+8, who.task || who.isSleeping ? C.textGood : C.textDim, 7);
+  y += 12;
+  if ((who.task || who.isSleeping) && who.taskDuration > 0) {
+    drawStatBar(ctx, px+8, y, sw, 3, who.taskProgress, who.taskDuration, C.textGood);
+    y += 7;
+  }
+  y += 8;
+  drawDivider(ctx, px+4, y, PW-8, C.border2); y += 8;
+
+  gs._charPanelBtns = [];
+  const BW = sw, BH = 18;
+  function addBtn(label, id, disabled) {
+    const hov = !disabled && hitTest(mx, my, px+8, y, BW, BH);
+    drawButton(ctx, px+8, y, BW, BH, label, hov, false, disabled);
+    gs._charPanelBtns.push({ id, x: px+8, y, w: BW, h: BH, disabled });
+    y += BH + 4;
+  }
+
+  const noTask   = !who.task && !who.isSleeping;
+  const foodIds  = ['heated_beans','heated_soup','cooked_meat','canned_beans','canned_soup','canned_meat','energy_bar'];
+  const waterIds = ['purified_water','water_bottle','dirty_water'];
+  const hasFood  = foodIds.some(id  => countInInventory(gs.shelter.storage, id) > 0);
+  const hasWater = waterIds.some(id => countInInventory(gs.shelter.storage, id) > 0);
+
+  addBtn('Sleep',             'sleep',   !noTask);
+  addBtn('Eat from Storage',  'eat',     !noTask || !hasFood);
+  addBtn('Drink from Storage','drink',   !noTask || !hasWater);
+  if (sel === 'parent') {
+    addBtn('Play with Lily',  'play',    !noTask);
+    addBtn('Explore...',      'explore', !noTask || who.isExploring);
+  }
+
+  const closeY   = py + PH - 22;
+  const closeHov = hitTest(mx, my, px + PW - 58, closeY, 50, 16);
+  drawButton(ctx, px + PW - 58, closeY, 50, 16, 'Close', closeHov);
+  gs._charPanelClose = { x: px + PW - 58, y: closeY, w: 50, h: 16 };
+}
+
+// ── Character task assignment ─────────────────────────────────────────────────
+
+function handleCharTask(taskId, gs) {
+  const sel = shelterUI.selectedChar;
+  if (!sel) return;
+
+  let who;
+  if (sel === 'parent')     who = gs.parent;
+  else if (sel === 'child') who = gs.child;
+  else who = gs.survivors.find(s => s.id === sel);
+  if (!who) return;
+
+  const foodIds  = ['heated_beans','heated_soup','cooked_meat','canned_beans','canned_soup','canned_meat','energy_bar'];
+  const waterIds = ['purified_water','water_bottle','dirty_water'];
+
+  switch (taskId) {
+    case 'sleep':
+      who.isSleeping   = true;
+      who.task         = { type: 'sleep' };
+      who.taskDuration = 5;
+      who.taskProgress = 0;
+      if (sel === 'parent') gs.parent.isWorking = false;
+      notify(`${who.name} went to sleep.`, 'normal');
+      shelterUI.activeMenu = null;
+      break;
+
+    case 'eat': {
+      const foodId = foodIds.find(id => countInInventory(gs.shelter.storage, id) > 0);
+      if (foodId) {
+        removeFromInventory(gs.shelter.storage, foodId, 1);
+        const def = getItemDef(foodId);
+        who.hunger     = clamp(who.hunger     + (def.hunger     || -20), 0, 100);
+        who.thirst     = clamp(who.thirst     + (def.thirst     ||   0), 0, 100);
+        who.depression = clamp(who.depression + (def.depression ||   0), 0, 100);
+        who.health     = clamp(who.health     + (def.health     ||   0), 0, who.maxHealth);
+        notify(`${who.name} ate ${def.name}.`, 'good');
+        shelterUI.activeMenu = null;
+      }
+      break;
+    }
+
+    case 'drink': {
+      const waterId = waterIds.find(id => countInInventory(gs.shelter.storage, id) > 0);
+      if (waterId) {
+        removeFromInventory(gs.shelter.storage, waterId, 1);
+        const def = getItemDef(waterId);
+        who.thirst = clamp(who.thirst + (def.thirst || -28), 0, 100);
+        who.health = clamp(who.health + (def.health ||   0), 0, who.maxHealth);
+        notify(`${who.name} drank ${def.name}.`, 'good');
+        shelterUI.activeMenu = null;
+      }
+      break;
+    }
+
+    case 'play':
+      if (sel === 'parent' && !gs.parent.task) {
+        gs.parent.task         = { type: 'play' };
+        gs.parent.taskDuration = 2;
+        gs.parent.taskProgress = 0;
+        gs.parent.isWorking    = true;
+        notify(`Playing with ${gs.child.name}.`, 'good');
+        shelterUI.activeMenu = null;
+      }
+      break;
+
+    case 'explore':
+      if (sel === 'parent') {
+        shelterUI.activeMenu   = null;
+        shelterUI.selectedChar = null;
+        gs.screen = 'exploreSelect';
+      }
+      break;
+  }
 }
 
 // ── Bottom controls ───────────────────────────────────────────────────────────
@@ -201,10 +418,11 @@ function drawShelterControls(ctx, gs, mx, my) {
 function drawShelterMenu(ctx, gs, mx, my) {
   const M = shelterUI;
 
-  if (M.activeMenu === 'room') drawRoomMenu(ctx, gs, mx, my);
+  if (M.activeMenu === 'room')     drawRoomMenu(ctx, gs, mx, my);
   else if (M.activeMenu === 'crafting') drawCraftingMenu(ctx, gs, mx, my);
   else if (M.activeMenu === 'storage')  drawStorageMenu(ctx, gs, mx, my);
   else if (M.activeMenu === 'cooking')  drawCookingMenu(ctx, gs, mx, my);
+  else if (M.activeMenu === 'char')     drawCharPanel(ctx, gs, mx, my);
 }
 
 function drawRoomMenu(ctx, gs, mx, my) {
@@ -359,6 +577,19 @@ function shelterClick(mx, my, gs) {
     }
   }
 
+  // Character click (check before room clicks)
+  if (GS._charHitBounds) {
+    for (const bound of GS._charHitBounds) {
+      if (hitTest(mx, my, bound.x, bound.y, bound.w, bound.h)) {
+        M.selectedChar = bound.id;
+        M.activeMenu   = 'char';
+        M.charPanelX   = clamp(bound.x - 60, 2, MAIN_W - 188);
+        M.charPanelY   = clamp(bound.y - 220, 2, CFG.H - 260);
+        return;
+      }
+    }
+  }
+
   // Room click
   for (let row = 0; row < ROOM_GRID.length; row++) {
     for (let col = 0; col < ROOM_GRID[row].length; col++) {
@@ -466,6 +697,32 @@ function handleMenuClick(mx, my, gs) {
     const W2 = 280, H2 = 240;
     const px = 60, py = 40;
     if (hitTest(mx, my, px+8, py + H2 - 22, 50, 16)) { M.activeMenu = null; return; }
+    return;
+  }
+
+  if (M.activeMenu === 'char') {
+    // Close button
+    if (GS._charPanelClose) {
+      const b = GS._charPanelClose;
+      if (hitTest(mx, my, b.x, b.y, b.w, b.h)) {
+        M.activeMenu = null; M.selectedChar = null; return;
+      }
+    }
+    // Task buttons
+    if (GS._charPanelBtns) {
+      for (const btn of GS._charPanelBtns) {
+        if (!btn.disabled && hitTest(mx, my, btn.x, btn.y, btn.w, btn.h)) {
+          handleCharTask(btn.id, gs); return;
+        }
+      }
+    }
+    // Click outside panel closes it
+    const sel = M.selectedChar;
+    const PH  = sel === 'parent' ? 242 : 202;
+    const PW  = 184;
+    const px  = clamp(M.charPanelX, 2, MAIN_W - PW - 2);
+    const py  = clamp(M.charPanelY, 2, CFG.H - PH - 36);
+    if (!hitTest(mx, my, px, py, PW, PH)) { M.activeMenu = null; M.selectedChar = null; }
     return;
   }
 

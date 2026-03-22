@@ -379,6 +379,7 @@ function makeSurvivor() {
     skills:     { scavenging: randInt(1,5), melee: randInt(1,4), firearms: randInt(1,3) },
     inventory:  [],
     isExploring: false,
+    isSleeping: false,
     task: null, taskProgress: 0, taskDuration: 0,
     animFrame: 0, animTimer: 0,
     x: 200 + _snIdx * 30, y: 0, facing: 1,

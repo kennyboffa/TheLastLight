@@ -49,9 +49,16 @@ function tickStats(gs, dt) {
 
   // ── Child ───────────────────────────────────────────────────────────────────
   const ch = gs.child;
-  ch.hunger  = clamp(ch.hunger  + CFG.HUNGER_PER_HOUR * 0.8 * hrs, 0, 100);
-  ch.thirst  = clamp(ch.thirst  + CFG.THIRST_PER_HOUR * 0.8 * hrs, 0, 100);
-  ch.tiredness = clamp(ch.tiredness + CFG.TIRE_IDLE_PER_HOUR * 0.6 * hrs, 0, 100);
+  if (ch.isSleeping) {
+    ch.hunger    = clamp(ch.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * hrs, 0, 100);
+    ch.thirst    = clamp(ch.thirst    + CFG.THIRST_PER_HOUR * 0.3 * hrs, 0, 100);
+    ch.tiredness = clamp(ch.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
+    if (ch.tiredness <= 0) { ch.isSleeping = false; ch.task = null; ch.tiredness = 0; }
+  } else {
+    ch.hunger    = clamp(ch.hunger    + CFG.HUNGER_PER_HOUR * 0.8 * hrs, 0, 100);
+    ch.thirst    = clamp(ch.thirst    + CFG.THIRST_PER_HOUR * 0.8 * hrs, 0, 100);
+    ch.tiredness = clamp(ch.tiredness + CFG.TIRE_IDLE_PER_HOUR * 0.6 * hrs, 0, 100);
+  }
 
   if (ch.hunger  >= CFG.HUNGER_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
   if (ch.thirst  >= CFG.THIRST_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
@@ -79,9 +86,16 @@ function tickStats(gs, dt) {
 
   // ── Survivors ──────────────────────────────────────────────────────────────
   for (const s of gs.survivors) {
-    s.hunger    = clamp(s.hunger    + CFG.HUNGER_PER_HOUR * hrs, 0, 100);
-    s.thirst    = clamp(s.thirst    + CFG.THIRST_PER_HOUR * hrs, 0, 100);
-    s.tiredness = clamp(s.tiredness + (s.isExploring ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR) * hrs, 0, 100);
+    if (s.isSleeping) {
+      s.hunger    = clamp(s.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * hrs, 0, 100);
+      s.thirst    = clamp(s.thirst    + CFG.THIRST_PER_HOUR * 0.3 * hrs, 0, 100);
+      s.tiredness = clamp(s.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
+      if (s.tiredness <= 0) { s.isSleeping = false; s.task = null; s.tiredness = 0; }
+    } else {
+      s.hunger    = clamp(s.hunger    + CFG.HUNGER_PER_HOUR * hrs, 0, 100);
+      s.thirst    = clamp(s.thirst    + CFG.THIRST_PER_HOUR * hrs, 0, 100);
+      s.tiredness = clamp(s.tiredness + (s.isExploring ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR) * hrs, 0, 100);
+    }
     s.depression = clamp(s.depression + 0.5 * hrs, 0, 100);
     if (s.hunger  >= CFG.HUNGER_DAMAGE) s.health = Math.max(0, s.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
     if (s.thirst  >= CFG.THIRST_DAMAGE) s.health = Math.max(0, s.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
@@ -94,6 +108,9 @@ function tickStats(gs, dt) {
   const roomBonus  = getRoomUnlocked('security') ? 0.08 * hrs : 0;
   gs.suspicion = clamp(gs.suspicion + suspRise - suspReduce - roomBonus, 0, CFG.SUSPICION_MAX);
   if (gs.shelter.hasGenerator) gs.suspicion = clamp(gs.suspicion + 0.2 * hrs, 0, CFG.SUSPICION_MAX);
+
+  // ── Autonomous character AI ────────────────────────────────────────────────
+  tickCharacterAI(gs);
 
   // ── Death check ────────────────────────────────────────────────────────────
   if (p.health  <= 0) triggerGameOver(gs, 'The parent died.');
@@ -117,6 +134,16 @@ function tickTasks(gs, hrs) {
       p.task = null; p.taskProgress = 0; p.taskDuration = 0; p.isWorking = false;
     }
   }
+  // Child task
+  const ch2 = gs.child;
+  if (ch2.task) {
+    ch2.taskProgress = (ch2.taskProgress || 0) + hrs;
+    if (ch2.taskProgress >= ch2.taskDuration) {
+      finishTask(gs, ch2, ch2.task);
+      ch2.task = null; ch2.taskProgress = 0; ch2.taskDuration = 0;
+    }
+  }
+
   // Survivor tasks
   for (const s of gs.survivors) {
     if (s.task) {
@@ -267,6 +294,68 @@ function advanceDay(gs) {
 function triggerGameOver(gs, reason) {
   gs.gameOverReason = reason;
   gs.screen = 'gameOver';
+}
+
+// ── Autonomous character AI ────────────────────────────────────────────────────
+function tickCharacterAI(gs) {
+  const foodIds  = ['heated_beans','heated_soup','cooked_meat','canned_beans','canned_soup','canned_meat','energy_bar'];
+  const waterIds = ['purified_water','water_bottle','dirty_water'];
+
+  function autoNeeds(who) {
+    if (who.task || who.isSleeping) return;
+    // Auto-sleep when very tired
+    if (who.tiredness >= 80) {
+      who.isSleeping   = true;
+      who.task         = { type: 'sleep' };
+      who.taskDuration = 5;
+      who.taskProgress = 0;
+      notify(`${who.name} is exhausted and went to sleep.`, 'normal');
+      return;
+    }
+    // Auto-eat when very hungry
+    if (who.hunger >= 78) {
+      const foodId = foodIds.find(id => countInInventory(gs.shelter.storage, id) > 0);
+      if (foodId) {
+        removeFromInventory(gs.shelter.storage, foodId, 1);
+        const def = getItemDef(foodId);
+        who.hunger     = clamp(who.hunger     + (def.hunger     || -20), 0, 100);
+        who.thirst     = clamp(who.thirst     + (def.thirst     ||   0), 0, 100);
+        who.depression = clamp(who.depression + (def.depression ||   0), 0, 100);
+        notify(`${who.name} ate ${def.name}.`, 'good');
+        return;
+      }
+    }
+    // Auto-drink when very thirsty
+    if (who.thirst >= 72) {
+      const waterId = waterIds.find(id => countInInventory(gs.shelter.storage, id) > 0);
+      if (waterId) {
+        removeFromInventory(gs.shelter.storage, waterId, 1);
+        const def = getItemDef(waterId);
+        who.thirst = clamp(who.thirst + (def.thirst || -28), 0, 100);
+        who.health = clamp(who.health + (def.health ||   0), 0, who.maxHealth);
+        notify(`${who.name} drank ${def.name}.`, 'good');
+        return;
+      }
+    }
+  }
+
+  // Parent (only when in shelter)
+  if (!gs.parent.isExploring) autoNeeds(gs.parent);
+
+  // Lily — only sleep (eating/drinking handled by autoFeedLogic)
+  const ch = gs.child;
+  if (ch.tiredness >= 85 && !ch.task && !ch.isSleeping) {
+    ch.isSleeping   = true;
+    ch.task         = { type: 'sleep' };
+    ch.taskDuration = 6;
+    ch.taskProgress = 0;
+    notify(`${ch.name} is exhausted and went to sleep.`, 'normal');
+  }
+
+  // Survivors
+  for (const s of gs.survivors) {
+    if (!s.isExploring) autoNeeds(s);
+  }
 }
 
 // ── Consume item directly ─────────────────────────────────────────────────────

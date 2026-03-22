@@ -29,10 +29,9 @@ function initCharCreate() {
     gender: 'father',
     name: 'Survivor',
     attrPts: 2,
-    skillPts: 3,
+    skillPts: 5,
     attrs:  { strength:5, agility:5, perception:5, intelligence:5, charisma:5 },
-    // Half of 5 skill pts pre-allocated: scavenging+1, exploration+1
-    skills: { scavenging:2, stealth:1, exploration:2, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },
+    skills: { scavenging:1, stealth:1, exploration:1, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },
     nameInputActive: false,
     hoveredItem: null,
   };
@@ -169,7 +168,7 @@ function renderStep2(ctx, gs, cx) {
   const ptsColor = cc.skillPts > 0 ? C.textWarn : C.textGood;
   drawText(ctx, `Skill points: ${cc.skillPts}`, cx, y, ptsColor, 9, 'center', true);
   y += 14;
-  drawText(ctx, '(2 pts pre-allocated. Spend remaining or save for leveling up.)', cx, y, C.textDim, 7, 'center');
+  drawText(ctx, '(5 points — spend now or save for leveling up)', cx, y, C.textDim, 7, 'center');
   y += 14;
 
   for (const skill of SKILLS_LIST) {
@@ -286,7 +285,7 @@ function finalizeCharacter(gs) {
     perception: cc.attrs.perception, intelligence: cc.attrs.intelligence,
     charisma:   cc.attrs.charisma,
     skills:  { ...cc.skills },
-    level: 1, xp: 0,
+    level: 1, xp: 0, pendingSkillPts: cc.skillPts,
   });
 
   // Starting inventory based on skills

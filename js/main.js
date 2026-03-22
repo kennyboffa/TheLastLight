@@ -408,7 +408,7 @@ function resolveMission(gs, m) {
     m.lost = true;
     if (survivor) {
       gs.survivors = gs.survivors.filter(s => s.id !== m.survivorId);
-      addLog(`${m.survivorName} did not return from ${m.locName}.`, 'danger');
+      addLog(`${m.survivorName} doesn't seem to be coming back from ${m.locName}...`, 'danger');
     }
     return;
   }
@@ -485,7 +485,7 @@ function resetGame() {
     },
     dog:null, suspicion:10,
     explore:null, combat:null, event:null,
-    missions:[],
+    missions:[], eventLastFired:{},
     _pendingLoc: null,
     flags:{dogEncountered:false,dogRescued:false,firstExplore:false,traderMet:false},
     log:[], notifications:[],

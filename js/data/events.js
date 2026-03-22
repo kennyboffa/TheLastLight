@@ -387,15 +387,15 @@ function makeSurvivor() {
 
 // Pick a valid event for current state
 function pickEvent(gs, context) {
-  // context: 'shelter' | 'explore' | 'any'
   const pool = EVENTS_DB.filter(e => {
     if (e.condition && !e.condition(gs)) return false;
-    if (context === 'shelter' && e.condition) {
-      // allow shelter events
-      return true;
-    }
     return true;
   });
   if (pool.length === 0) return null;
-  return deepClone(randChoice(pool));
+  // Shallow-copy to avoid mutating original; keep function references in choices
+  const ev = randChoice(pool);
+  return {
+    ...ev,
+    choices: ev.choices ? ev.choices.map(c => ({ ...c })) : [],
+  };
 }

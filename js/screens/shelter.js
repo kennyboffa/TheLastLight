@@ -370,7 +370,7 @@ function handleControlBtn(id, gs, mx, my) {
   const M = shelterUI;
   switch (id) {
     case 'explore':
-      startExploration(gs);
+      gs.screen = 'exploreSelect';
       break;
     case 'craft':
       M.activeMenu = M.activeMenu === 'crafting' ? null : 'crafting';

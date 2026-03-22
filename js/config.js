@@ -34,16 +34,26 @@ const CFG = {
 
   // ── Shelter layout ───────────────────────────────────────────────────────
   PANEL_W: 200,          // right stats/controls panel width
-  ROOM_W:  128,
-  ROOM_H:   68,
-  ROOM_GAP:   8,
+  ROOM_W:  150,          // wider rooms (was 128)
+  ROOM_H:   86,          // taller rooms (was 68)
+  ROOM_GAP:   6,
   ROOM_COLS:  3,
   SURFACE_H: 95,         // height of surface scene at top of shelter view
 
   // ── Exploration ──────────────────────────────────────────────────────────
-  WORLD_W: 2200,         // exploration world pixel width
+  WORLD_W: 2800,         // exploration world pixel width
   SCROLL_SPEED: 2.2,
-  PLAYER_SPEED: 2.0,
+  PLAYER_SPEED: 2.5,
+
+  // ── Building interiors ───────────────────────────────────────────────────
+  BLDG_GROUND_Y: 230,    // floor y inside buildings
+  BLDG_CEIL_Y:    55,    // ceiling y inside buildings
+  FOG_RADIUS_OUT: 190,   // outdoor visibility radius
+  FOG_RADIUS_IN:  140,   // indoor visibility radius
+
+  // ── Weather ──────────────────────────────────────────────────────────────
+  WEATHER_CHANGE_MIN: 3, // game hours min between changes
+  WEATHER_CHANGE_MAX: 8,
 
   // ── Combat ───────────────────────────────────────────────────────────────
   BASE_HIT_CHANCE: 75,   // base % to hit

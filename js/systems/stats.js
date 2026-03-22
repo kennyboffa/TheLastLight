@@ -100,6 +100,9 @@ function tickStats(gs, dt) {
   if (ch.health <= 0) triggerGameOver(gs, 'Lily did not survive.');
   if (gs.suspicion >= CFG.SUSPICION_MAX) triggerGameOver(gs, 'The AI found the shelter.');
 
+  // ── Weather ────────────────────────────────────────────────────────────────
+  tickWeather(gs, hrs);
+
   // ── Task progress ──────────────────────────────────────────────────────────
   tickTasks(gs, hrs);
 }
@@ -206,6 +209,30 @@ function finishHunt(gs, task) {
   const yield_ = randInt(1, 3);
   addToInventory(gs.shelter.storage, 'raw_meat', yield_);
   addLog(`Hunt successful: found ${yield_} raw meat.`, 'good');
+}
+
+// ── Weather tick ──────────────────────────────────────────────────────────────
+function tickWeather(gs, hrs) {
+  const w = gs.weather;
+  w.timer += hrs;
+  if (w.timer >= w.nextChange) {
+    w.timer = 0;
+    w.nextChange = randFloat(CFG.WEATHER_CHANGE_MIN, CFG.WEATHER_CHANGE_MAX);
+    // Weighted: mostly clear, sometimes cloudy, occasionally rain
+    const roll = Math.random();
+    const prev = w.type;
+    w.type = roll < 0.45 ? 'clear' : roll < 0.78 ? 'cloudy' : 'rain';
+    if (w.type !== prev) notify(`Weather: ${w.type}`, 'info');
+  }
+  // Raincatcher fills when raining
+  if (w.type === 'rain' && gs.shelter.hasRaincatcher) {
+    w.rainAccum = (w.rainAccum || 0) + hrs;
+    if (w.rainAccum >= 2.5) {
+      w.rainAccum -= 2.5;
+      addToInventory(gs.shelter.storage, 'dirty_water', 1);
+      notify('Rain caught: dirty water collected.', 'info');
+    }
+  }
 }
 
 // ── Day transition ────────────────────────────────────────────────────────────

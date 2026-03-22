@@ -51,6 +51,33 @@ canvas.addEventListener('mouseup', (e) => {
   GS.mouse.clickY  = y;
 });
 
+// ── Touch support (mobile) ────────────────────────────────────────────────────
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = (t.clientX - rect.left) / SCALE;
+  const y = (t.clientY - rect.top)  / SCALE;
+  GS.mouse.x = x; GS.mouse.y = y;
+  GS.mouse.down = true;
+  GS.mouse.clickX = x; GS.mouse.clickY = y;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  GS.mouse.x = (t.clientX - rect.left) / SCALE;
+  GS.mouse.y = (t.clientY - rect.top)  / SCALE;
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  GS.mouse.down    = false;
+  GS.mouse.clicked = true;
+}, { passive: false });
+
 window.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
   GS.keys[key] = true;
@@ -188,6 +215,9 @@ function render(ctx) {
     case 'shelter':
       renderShelter(ctx, gs);
       break;
+    case 'exploreSelect':
+      renderExploreSelect(ctx, gs);
+      break;
     case 'explore':
       renderExplore(ctx, gs);
       break;
@@ -224,6 +254,9 @@ function handleClick(mx, my, gs) {
       break;
     case 'shelter':
       shelterClick(mx, my, gs);
+      break;
+    case 'exploreSelect':
+      exploreSelectClick(mx, my, gs);
       break;
     case 'explore':
       exploreClick(mx, my, gs);
@@ -313,7 +346,7 @@ function resetGame() {
     shelter: {
       rooms: [
         {id:'main',     unlocked:true,  level:1, building:false, buildProgress:0},
-        {id:'bedroom',  unlocked:false, level:0, building:false, buildProgress:0},
+        {id:'bedroom',  unlocked:true,  level:1, building:false, buildProgress:0},
         {id:'storage',  unlocked:false, level:0, building:false, buildProgress:0},
         {id:'workshop', unlocked:false, level:0, building:false, buildProgress:0},
         {id:'infirmary',unlocked:false, level:0, building:false, buildProgress:0},
@@ -321,13 +354,17 @@ function resetGame() {
       ],
       storage:[], storageMax:80, defenseLevel:0,
       hasWaterFilter:false, hasGenerator:false, hasRadioDampener:false,
+      hasRaincatcher:false,
       campfire:false, noiseBudget:100, noiseToday:0,
+      dronePatrol:{ active:false, x:-30, dir:1, timer:0, nextPatrol:300 },
     },
     dog:null, suspicion:10,
     explore:null, combat:null, event:null,
     flags:{dogEncountered:false,dogRescued:false,firstExplore:false,traderMet:false},
     log:[], notifications:[],
     dayFade:{active:false,alpha:0,phase:'out',timer:0},
+    weather:{ type:'clear', timer:0, nextChange:240, rainAccum:0 },
+    zoom:1.0,
     mouse:{x:0,y:0,down:false,clicked:false,clickX:0,clickY:0},
     keys:{},
     gameOverReason: '',

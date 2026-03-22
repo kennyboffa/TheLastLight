@@ -47,6 +47,12 @@ const UPGRADES_DB = {
     buildCost: { metal:3, wood:4 }, needsTools:false, buildNoise:5,
     buildTime:4, requiresRoom:null, key:'campfire',
   },
+  raincatcher: {
+    id:'raincatcher', name:'Rain Catcher',
+    desc:'Collects rainwater. Passively generates dirty water during rain.',
+    buildCost: { metal:4, cloth:3 }, needsTools:false, buildNoise:4,
+    buildTime:3, requiresRoom:null, key:'hasRaincatcher',
+  },
   generator: {
     id:'generator', name:'Generator',
     desc:'Power and warmth. Increases suspicion slightly each day.',

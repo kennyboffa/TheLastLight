@@ -87,6 +87,13 @@ const ITEMS_DB = {
   backpack:      { id:'backpack',      name:'Backpack',       type:'backpack', weight:1.0, value:58, carryBonus:12, desc:'Standard hiking pack.' },
   mil_backpack:  { id:'mil_backpack',  name:'Military Pack',  type:'backpack', weight:1.5, value:110,carryBonus:20, desc:'Large military-grade pack.' },
 
+  mushroom:      { id:'mushroom',      name:'Mushrooms',      type:'food', weight:0.2, value:5,
+    hunger:-10, thirst:2, depression:-4, desc:'Foraged mushrooms. Decent nutrition.', stackable:true },
+  dried_berries: { id:'dried_berries', name:'Dried Berries',  type:'food', weight:0.1, value:6,
+    hunger:-8,  thirst:1, depression:-6, desc:'Sweet and preserved. A small comfort.', stackable:true },
+  jerky:         { id:'jerky',         name:'Dried Meat',     type:'food', weight:0.2, value:10,
+    hunger:-18, thirst:4, depression:-3, desc:'Preserved and chewy. Long shelf life.', stackable:true },
+
   // ── MISC / MORALE ─────────────────────────────────────────────────────────
   book:          { id:'book',          name:'Old Book',       type:'misc', weight:0.4, value:8,
     depression:-6, desc:'Something to read.', stackable:true },

@@ -61,23 +61,32 @@ const GS = {
   // ── Shelter ───────────────────────────────────────────────────────────────
   shelter: {
     rooms: [
-      { id: 'main', unlocked: true,  level: 1, building: false, buildProgress: 0 },
-      { id: 'bedroom',   unlocked: false, level: 0, building: false, buildProgress: 0 },
+      { id: 'main',      unlocked: true,  level: 1, building: false, buildProgress: 0 },
+      { id: 'bedroom',   unlocked: true,  level: 1, building: false, buildProgress: 0 },  // unlocked from start
       { id: 'storage',   unlocked: false, level: 0, building: false, buildProgress: 0 },
       { id: 'workshop',  unlocked: false, level: 0, building: false, buildProgress: 0 },
       { id: 'infirmary', unlocked: false, level: 0, building: false, buildProgress: 0 },
       { id: 'security',  unlocked: false, level: 0, building: false, buildProgress: 0 },
     ],
     storage: [],
-    storageMax: 80,     // kg — grows when storage room is built
+    storageMax: 80,
     defenseLevel: 0,
-    hasWaterFilter:  false,
-    hasGenerator:    false,
+    hasWaterFilter:   false,
+    hasGenerator:     false,
     hasRadioDampener: false,
+    hasRaincatcher:   false,
     campfire: false,
-    noiseBudget: 100,   // noise tolerance before suspicion spike
-    noiseToday: 0,      // noise generated today from building
+    noiseBudget: 100,
+    noiseToday: 0,
+    // Drone patrol above shelter
+    dronePatrol: { active: false, x: -30, dir: 1, timer: 0, nextPatrol: 300 },
   },
+
+  // ── Weather ───────────────────────────────────────────────────────────────
+  weather: { type: 'clear', timer: 0, nextChange: 240, rainAccum: 0 },
+
+  // ── Zoom ──────────────────────────────────────────────────────────────────
+  zoom: 1.0,
 
   // ── Dog ───────────────────────────────────────────────────────────────────
   dog: null,     // null | { name:'Rex', health:100, hunger:20, alive:true }

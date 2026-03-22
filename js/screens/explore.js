@@ -539,8 +539,8 @@ function exploreClick(mx, my, gs) {
     es.invOpen = !es.invOpen; return;
   }
 
-  // Return Home button
-  if (hitTest(mx, my, 12, CFG.H - 55, 90, 16)) {
+  // Return Home button (top-left)
+  if (hitTest(mx, my, 6, 6, 90, 18)) {
     if (es.building) notify('Find the exit door first.', 'warn');
     else endExploration(gs);
     return;
@@ -803,8 +803,8 @@ function drawExploreHUD(ctx, gs, es) {
   const wtCol = parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : C.textDim;
   drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 38, wtCol, 8);
 
-  // Return Home button
-  drawButton(ctx, 12, CFG.H - 55, 90, 16, 'Return Home', hitTest(mx, my, 12, CFG.H - 55, 90, 16));
+  // Return Home button (top-left, mirrors INV button)
+  drawButton(ctx, 6, 6, 90, 18, 'Return Home', hitTest(mx, my, 6, 6, 90, 18));
 
   // ── Mobile D-pad (always visible; only meaningful on touch devices) ──────────
   const MB = _MOBILE_BTNS;

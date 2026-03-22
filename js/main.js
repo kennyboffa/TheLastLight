@@ -105,6 +105,16 @@ canvas.addEventListener('touchmove', (e) => {
 canvas.addEventListener('touchend', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
+
+  // If a screen transition happened while a D-pad button was held (e.g. an
+  // event fired mid-walk), _mobileHeld stays true and blocks all future clicks.
+  // Clear it now so taps on the new screen register normally.
+  if (GS.screen !== 'explore' && (_mobileHeld.left || _mobileHeld.right || _mobileHeld.action)) {
+    _mobileHeld.left = _mobileHeld.right = _mobileHeld.action = false;
+    GS.keys['a'] = false;
+    GS.keys['d'] = false;
+  }
+
   for (const t of e.changedTouches) {
     const x = (t.clientX - rect.left) / SCALE;
     const y = (t.clientY - rect.top)  / SCALE;
@@ -115,7 +125,7 @@ canvas.addEventListener('touchend', (e) => {
       if (hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h)) { _mobileHeld.action = false; continue; }
     }
   }
-  // Only fire click if no mobile button was released
+  // Only fire click if no mobile button is still held
   if (!_mobileHeld.left && !_mobileHeld.right && !_mobileHeld.action) {
     GS.mouse.down    = false;
     GS.mouse.clicked = true;

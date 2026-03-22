@@ -258,6 +258,10 @@ function endCombat(gs, result) {
     triggerGameOver(gs, `${gs.parent.name} was killed in combat.`);
     return;
   }
+  // Mark the encounter that triggered this combat as killed
+  if (result === 'victory' && c._encRef) {
+    c._encRef.killed = true;
+  }
   gs.combat = null;
   gs.screen  = 'explore';
 }

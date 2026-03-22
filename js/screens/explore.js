@@ -126,19 +126,26 @@ function startExploration(gs, loc) {
     }
   }
 
-  // Enemy encounters
+  // Enemy encounters — capped at 0-2 for early game
   const encounters = [];
   for (const zone of loc.zones) {
     if (chance(zone.enemyChance)) {
       encounters.push({
         wx: zone.x + Math.floor(zone.w * 0.6) + randInt(-20, 20),
-        triggered: false, distance: 80,
+        triggered: false, killed: false, distance: 70,
         difficulty: loc.difficulty,
         locCanHunt: !!loc.canHunt,
         zone,
       });
     }
   }
+  // Cap encounter count by difficulty (shuffle then slice)
+  const maxEnc = loc.difficulty <= 1 ? 2 : loc.difficulty <= 2 ? 3 : encounters.length;
+  for (let i = encounters.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = encounters[i]; encounters[i] = encounters[j]; encounters[j] = tmp;
+  }
+  encounters.length = Math.min(encounters.length, maxEnc);
 
   // Random events
   const events = [];
@@ -171,6 +178,39 @@ function startExploration(gs, loc) {
     showReturnPrompt: false,
     building: null,   // non-null when inside a building
   };
+
+  // Restore persistent loot/encounter state from previous visit
+  const saved = gs.locationStates && gs.locationStates[loc.id];
+  if (saved) {
+    saved.containers.forEach((sc, i) => {
+      if (exploreState.containers[i]) exploreState.containers[i].searched = sc.searched;
+    });
+    saved.loot.forEach((sl, i) => {
+      if (exploreState.loot[i]) exploreState.loot[i].taken = sl.taken;
+    });
+    saved.encounters.forEach((se, i) => {
+      if (!exploreState.encounters[i]) return;
+      if (se.killed) {
+        // Enemy was killed — small chance a wanderer moved in
+        exploreState.encounters[i].triggered = chance(12) ? false : true;
+      } else if (se.triggered) {
+        // Encounter was triggered but not killed (fled) — don't re-trigger
+        exploreState.encounters[i].triggered = true;
+      }
+    });
+    if (saved.buildings) {
+      saved.buildings.forEach((sb, bi) => {
+        if (!exploreState.buildings[bi]) return;
+        sb.floors.forEach((sf, fi) => {
+          if (!exploreState.buildings[bi].floors[fi]) return;
+          sf.containers.forEach((sc, ci) => {
+            const c = exploreState.buildings[bi].floors[fi].containers[ci];
+            if (c) c.searched = sc.searched;
+          });
+        });
+      });
+    }
+  }
 
   gs.parent.isExploring = true;
   gs.child.isAlone      = true;
@@ -266,7 +306,7 @@ function updateExplore(gs, dt) {
     if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance) {
       enc.triggered = true;
       const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt);
-      if (enemies.length > 0) { startCombat(gs, enemies); gs.screen = 'combat'; return; }
+      if (enemies.length > 0) { startCombat(gs, enemies); gs.combat._encRef = enc; gs.screen = 'combat'; return; }
     }
   }
 
@@ -505,7 +545,6 @@ function renderExplore(ctx, gs) {
   else             renderOutdoor(ctx, gs, es);
 
   drawExploreHUD(ctx, gs, es);
-  drawStatsPanel(ctx, gs);
   drawNotifications(ctx, gs);
   drawDayTransition(ctx, gs);
 }
@@ -706,12 +745,12 @@ function drawExploreHUD(ctx, gs, es) {
     const nearLoot = es.loot.find(item => !item.taken && Math.abs(es.px - item.wx) < 25);
     if (nearLoot) {
       const def = getItemDef(nearLoot.id);
-      drawPanel(ctx, CFG.W / 2 - 85, CFG.H - 62, 170, 20, C.panelBg);
-      drawText(ctx, `[E] Pick up ${def?.name || nearLoot.id}`, CFG.W / 2, CFG.H - 48, C.textBright, 8, 'center');
+      drawPanel(ctx, CFG.W / 2 - 70, CFG.H - 50, 140, 14, C.panelBg, C.border);
+      drawText(ctx, `[E] ${def?.name || nearLoot.id}`, CFG.W / 2, CFG.H - 40, C.textDim, 7, 'center');
     }
     if (es.showReturnPrompt) {
-      drawPanel(ctx, CFG.W / 2 - 95, CFG.H - 82, 190, 20, C.panelBg);
-      drawText(ctx, '[E] Return to shelter', CFG.W / 2, CFG.H - 68, C.textBright, 8, 'center');
+      drawPanel(ctx, CFG.W / 2 - 80, CFG.H - 66, 160, 14, C.panelBg, C.border);
+      drawText(ctx, '[E] Return to shelter', CFG.W / 2, CFG.H - 56, C.textDim, 7, 'center');
     }
   }
 
@@ -836,6 +875,19 @@ function drawExploreWeather(ctx, gs) {
 function endExploration(gs) {
   const es = exploreState;
   if (!es) return;
+
+  // Save location state for persistence
+  gs.locationStates[es.location.id] = {
+    containers: es.containers.map(c => ({ searched: c.searched })),
+    loot:       es.loot.map(l => ({ taken: l.taken })),
+    encounters: es.encounters.map(e => ({ triggered: e.triggered, killed: e.killed })),
+    buildings:  es.buildings.map(b => ({
+      floors: b.floors.map(f => ({
+        containers: f.containers.map(c => ({ searched: c.searched })),
+      })),
+    })),
+  };
+
   gs.parent.isExploring = false;
   gs.child.isAlone      = false;
   exploreState          = null;

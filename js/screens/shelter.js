@@ -38,6 +38,12 @@ function renderShelter(ctx, gs) {
   drawSurface(ctx, gs.day * 30);
   drawHatch(ctx, MAIN_W / 2, CFG.SURFACE_H - 2);
 
+  // Weather overlay on surface
+  drawShelterWeather(ctx, gs);
+
+  // Drone patrol above shelter
+  drawDronePatrol(ctx, gs);
+
   // Earth fill below surface
   drawEarth(ctx, 0, CFG.SURFACE_H, MAIN_W, CFG.H - CFG.SURFACE_H);
 
@@ -94,6 +100,9 @@ function renderShelter(ctx, gs) {
 
   // Right stats panel
   drawStatsPanel(ctx, gs);
+
+  // Weather / raincatcher badge
+  drawWeatherBadge(ctx, gs);
 
   // Bottom controls bar
   drawShelterControls(ctx, gs, mx, my);
@@ -479,5 +488,148 @@ function handleMenuClick(mx, my, gs) {
       y += 24;
     }
     if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16)) M.activeMenu = null;
+  }
+}
+
+// ── Drone patrol ──────────────────────────────────────────────────────────────
+
+function updateShelterAmbient(gs) {
+  const dp = gs.shelter.dronePatrol;
+  if (!dp) return;
+
+  if (dp.active) {
+    dp.x += dp.dir * 1.2;
+    // Drone reached far edge — deactivate
+    if (dp.x > MAIN_W + 40 || dp.x < -40) {
+      dp.active = false;
+      dp.timer  = 0;
+      // Suspicion affects how soon next patrol arrives
+      const base = gs.suspicion > 70 ? 90 : gs.suspicion > 40 ? 200 : 420;
+      dp.nextPatrol = base + randInt(0, 120);
+    }
+  } else {
+    dp.timer++;
+    if (dp.timer >= dp.nextPatrol) {
+      dp.active = true;
+      dp.timer  = 0;
+      dp.dir    = randInt(0, 1) === 0 ? 1 : -1;
+      dp.x      = dp.dir === 1 ? -30 : MAIN_W + 30;
+    }
+  }
+}
+
+function drawDronePatrol(ctx, gs) {
+  const dp = gs.shelter.dronePatrol;
+  if (!dp || !dp.active) return;
+
+  const y = 18 + Math.sin(dp.timer * 0.08) * 3;
+  drawDroneSprite(ctx, dp.x, y, 1.5, dp.timer);
+
+  // Spotlight beam (faint cone downward)
+  ctx.save();
+  ctx.globalAlpha = 0.07;
+  const grad = ctx.createLinearGradient(dp.x, y + 10, dp.x, CFG.SURFACE_H);
+  grad.addColorStop(0, '#c0c8ff');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(dp.x - 4, y + 10);
+  ctx.lineTo(dp.x - 28, CFG.SURFACE_H);
+  ctx.lineTo(dp.x + 28, CFG.SURFACE_H);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ── Weather visuals on shelter surface ───────────────────────────────────────
+
+function drawShelterWeather(ctx, gs) {
+  if (!gs.weather) return;
+  const w    = gs.weather.type;
+  const SH   = CFG.SURFACE_H;
+  const SW   = MAIN_W;
+  const fc   = frameCount;   // from main.js — updated each frame
+
+  if (w === 'cloudy' || w === 'rain') {
+    // Slow-drifting clouds
+    ctx.save();
+    ctx.globalAlpha = w === 'rain' ? 0.55 : 0.30;
+    ctx.fillStyle = '#1a1a2a';
+    const cloudDefs = [
+      { bx: 40,  by: 8,  rx: 28, ry: 10 },
+      { bx: 140, by: 12, rx: 22, ry:  8 },
+      { bx: 260, by: 6,  rx: 32, ry: 12 },
+      { bx: 360, by: 10, rx: 20, ry:  7 },
+    ];
+    for (const c of cloudDefs) {
+      const cx = ((c.bx + fc * 0.12) % (SW + 60)) - 30;
+      ctx.beginPath();
+      ctx.ellipse(Math.round(cx), c.by, c.rx, c.ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  if (w === 'rain') {
+    // Animated rain streaks
+    ctx.save();
+    ctx.strokeStyle = '#3a5a7a';
+    ctx.lineWidth   = 1;
+    ctx.globalAlpha = 0.45;
+    const drops = 22;
+    for (let i = 0; i < drops; i++) {
+      // Pseudo-random but deterministic per frame+drop
+      const seed = (i * 137 + fc * 3) % 1000;
+      const rx   = (seed * SW / 1000 + fc * 0.8) % SW;
+      const ry   = (i * 41 + fc * 5) % SH;
+      ctx.beginPath();
+      ctx.moveTo(Math.round(rx), Math.round(ry));
+      ctx.lineTo(Math.round(rx + 2), Math.round(ry + 7));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // Puddle shimmer on ground line
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = '#2a4a6a';
+    ctx.fillRect(0, SH - 4, SW, 3);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  if (w === 'clear') {
+    // Faint warm sky glow when clear
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.fillStyle = '#302818';
+    ctx.fillRect(0, 0, SW, SH);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+}
+
+// ── Weather/raincatcher badge ─────────────────────────────────────────────────
+
+function drawWeatherBadge(ctx, gs) {
+  if (!gs.weather) return;
+  const w  = gs.weather.type;
+  const icon = w === 'rain' ? '🌧' : w === 'cloudy' ? '☁' : '☀';
+  const label = w.charAt(0).toUpperCase() + w.slice(1);
+
+  // Small badge in top-left of surface area
+  drawPanel(ctx, 4, 4, 70, 16, C.panelBg);
+  drawText(ctx, icon, 10, 16, C.text, 8);
+  drawText(ctx, label, 22, 16, C.textDim, 7);
+
+  // Raincatcher status if built
+  if (gs.shelter.hasRaincatcher) {
+    const collecting = w === 'rain';
+    const col = collecting ? '#2878cc' : C.textDim;
+    drawPanel(ctx, 78, 4, 90, 16, C.panelBg);
+    drawText(ctx, collecting ? 'Collecting' : 'Raincatcher', 84, 16, col, 7);
   }
 }

@@ -588,6 +588,9 @@ function renderOutdoor(ctx, gs, es) {
   // Fog of war (drawn over world, not over HUD)
   const playerScreenX = es.px - es.scrollX;
   renderFog(ctx, playerScreenX, PLAYER_FOOT - 12, false);
+
+  // Weather overlay
+  drawExploreWeather(ctx, gs);
 }
 
 function renderBuildingInterior(ctx, gs, es) {
@@ -770,6 +773,44 @@ function drawBuildingStairs(ctx, sx, groundY, dir) {
     fillRect(ctx, sx + ox, stepY, 22 - i * 2, 5, col);
   }
   drawText(ctx, dir === 'up' ? '▲' : '▼', sx + 12, groundY - 24, '#6a5a88', 8, 'center');
+}
+
+// ── Weather overlay in explore ────────────────────────────────────────────────
+
+function drawExploreWeather(ctx, gs) {
+  if (!gs.weather) return;
+  const w  = gs.weather.type;
+  const fc = frameCount;
+
+  if (w === 'rain') {
+    ctx.save();
+    ctx.strokeStyle = '#3a5a7a';
+    ctx.lineWidth   = 1;
+    ctx.globalAlpha = 0.38;
+    for (let i = 0; i < 40; i++) {
+      const rx = ((i * 137 + fc * 2.5) % CFG.W);
+      const ry = ((i * 47  + fc * 5)   % GROUND_Y);
+      ctx.beginPath();
+      ctx.moveTo(Math.round(rx), Math.round(ry));
+      ctx.lineTo(Math.round(rx + 2), Math.round(ry + 8));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  if (w === 'cloudy' || w === 'rain') {
+    ctx.save();
+    ctx.globalAlpha = w === 'rain' ? 0.22 : 0.10;
+    ctx.fillStyle = '#101018';
+    ctx.fillRect(0, 0, CFG.W, GROUND_Y);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  // Small weather icon top-right (not scrolled)
+  const icon  = w === 'rain' ? '🌧' : w === 'cloudy' ? '☁' : '☀';
+  drawText(ctx, icon, CFG.W - CFG.PANEL_W - 14, 16, C.textDim, 9, 'right');
 }
 
 // ── End exploration ───────────────────────────────────────────────────────────

@@ -192,8 +192,8 @@ function update(dt) {
   // Shelter ambient events
   if (gs.screen === 'shelter') {
     maybeFireShelterEvent(gs);
-    // Auto feed when parent is not exploring (simple AI)
     autoFeedLogic(gs);
+    updateShelterAmbient(gs);
   }
 
   // Handle pending click

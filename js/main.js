@@ -53,15 +53,35 @@ canvas.addEventListener('mouseup', (e) => {
 
 // ── Touch support (mobile) ────────────────────────────────────────────────────
 
+// Tracks which mobile D-pad buttons are held (suppresses normal click)
+let _mobileHeld = { left: false, right: false, action: false };
+
+function _isMobileBtn(x, y) {
+  if (GS.screen !== 'explore') return false;
+  const MB = _MOBILE_BTNS;
+  return hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h)
+      || hitTest(x, y, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h)
+      || hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h);
+}
+
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
-  const t = e.touches[0];
   const rect = canvas.getBoundingClientRect();
-  const x = (t.clientX - rect.left) / SCALE;
-  const y = (t.clientY - rect.top)  / SCALE;
-  GS.mouse.x = x; GS.mouse.y = y;
-  GS.mouse.down = true;
-  GS.mouse.clickX = x; GS.mouse.clickY = y;
+  // Handle all active touches (multi-touch for e.g. left + action simultaneously)
+  for (const t of e.changedTouches) {
+    const x = (t.clientX - rect.left) / SCALE;
+    const y = (t.clientY - rect.top)  / SCALE;
+    if (GS.screen === 'explore') {
+      const MB = _MOBILE_BTNS;
+      if (hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h))   { GS.keys['a'] = true; _mobileHeld.left   = true; continue; }
+      if (hitTest(x, y, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h))  { GS.keys['d'] = true; _mobileHeld.right  = true; continue; }
+      if (hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h)) { _mobileHeld.action = true; exploreKeyPress('e', GS); continue; }
+    }
+    // Regular touch → mouse
+    GS.mouse.x = x; GS.mouse.y = y;
+    GS.mouse.down = true;
+    GS.mouse.clickX = x; GS.mouse.clickY = y;
+  }
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
@@ -74,8 +94,22 @@ canvas.addEventListener('touchmove', (e) => {
 
 canvas.addEventListener('touchend', (e) => {
   e.preventDefault();
-  GS.mouse.down    = false;
-  GS.mouse.clicked = true;
+  const rect = canvas.getBoundingClientRect();
+  for (const t of e.changedTouches) {
+    const x = (t.clientX - rect.left) / SCALE;
+    const y = (t.clientY - rect.top)  / SCALE;
+    if (GS.screen === 'explore') {
+      const MB = _MOBILE_BTNS;
+      if (hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h))   { GS.keys['a'] = false; _mobileHeld.left   = false; continue; }
+      if (hitTest(x, y, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h))  { GS.keys['d'] = false; _mobileHeld.right  = false; continue; }
+      if (hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h)) { _mobileHeld.action = false; continue; }
+    }
+  }
+  // Only fire click if no mobile button was released
+  if (!_mobileHeld.left && !_mobileHeld.right && !_mobileHeld.action) {
+    GS.mouse.down    = false;
+    GS.mouse.clicked = true;
+  }
 }, { passive: false });
 
 window.addEventListener('keydown', (e) => {

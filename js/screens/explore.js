@@ -8,6 +8,13 @@ const BUILDING_W  = 900;   // interior width of each building floor
 let exploreState = null;
 let fogCanvas    = null;   // offscreen canvas for fog of war
 
+// Mobile on-screen D-pad button rects (referenced by touch handler in main.js)
+const _MOBILE_BTNS = {
+  left:   { x: 108, y: CFG.H - 32, w: 38, h: 24 },
+  right:  { x: 152, y: CFG.H - 32, w: 38, h: 24 },
+  action: { x: 200, y: CFG.H - 32, w: 40, h: 24 },
+};
+
 // ── Fog of war ────────────────────────────────────────────────────────────────
 
 function initFogCanvas() {
@@ -716,6 +723,17 @@ function drawExploreHUD(ctx, gs, es) {
 
   // Return Home button
   drawButton(ctx, 12, CFG.H - 55, 90, 16, 'Return Home', hitTest(mx, my, 12, CFG.H - 55, 90, 16));
+
+  // ── Mobile D-pad (always visible; only meaningful on touch devices) ──────────
+  const MB = _MOBILE_BTNS;
+  const leftHov  = hitTest(mx, my, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h);
+  const rightHov = hitTest(mx, my, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h);
+  const actHov   = hitTest(mx, my, MB.action.x, MB.action.y, MB.action.w, MB.action.h);
+  const isLeft   = GS.keys['a'] || GS.keys['arrowleft'];
+  const isRight  = GS.keys['d'] || GS.keys['arrowright'];
+  drawButton(ctx, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h,   '◀', leftHov,  isLeft);
+  drawButton(ctx, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h,  '▶', rightHov, isRight);
+  drawButton(ctx, MB.action.x, MB.action.y, MB.action.w, MB.action.h, '[E]', actHov);
 }
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────

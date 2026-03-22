@@ -9,7 +9,11 @@ const ctx    = canvas.getContext('2d');
 let SCALE = 1;
 
 function resizeCanvas() {
-  const ww = window.innerWidth, wh = window.innerHeight;
+  // visualViewport gives the true visible area on mobile (excludes address bar,
+  // on-screen keyboard, etc.). Fall back to window dimensions on desktop.
+  const vp = window.visualViewport;
+  const ww = vp ? vp.width  : window.innerWidth;
+  const wh = vp ? vp.height : window.innerHeight;
   SCALE = Math.min(ww / CFG.W, wh / CFG.H);
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
@@ -18,6 +22,12 @@ function resizeCanvas() {
 }
 
 window.addEventListener('resize', resizeCanvas);
+// Fires when the phone rotates
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+// Fires when iOS address bar shows/hides
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resizeCanvas);
+}
 resizeCanvas();
 
 // ── Input handling ────────────────────────────────────────────────────────────

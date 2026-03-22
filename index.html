@@ -9,6 +9,13 @@
   <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
+  <!-- Portrait-mode overlay (hidden in landscape via CSS media query) -->
+  <div id="portrait-warning">
+    <div class="rotate-icon">&#x21BA;</div>
+    <div>Rotate your device to play</div>
+    <div style="color:#556;font-size:11px">The Last Light requires landscape mode</div>
+  </div>
+
   <div id="game-wrap">
     <canvas id="canvas"></canvas>
     <!-- Text input overlay for character name -->

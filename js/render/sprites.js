@@ -255,13 +255,14 @@ function drawRoomInterior(ctx, x, y, w, h, unlocked, selected) {
   }
 }
 
-function drawSurface(ctx, scrollOffset) {
+function drawSurface(ctx, scrollOffset, time) {
   const H = CFG.SURFACE_H;
   const W = CFG.W - CFG.PANEL_W;
 
   // Sky gradient
   fillRect(ctx, 0, 0, W, H, C.sky);
   fillRect(ctx, 0, H * 0.4, W, H * 0.6, C.sky2);
+  if (time !== undefined) fillRect(ctx, 0, 0, W, H, '#303858', dayFactor(time) * 0.28);
 
   // Distant building silhouettes
   ctx.globalAlpha = 0.35;
@@ -326,12 +327,13 @@ function drawEarth(ctx, x, y, w, h) {
 
 // ── Exploration environment ───────────────────────────────────────────────────
 
-function drawExploreBackground(ctx, scrollX, zone, worldH) {
+function drawExploreBackground(ctx, scrollX, zone, worldH, time) {
   const W = CFG.W;
   const H = worldH;
 
   // Sky
   fillRect(ctx, 0, 0, W, H * 0.45, C.sky);
+  if (time !== undefined) fillRect(ctx, 0, 0, W, H * 0.45, '#2a3850', dayFactor(time) * 0.35);
   // Ground
   fillRect(ctx, 0, H * 0.45, W, H * 0.55, C.ground);
 

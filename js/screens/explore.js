@@ -8,6 +8,13 @@ const BUILDING_W  = 900;   // interior width of each building floor
 let exploreState = null;
 let fogCanvas    = null;   // offscreen canvas for fog of war
 
+// ── Mobile D-pad button rects (computed after CFG available) ─────────────────
+const _MOBILE_BTNS = {
+  left:   { x: 10,  y: 290, w: 40, h: 30 },
+  right:  { x: 56,  y: 290, w: 40, h: 30 },
+  action: { x: 546, y: 290, w: 44, h: 30 },
+};
+
 // ── Fog of war ────────────────────────────────────────────────────────────────
 
 function initFogCanvas() {
@@ -16,10 +23,11 @@ function initFogCanvas() {
   fogCanvas.height = CFG.H;
 }
 
-function renderFog(ctx, playerScreenX, playerScreenY, isIndoor) {
+function renderFog(ctx, playerScreenX, playerScreenY, gs, isIndoor) {
   if (!fogCanvas) initFogCanvas();
-  const fc     = fogCanvas.getContext('2d');
-  const radius = isIndoor ? CFG.FOG_RADIUS_IN : CFG.FOG_RADIUS_OUT;
+  const fc = fogCanvas.getContext('2d');
+  const df = dayFactor(gs.time);
+  const radius = (isIndoor ? CFG.FOG_RADIUS_IN : CFG.FOG_RADIUS_OUT) + Math.round((isIndoor ? 60 : 130) * df);
 
   fc.clearRect(0, 0, CFG.W, CFG.H);
   fc.fillStyle = 'rgba(0,0,0,0.84)';
@@ -170,6 +178,7 @@ function startExploration(gs, loc) {
     animFrame: 0, animTimer: 0,
     showReturnPrompt: false,
     building: null,   // non-null when inside a building
+    invOpen: false, invScroll: 0,
   };
 
   // Restore persistent loot/encounter state from previous visit
@@ -265,9 +274,11 @@ function updateExplore(gs, dt) {
   const es = exploreState;
   const p  = gs.parent;
 
-  // Movement
-  const left  = gs.keys['a'] || gs.keys['arrowleft'];
-  const right = gs.keys['d'] || gs.keys['arrowright'];
+  // Movement (keyboard + mobile D-pad)
+  const dpadLeft  = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
+  const dpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
+  const left  = gs.keys['a'] || gs.keys['arrowleft']  || dpadLeft;
+  const right = gs.keys['d'] || gs.keys['arrowright'] || dpadRight;
   if (left)       { es.velX = -CFG.PLAYER_SPEED; es.facing = -1; }
   else if (right) { es.velX =  CFG.PLAYER_SPEED; es.facing =  1; }
   else es.velX = 0;
@@ -334,8 +345,10 @@ function updateBuildingInterior(gs, dt) {
   const fl  = bld.floors[bi.floorIdx];
   const p   = gs.parent;
 
-  const left  = gs.keys['a'] || gs.keys['arrowleft'];
-  const right = gs.keys['d'] || gs.keys['arrowright'];
+  const biDpadLeft  = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
+  const biDpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
+  const left  = gs.keys['a'] || gs.keys['arrowleft']  || biDpadLeft;
+  const right = gs.keys['d'] || gs.keys['arrowright'] || biDpadRight;
   if (left)       { bi.velX = -CFG.PLAYER_SPEED; bi.facing = -1; }
   else if (right) { bi.velX =  CFG.PLAYER_SPEED; bi.facing =  1; }
   else bi.velX = 0;
@@ -490,6 +503,42 @@ function exploreClick(mx, my, gs) {
   if (!exploreState) return;
   const es = exploreState;
 
+  // Inventory overlay — handle before anything else
+  if (es.invOpen) {
+    if (gs._exploreInvClose && hitTest(mx, my, gs._exploreInvClose.x, gs._exploreInvClose.y, gs._exploreInvClose.w, gs._exploreInvClose.h)) {
+      es.invOpen = false; return;
+    }
+    if (gs._exploreInvRows) {
+      for (const row of gs._exploreInvRows) {
+        if (my >= row.y1 && my < row.y2) {
+          const def = getItemDef(row.slot.id);
+          if (def) {
+            removeFromInventory(gs.parent.inventory, row.slot.id, row.slot.qty);
+            notify(`Dropped ${def.name}.`, 'warn');
+          }
+          return;
+        }
+      }
+    }
+    // Click outside modal to close
+    const px = 30, py = 40, pw = CFG.W - 60, ph = CFG.H - 80;
+    if (!hitTest(mx, my, px, py, pw, ph)) es.invOpen = false;
+    return;
+  }
+
+  // D-pad left/right — ignore clicks (movement handled by mouse.down in update)
+  if (hitTest(mx, my, _MOBILE_BTNS.left.x, _MOBILE_BTNS.left.y, _MOBILE_BTNS.left.w, _MOBILE_BTNS.left.h)) return;
+  if (hitTest(mx, my, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h)) return;
+  // Action button
+  if (hitTest(mx, my, _MOBILE_BTNS.action.x, _MOBILE_BTNS.action.y, _MOBILE_BTNS.action.w, _MOBILE_BTNS.action.h)) {
+    exploreKeyPress('e', gs); return;
+  }
+
+  // INV button
+  if (gs._exploreInvBtn && hitTest(mx, my, gs._exploreInvBtn.x, gs._exploreInvBtn.y, gs._exploreInvBtn.w, gs._exploreInvBtn.h)) {
+    es.invOpen = !es.invOpen; return;
+  }
+
   // Return Home button
   if (hitTest(mx, my, 12, CFG.H - 55, 90, 16)) {
     if (es.building) notify('Find the exit door first.', 'warn');
@@ -538,6 +587,7 @@ function renderExplore(ctx, gs) {
   else             renderOutdoor(ctx, gs, es);
 
   drawExploreHUD(ctx, gs, es);
+  if (es.invOpen) drawExploreInventory(ctx, gs, es);
   drawNotifications(ctx, gs);
   drawDayTransition(ctx, gs);
 }
@@ -545,7 +595,7 @@ function renderExplore(ctx, gs) {
 function renderOutdoor(ctx, gs, es) {
   const loc = es.location;
 
-  drawExploreBackground(ctx, es.scrollX, null, CFG.H);
+  drawExploreBackground(ctx, es.scrollX, null, CFG.H, gs.time);
   fillRect(ctx, 0, GROUND_Y, CFG.W, CFG.H - GROUND_Y, C.ground);
   fillRect(ctx, 0, GROUND_Y, CFG.W, 3, C.dirt2);
 
@@ -626,7 +676,7 @@ function renderOutdoor(ctx, gs, es) {
 
   // Fog of war (drawn over world, not over HUD)
   const playerScreenX = es.px - es.scrollX;
-  renderFog(ctx, playerScreenX, PLAYER_FOOT - 12, false);
+  renderFog(ctx, playerScreenX, PLAYER_FOOT - 12, gs, false);
 
   // Weather overlay
   drawExploreWeather(ctx, gs);
@@ -712,7 +762,7 @@ function renderBuildingInterior(ctx, gs, es) {
 
   // Indoor fog (tighter radius)
   const playerScreenX = bi.px - bi.scrollX;
-  renderFog(ctx, playerScreenX, PLAYER_FOOT - 12, true);
+  renderFog(ctx, playerScreenX, PLAYER_FOOT - 12, gs, true);
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
@@ -755,6 +805,12 @@ function drawExploreHUD(ctx, gs, es) {
 
   // Return Home button
   drawButton(ctx, 12, CFG.H - 55, 90, 16, 'Return Home', hitTest(mx, my, 12, CFG.H - 55, 90, 16));
+
+  // INV button (top-right)
+  const invBtnX = CFG.W - 50, invBtnY = 6;
+  const invHov = hitTest(mx, my, invBtnX, invBtnY, 40, 18);
+  drawButton(ctx, invBtnX, invBtnY, 40, 18, 'INV', invHov, es.invOpen);
+  gs._exploreInvBtn = { x: invBtnX, y: invBtnY, w: 40, h: 18 };
 }
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
@@ -812,6 +868,41 @@ function drawBuildingStairs(ctx, sx, groundY, dir) {
     fillRect(ctx, sx + ox, stepY, 22 - i * 2, 5, col);
   }
   drawText(ctx, dir === 'up' ? '▲' : '▼', sx + 12, groundY - 24, '#6a5a88', 8, 'center');
+}
+
+// ── In-explore inventory overlay ──────────────────────────────────────────────
+
+function drawExploreInventory(ctx, gs, es) {
+  const px = 30, py = 40, pw = CFG.W - 60, ph = CFG.H - 80;
+  const mx = gs.mouse.x, my = gs.mouse.y;
+
+  fillRect(ctx, 0, 0, CFG.W, CFG.H, '#000000', 0.55);
+  drawModal(ctx, px, py, pw, ph, 'INVENTORY & EQUIPMENT');
+
+  // Equipped strip
+  const eq = gs.parent.equipped;
+  const weapDef = eq.weapon ? getItemDef(eq.weapon) : null;
+  const bpDef   = gs.parent.backpackId ? getItemDef(gs.parent.backpackId) : null;
+  let ey = py + 22;
+  drawText(ctx, `Weapon: ${weapDef ? weapDef.name : 'none'}`, px + 8, ey + 8, weapDef ? C.textBright : C.textDim, 8);
+  drawText(ctx, `Backpack: ${bpDef ? bpDef.name : 'none'}`, px + pw/2, ey + 8, bpDef ? C.textBright : C.textDim, 8);
+  ey += 14;
+  drawDivider(ctx, px + 4, ey, pw - 8, C.border2);
+  ey += 4;
+
+  const listH = ph - (ey - py) - 30;
+  const rows = drawInventoryList(ctx, gs.parent.inventory, px + 4, ey, pw - 8, listH,
+    `CARRYING  ${calcWeight(gs.parent.inventory).toFixed(1)}/${parentMaxCarry().toFixed(1)}kg`,
+    es.invScroll || 0, mx, my);
+  gs._exploreInvRows = rows;
+
+  // Hint
+  drawText(ctx, 'Click item to drop it.  Tap anywhere outside to close.', px + pw/2, py + ph - 8, C.textDim, 7, 'center');
+
+  // Close button
+  const closeX = px + pw - 54, closeY = py + ph - 20;
+  drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
+  gs._exploreInvClose = { x: closeX, y: closeY, w: 50, h: 16 };
 }
 
 // ── Weather overlay in explore ────────────────────────────────────────────────
@@ -873,6 +964,7 @@ function endExploration(gs) {
   gs.parent.isExploring = false;
   gs.child.isAlone      = false;
   exploreState          = null;
+  gs.keys               = {};
   gs.screen             = 'shelter';
   gs.suspicion = clamp(gs.suspicion + randInt(2, 5), 0, CFG.SUSPICION_MAX);
   addLog(`Returned from ${es.location?.name || 'exploration'}.`, 'info');

@@ -141,6 +141,9 @@ const GS = {
   // ── Location persistence ──────────────────────────────────────────────────
   locationStates: {},   // { [locId]: saved container/loot/encounter state }
 
+  // ── Companion missions ────────────────────────────────────────────────────
+  missions: [],
+
   cc: {
     step: 0,     // 0=gender/name  1=attributes  2=skills
     gender: 'father',

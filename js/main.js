@@ -183,6 +183,7 @@ function update(dt) {
   // Stats tick (only in shelter/explore — not during events or combat transitions)
   if (!gs.paused && (gs.screen === 'shelter' || gs.screen === 'explore')) {
     tickStats(gs, dt);
+    tickMissions(gs);
   }
 
   // Screen-specific update
@@ -217,6 +218,9 @@ function render(ctx) {
       break;
     case 'exploreSelect':
       renderExploreSelect(ctx, gs);
+      break;
+    case 'packScreen':
+      renderPackScreen(ctx, gs);
       break;
     case 'explore':
       renderExplore(ctx, gs);
@@ -257,6 +261,9 @@ function handleClick(mx, my, gs) {
       break;
     case 'exploreSelect':
       exploreSelectClick(mx, my, gs);
+      break;
+    case 'packScreen':
+      packScreenClick(mx, my, gs);
       break;
     case 'explore':
       exploreClick(mx, my, gs);
@@ -309,6 +316,57 @@ function autoFeedLogic(gs) {
         break;
       }
     }
+  }
+}
+
+// ── Companion missions ────────────────────────────────────────────────────────
+
+function tickMissions(gs) {
+  for (const m of gs.missions) {
+    if (m.status !== 'active') continue;
+    const returnMinutes = m.returnDay * 1440 + m.returnTime;
+    const nowMinutes    = gs.day * 1440 + gs.time;
+    if (nowMinutes >= returnMinutes) {
+      resolveMission(gs, m);
+    }
+  }
+  // Clean up old resolved missions (keep last 5)
+  gs.missions = gs.missions.filter(m => m.status === 'active').concat(
+    gs.missions.filter(m => m.status !== 'active').slice(-5)
+  );
+}
+
+function resolveMission(gs, m) {
+  m.status = 'resolved';
+  const survivor = gs.survivors.find(s => s.id === m.survivorId);
+  if (survivor) survivor.onMission = false;
+
+  // Small chance lost
+  if (chance(m.lostChance)) {
+    m.lost = true;
+    if (survivor) {
+      gs.survivors = gs.survivors.filter(s => s.id !== m.survivorId);
+      addLog(`${m.survivorName} did not return from ${m.locName}.`, 'danger');
+    }
+    return;
+  }
+
+  // Injury chance
+  if (chance(m.injuryChance) && survivor) {
+    const dmg = randInt(10, 35);
+    survivor.health = Math.max(5, survivor.health - dmg);
+    m.injured = true;
+    addLog(`${m.survivorName} returned injured from ${m.locName}.`, 'warn');
+  } else {
+    addLog(`${m.survivorName} returned from ${m.locName}.`, 'good');
+  }
+
+  // Add loot to shelter storage
+  for (const item of m.loot) {
+    addToInventory(gs.shelter.storage, item.id, item.qty);
+  }
+  if (m.loot.length > 0) {
+    notify(`${m.survivorName} brought back ${m.loot.length} types of supplies.`, 'good');
   }
 }
 
@@ -365,6 +423,8 @@ function resetGame() {
     },
     dog:null, suspicion:10,
     explore:null, combat:null, event:null,
+    missions:[],
+    _pendingLoc: null,
     flags:{dogEncountered:false,dogRescued:false,firstExplore:false,traderMet:false},
     log:[], notifications:[],
     dayFade:{active:false,alpha:0,phase:'out',timer:0},

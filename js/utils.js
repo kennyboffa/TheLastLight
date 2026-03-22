@@ -159,3 +159,11 @@ function hitTest(px, py, x, y, w, h) {
 function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
+
+/** Day factor: 0 at night, 1 during day, ramps 6-8am and 6-8pm */
+function dayFactor(time) {
+  if (time >= 480 && time < 1080) return 1;
+  if (time >= 360 && time < 480)  return (time - 360) / 120;
+  if (time >= 1080 && time < 1200) return 1 - (time - 1080) / 120;
+  return 0;
+}

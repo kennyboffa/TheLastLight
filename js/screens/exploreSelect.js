@@ -87,7 +87,8 @@ function exploreSelectClick(mx, my, gs) {
 
   for (const loc of LOCATIONS_DB) {
     if (hitTest(mx, my, cardX, cy, cardW, cardH)) {
-      startExploration(gs, loc);
+      gs.screen = 'packScreen';
+      gs._pendingLoc = loc;
       return;
     }
     cy += cardH + 6;

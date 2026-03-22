@@ -535,15 +535,15 @@ function handleCharTask(taskId, gs) {
 // ── Bottom controls ───────────────────────────────────────────────────────────
 
 const CTRL_BUTTONS = [
-  { id: 'explore',  label: 'Explore',   w: 72 },
-  { id: 'craft',    label: 'Craft',     w: 56 },
-  { id: 'storage',  label: 'Storage',   w: 62 },
-  { id: 'cook',     label: 'Cook',      w: 56, needsCampfire: true },
-  { id: 'sleep',    label: 'Sleep',     w: 52 },
-  { id: 'play',     label: 'Play',      w: 52 },
-  { id: 'endday',   label: 'End Day',   w: 62 },
-  { id: 'save',     label: 'Save',      w: 46 },
-  { id: 'load',     label: 'Load',      w: 46 },
+  { id: 'explore',  label: 'Explore',   w: 56 },
+  { id: 'craft',    label: 'Craft',     w: 42 },
+  { id: 'storage',  label: 'Storage',   w: 50 },
+  { id: 'cook',     label: 'Cook',      w: 38, needsCampfire: true },
+  { id: 'sleep',    label: 'Sleep',     w: 42 },
+  { id: 'play',     label: 'Play',      w: 38 },
+  { id: 'endday',   label: 'End Day',   w: 50 },
+  { id: 'save',     label: 'Save',      w: 38 },
+  { id: 'load',     label: 'Load',      w: 38 },
 ];
 
 function drawShelterControls(ctx, gs, mx, my) {

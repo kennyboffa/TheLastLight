@@ -47,10 +47,22 @@ function drawStatsPanel(ctx, gs) {
     drawDivider(ctx, x + 6, y, w - 12, C.border2);
     y += 5;
     for (const s of gs.survivors) {
-      drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, C.textDim, 8);
-      y += 10;
-      y = drawPersonStats(ctx, s, x + 8, y, w - 16, true);
-      y += 3;
+      if (s.onMission) {
+        ctx.save();
+        ctx.globalAlpha = 0.38;
+        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, C.textDim, 8);
+        y += 10;
+        y = drawPersonStats(ctx, s, x + 8, y, w - 16, true);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+        drawText(ctx, 'ON MISSION', x + w / 2, y + 3, '#4a6a8a', 7, 'center');
+        y += 8;
+      } else {
+        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, C.textDim, 8);
+        y += 10;
+        y = drawPersonStats(ctx, s, x + 8, y, w - 16, true);
+        y += 3;
+      }
     }
   }
 
@@ -86,11 +98,9 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
   drawStatBar(ctx, x, y, w, bh, person.health, person.maxHealth, hpColor, null, 'HP');
   y += gap;
 
-  if (!compact) {
-    drawStatBar(ctx, x, y, w, bh, person.hunger,     100, C.hunger,    null, 'Hunger');   y += gap;
-    drawStatBar(ctx, x, y, w, bh, person.thirst,     100, C.thirst,    null, 'Thirst');   y += gap;
-    drawStatBar(ctx, x, y, w, bh, person.tiredness,  100, C.tiredness, null, 'Tired');    y += gap;
-  }
+  drawStatBar(ctx, x, y, w, bh, person.hunger,     100, C.hunger,    null, 'Hunger');   y += gap;
+  drawStatBar(ctx, x, y, w, bh, person.thirst,     100, C.thirst,    null, 'Thirst');   y += gap;
+  drawStatBar(ctx, x, y, w, bh, person.tiredness,  100, C.tiredness, null, 'Tired');    y += gap;
 
   const dcolor = person.depression > 70 ? '#9944dd' : C.depression;
   drawStatBar(ctx, x, y, w, bh, person.depression, 100, dcolor, null, 'Depr.');

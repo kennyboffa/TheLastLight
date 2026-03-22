@@ -116,6 +116,7 @@ function renderIntro(ctx, gs) {
 function introAdvance() {
   const i = GS.intro;
   if (i.done || i.waitForInput) {
+    initCharCreate();
     setScreen('charCreate');
     return;
   }

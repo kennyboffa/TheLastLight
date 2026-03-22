@@ -421,6 +421,11 @@ function drawCharPanel(ctx, gs, mx, my) {
     addBtn(onMission ? 'On Mission...' : 'Send on Mission', 'mission', onMission || tooWeak);
   }
 
+  // Character sheet button
+  const pendPts = who.pendingSkillPts || 0;
+  const charLabel = pendPts > 0 ? `Character (${pendPts} pts!)` : 'Character Sheet';
+  addBtn(charLabel, 'charSheet', false);
+
   const closeY   = py + PH - 22;
   const closeHov = hitTest(mx, my, px + PW - 58, closeY, 50, 16);
   drawButton(ctx, px + PW - 58, closeY, 50, 16, 'Close', closeHov);
@@ -500,6 +505,10 @@ function handleCharTask(taskId, gs) {
       }
       break;
 
+    case 'charSheet':
+      shelterUI.activeMenu = 'charSheet';
+      break;
+
     case 'mission': {
       const loc = randChoice(LOCATIONS_DB);
       const durationMins = randInt(480, 4320); // 8 hours to 3 days
@@ -570,11 +579,12 @@ function drawShelterControls(ctx, gs, mx, my) {
 function drawShelterMenu(ctx, gs, mx, my) {
   const M = shelterUI;
 
-  if (M.activeMenu === 'room')     drawRoomMenu(ctx, gs, mx, my);
-  else if (M.activeMenu === 'crafting') drawCraftingMenu(ctx, gs, mx, my);
-  else if (M.activeMenu === 'storage')  drawStorageMenu(ctx, gs, mx, my);
-  else if (M.activeMenu === 'cooking')  drawCookingMenu(ctx, gs, mx, my);
-  else if (M.activeMenu === 'char')     drawCharPanel(ctx, gs, mx, my);
+  if (M.activeMenu === 'room')      drawRoomMenu(ctx, gs, mx, my);
+  else if (M.activeMenu === 'crafting')  drawCraftingMenu(ctx, gs, mx, my);
+  else if (M.activeMenu === 'storage')   drawStorageMenu(ctx, gs, mx, my);
+  else if (M.activeMenu === 'cooking')   drawCookingMenu(ctx, gs, mx, my);
+  else if (M.activeMenu === 'char')      drawCharPanel(ctx, gs, mx, my);
+  else if (M.activeMenu === 'charSheet') drawCharSheet(ctx, gs, mx, my);
 }
 
 function drawRoomMenu(ctx, gs, mx, my) {
@@ -908,6 +918,21 @@ function handleMenuClick(mx, my, gs) {
     }
     if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16)) M.activeMenu = null;
   }
+
+  if (M.activeMenu === 'charSheet') {
+    if (GS._charSheetBtns) {
+      for (const btn of GS._charSheetBtns) {
+        if (hitTest(mx, my, btn.x, btn.y, btn.w, btn.h)) {
+          btn.action(); return;
+        }
+      }
+    }
+    if (GS._charSheetClose && hitTest(mx, my,
+        GS._charSheetClose.x, GS._charSheetClose.y,
+        GS._charSheetClose.w, GS._charSheetClose.h)) {
+      M.activeMenu = 'char'; return;
+    }
+  }
 }
 
 // ── Drone patrol ──────────────────────────────────────────────────────────────
@@ -1059,4 +1084,99 @@ function drawWeatherBadge(ctx, gs) {
     drawPanel(ctx, 78, 4, 90, 16, C.panelBg);
     drawText(ctx, collecting ? 'Collecting' : 'Raincatcher', 84, 16, col, 7);
   }
+}
+
+// ── Character Sheet panel ──────────────────────────────────────────────────────
+
+const _CHAR_SHEET_ATTRS  = ['strength','agility','perception','intelligence','charisma'];
+const _CHAR_SHEET_SKILLS = ['scavenging','stealth','exploration','bartering','speech','lockpick','melee','firearms'];
+
+function drawCharSheet(ctx, gs, mx, my) {
+  const sel = shelterUI.selectedChar;
+  if (!sel) { shelterUI.activeMenu = null; return; }
+
+  let who, role, selColor;
+  if (sel === 'parent') {
+    who = gs.parent; role = parentTitle(); selColor = '#8888ff';
+  } else if (sel === 'child') {
+    who = gs.child; role = 'Child'; selColor = '#cc88cc';
+  } else {
+    who = gs.survivors.find(s => s.id === sel);
+    role = 'Survivor'; selColor = '#88cc88';
+  }
+  if (!who) { shelterUI.activeMenu = null; return; }
+
+  const PW = 260, PH = 300;
+  const px = clamp(Math.floor((MAIN_W - PW) / 2), 2, MAIN_W - PW - 2);
+  const py = clamp(Math.floor((CFG.H - PH) / 2), 2, CFG.H - PH - 2);
+
+  fillRect(ctx, px, py, PW, PH, C.panelBg);
+  strokeRect(ctx, px, py, PW, PH, selColor);
+  fillRect(ctx, px, py, PW, 18, '#0a0a18');
+  drawText(ctx, `${who.name.toUpperCase()} — CHARACTER SHEET`, px + PW/2, py + 12, selColor, 8, 'center', true);
+
+  gs._charSheetBtns = [];
+
+  const pendPts = who.pendingSkillPts || 0;
+  const halfW = (PW - 20) / 2;
+  let y = py + 24;
+
+  // ── Attributes (left column) ─────────────────────────────────────────────
+  drawText(ctx, 'ATTRIBUTES', px + 8 + halfW/2, y + 7, C.textDim, 7, 'center', true);
+  y += 12;
+  for (const attr of _CHAR_SHEET_ATTRS) {
+    const val = who[attr] || 1;
+    const label = attr.charAt(0).toUpperCase() + attr.slice(1, 3);
+    drawText(ctx, label, px + 8, y + 8, C.text, 8);
+    drawText(ctx, String(val), px + 8 + halfW - 10, y + 8, val >= 8 ? C.textGood : C.textBright, 8, 'right', true);
+    y += 14;
+  }
+
+  // ── Skills (right column, from top) ──────────────────────────────────────
+  y = py + 36;
+  drawText(ctx, 'SKILLS', px + 14 + halfW + halfW/2, y - 12 + 7, C.textDim, 7, 'center', true);
+  const skillColX = px + 14 + halfW;
+  for (const skill of _CHAR_SHEET_SKILLS) {
+    const val = (who.skills && who.skills[skill]) || 0;
+    const label = skill.charAt(0).toUpperCase() + skill.slice(1, 5);
+    drawText(ctx, label, skillColX, y + 8, C.text, 7);
+    // Pips
+    for (let p = 0; p < 5; p++) {
+      const px2 = skillColX + 32 + p * 11;
+      fillRect(ctx, px2, y + 2, 9, 9, p < val ? '#3a6a3a' : '#151520');
+      strokeRect(ctx, px2, y + 2, 9, 9, p < val ? '#5a9a5a' : C.border);
+    }
+    // + button if pending pts
+    if (pendPts > 0 && val < 10 && (sel === 'parent' || who.skills)) {
+      const bx = skillColX + 32 + 5 * 11 + 2, by = y + 1;
+      const bHov = hitTest(mx, my, bx, by, 12, 12);
+      drawButton(ctx, bx, by, 12, 12, '+', bHov);
+      const capturedSkill = skill;
+      gs._charSheetBtns.push({
+        x: bx, y: by, w: 12, h: 12,
+        action: () => {
+          if ((who.pendingSkillPts || 0) <= 0) return;
+          if (!who.skills) who.skills = {};
+          who.skills[capturedSkill] = Math.min(10, (who.skills[capturedSkill] || 0) + 1);
+          who.pendingSkillPts--;
+        }
+      });
+    }
+    y += 14;
+  }
+
+  // Pending pts notice
+  y = py + 24 + 5 * 14 + 14;
+  drawDivider(ctx, px + 4, y, PW - 8, C.border2); y += 8;
+  if (pendPts > 0) {
+    drawText(ctx, `${pendPts} skill point${pendPts !== 1 ? 's' : ''} to spend!`, px + PW/2, y + 8, '#d4aa40', 8, 'center', true);
+  } else {
+    drawText(ctx, `Level ${who.level || 1}  •  XP ${who.xp || 0}/${xpForLevel(who.level || 1)}`, px + PW/2, y + 8, C.textDim, 7, 'center');
+  }
+  y += 16;
+
+  // Back button
+  const backHov = hitTest(mx, my, px + 8, py + PH - 24, 60, 16);
+  drawButton(ctx, px + 8, py + PH - 24, 60, 16, '← Back', backHov);
+  gs._charSheetClose = { x: px + 8, y: py + PH - 24, w: 60, h: 16 };
 }

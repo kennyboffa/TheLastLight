@@ -356,17 +356,12 @@ function giveXP(who, amount, gs) {
     const attrKey = _ATTR_CYCLE[(who.level - 2) % _ATTR_CYCLE.length];
     if (who[attrKey] !== undefined) who[attrKey] = Math.min(10, who[attrKey] + 1);
 
-    // Skill boost every 2 levels
-    let skillMsg = '';
-    if (who.level % 2 === 0 && who.skills) {
-      const skillKey = _SKILL_CYCLE[(Math.floor(who.level / 2) - 1) % _SKILL_CYCLE.length];
-      if (who.skills[skillKey] !== undefined) {
-        who.skills[skillKey] = Math.min(10, who.skills[skillKey] + 1);
-        skillMsg = `, +1 ${skillKey}`;
-      }
+    // Give 2 spendable skill points every level
+    if (who.skills) {
+      who.pendingSkillPts = (who.pendingSkillPts || 0) + 2;
     }
 
-    notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}${skillMsg}, +5 HP`, 'good');
+    notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}, +2 skill pts, +5 HP`, 'good');
     if (gs) addLog(`${who.name} leveled up to Level ${who.level}.`, 'good');
   }
 }

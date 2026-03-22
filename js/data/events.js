@@ -381,7 +381,7 @@ function makeSurvivor() {
     isExploring: false,
     isSleeping: false,
     task: null, taskProgress: 0, taskDuration: 0,
-    level: 1, xp: 0,
+    level: 1, xp: 0, pendingSkillPts: 0,
     animFrame: 0, animTimer: 0,
     x: 200 + _snIdx * 30, y: 0, facing: 1,
   };
@@ -389,13 +389,18 @@ function makeSurvivor() {
 
 // Pick a valid event for current state
 function pickEvent(gs, context) {
+  if (!gs.eventLastFired) gs.eventLastFired = {};
   const pool = EVENTS_DB.filter(e => {
     if (e.condition && !e.condition(gs)) return false;
+    // Prevent the same event from firing again within 10 in-game days
+    const lastDay = gs.eventLastFired[e.id] || 0;
+    if (gs.day - lastDay < 10) return false;
     return true;
   });
   if (pool.length === 0) return null;
   // Shallow-copy to avoid mutating original; keep function references in choices
   const ev = randChoice(pool);
+  gs.eventLastFired[ev.id] = gs.day;
   return {
     ...ev,
     choices: ev.choices ? ev.choices.map(c => ({ ...c })) : [],

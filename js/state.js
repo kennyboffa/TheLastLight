@@ -39,7 +39,7 @@ const GS = {
     taskProgress: 0,
     taskDuration: 0,
     // Progression
-    level: 1, xp: 0,
+    level: 1, xp: 0, pendingSkillPts: 0,
     // Animation
     x: 115, y: 0, facing: 1, animFrame: 0, animTimer: 0,
   },
@@ -61,7 +61,7 @@ const GS = {
     // Skills (low; grow via XP)
     skills: { scavenging:1, stealth:2, exploration:1, bartering:1, speech:2, lockpick:1, melee:1, firearms:1 },
     // Progression
-    level: 1, xp: 0,
+    level: 1, xp: 0, pendingSkillPts: 0,
     x: 65, y: 0, facing: 1, animFrame: 0, animTimer: 0,
   },
 
@@ -144,12 +144,15 @@ const GS = {
   // ── Companion missions ────────────────────────────────────────────────────
   missions: [],
 
+  // ── Event cooldowns (last fired day per event id) ─────────────────────────
+  eventLastFired: {},
+
   cc: {
     step: 0,     // 0=gender/name  1=attributes  2=skills
     gender: 'father',
     name:   '',
     attrPts: 2,   // distributable attribute points above base
-    skillPts: 10, // distributable skill points
+    skillPts: 5,  // distributable skill points
     attrs:  { strength:5, agility:5, perception:5, intelligence:5, charisma:5 },
     skills: { scavenging:1, stealth:1, exploration:1, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },
     nameInputActive: false,

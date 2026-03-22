@@ -94,13 +94,16 @@ function startExploration(gs, loc) {
   }
 
   // Outdoor containers (2-4 per zone, scattered)
+  // Crates and chests are only found near/inside buildings — not in forest/nature exterior
   const containers = [];
   for (const zone of loc.zones) {
-    const count = 2 + randInt(0, 2);
+    const isNatureZone = zone.lootTable && (zone.lootTable.startsWith('nature') || zone.lootTable.startsWith('water'));
+    const count = isNatureZone ? 0 : 2 + randInt(0, 2);
     for (let i = 0; i < count; i++) {
       const cx = zone.x + 50 + randInt(0, zone.w - 100);
       if (buildings.some(b => Math.abs(cx - (b.doorX + 8)) < 35)) continue;
-      const types = ['crate', 'locker', 'chest', 'bag'];
+      // Nature-adjacent zones only spawn bags/backpacks, never crates or chests
+      const types = ['locker', 'bag'];
       containers.push({
         wx: cx, wy: GROUND_Y,
         type: randChoice(types),
@@ -539,8 +542,9 @@ function exploreClick(mx, my, gs) {
     es.invOpen = !es.invOpen; return;
   }
 
-  // Return Home button (top-left)
-  if (hitTest(mx, my, 6, 6, 90, 18)) {
+  // Return Home button (bottom-left)
+  const _retBtnY = CFG.H - 30;
+  if (hitTest(mx, my, 6, _retBtnY, 96, 20)) {
     if (es.building) notify('Find the exit door first.', 'warn');
     else endExploration(gs);
     return;
@@ -771,7 +775,7 @@ function drawExploreHUD(ctx, gs, es) {
   const loc = es.location;
   const mx = gs.mouse.x, my = gs.mouse.y;
 
-  // Location / floor info panel
+  // Location / floor info panel (shifted right to leave room for Return Home)
   drawPanel(ctx, 6, 6, 220, 30, C.panelBg);
   drawText(ctx, loc.name, 12, 18, C.text, 8);
   if (es.building) {
@@ -792,8 +796,8 @@ function drawExploreHUD(ctx, gs, es) {
       drawText(ctx, `[E] ${def?.name || nearLoot.id}`, CFG.W / 2, CFG.H - 40, C.textDim, 7, 'center');
     }
     if (es.showReturnPrompt) {
-      drawPanel(ctx, CFG.W / 2 - 80, CFG.H - 66, 160, 14, C.panelBg, C.border);
-      drawText(ctx, '[E] Return to shelter', CFG.W / 2, CFG.H - 56, C.textDim, 7, 'center');
+      drawPanel(ctx, CFG.W / 2 - 80, CFG.H - 50, 160, 14, C.panelBg, C.border);
+      drawText(ctx, '[E] Return to shelter', CFG.W / 2, CFG.H - 40, C.textDim, 7, 'center');
     }
   }
 
@@ -803,8 +807,9 @@ function drawExploreHUD(ctx, gs, es) {
   const wtCol = parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : C.textDim;
   drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 38, wtCol, 8);
 
-  // Return Home button (top-left, mirrors INV button)
-  drawButton(ctx, 6, 6, 90, 18, 'Return Home', hitTest(mx, my, 6, 6, 90, 18));
+  // Return Home button — placed below the d-pad row to avoid overlap
+  const retBtnY = CFG.H - 30;
+  drawButton(ctx, 6, retBtnY, 96, 20, 'Return Home', hitTest(mx, my, 6, retBtnY, 96, 20));
 
   // ── Mobile D-pad (always visible; only meaningful on touch devices) ──────────
   const MB = _MOBILE_BTNS;

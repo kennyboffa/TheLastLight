@@ -24,7 +24,9 @@ function drawStatsPanel(ctx, gs) {
   y += 6;
 
   // ── Parent stats ───────────────────────────────────────────────────────────
+  const pLvl = gs.parent.level || 1;
   drawText(ctx, gs.parent.name.toUpperCase() + ' (' + parentTitle() + ')', x + 8, y + 8, C.text, 8, 'left', true);
+  drawText(ctx, `Lv.${pLvl}`, x + w - 8, y + 8, '#d4aa40', 7, 'right', true);
   y += 12;
 
   y = drawPersonStats(ctx, gs.parent, x + 8, y, w - 16);
@@ -33,7 +35,9 @@ function drawStatsPanel(ctx, gs) {
   y += 5;
 
   // ── Child stats ────────────────────────────────────────────────────────────
+  const chLvl = gs.child.level || 1;
   drawText(ctx, gs.child.name.toUpperCase() + ' (Child)', x + 8, y + 8, '#a0809a', 8, 'left', true);
+  drawText(ctx, `Lv.${chLvl}`, x + w - 8, y + 8, '#d4aa40', 7, 'right', true);
   y += 12;
   y = drawPersonStats(ctx, gs.child, x + 8, y, w - 16);
   y += 4;
@@ -43,7 +47,7 @@ function drawStatsPanel(ctx, gs) {
     drawDivider(ctx, x + 6, y, w - 12, C.border2);
     y += 5;
     for (const s of gs.survivors) {
-      drawText(ctx, s.name, x + 8, y + 8, C.textDim, 8);
+      drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, C.textDim, 8);
       y += 10;
       y = drawPersonStats(ctx, s, x + 8, y, w - 16, true);
       y += 3;

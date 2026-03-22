@@ -38,6 +38,8 @@ const GS = {
     task: null,          // current shelter task
     taskProgress: 0,
     taskDuration: 0,
+    // Progression
+    level: 1, xp: 0,
     // Animation
     x: 115, y: 0, facing: 1, animFrame: 0, animTimer: 0,
   },
@@ -54,6 +56,12 @@ const GS = {
     infected: false,
     isSleeping: false,
     task: null, taskProgress: 0, taskDuration: 0,
+    // Attributes (child-appropriate)
+    strength: 2, agility: 5, perception: 5, intelligence: 6, charisma: 6,
+    // Skills (low; grow via XP)
+    skills: { scavenging:1, stealth:2, exploration:1, bartering:1, speech:2, lockpick:1, melee:1, firearms:1 },
+    // Progression
+    level: 1, xp: 0,
     x: 65, y: 0, facing: 1, animFrame: 0, animTimer: 0,
   },
 

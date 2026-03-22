@@ -334,6 +334,7 @@ function resetGame() {
       loaded:{pistol:0,rifle:0,shotgun:0},
       isExploring:false, isSleeping:false, isWorking:false,
       task:null, taskProgress:0, taskDuration:0,
+      level:1, xp:0,
       x:115, y:0, facing:1, animFrame:0, animTimer:0,
     },
     child: {
@@ -341,6 +342,9 @@ function resetGame() {
       hunger:20, thirst:20, tiredness:25, depression:15,
       isAlone:false, infected:false,
       isSleeping:false, task:null, taskProgress:0, taskDuration:0,
+      strength:2, agility:5, perception:5, intelligence:6, charisma:6,
+      skills:{scavenging:1,stealth:2,exploration:1,bartering:1,speech:2,lockpick:1,melee:1,firearms:1},
+      level:1, xp:0,
       x:65, y:0, facing:1, animFrame:0, animTimer:0,
     },
     survivors: [],

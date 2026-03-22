@@ -381,6 +381,7 @@ function makeSurvivor() {
     isExploring: false,
     isSleeping: false,
     task: null, taskProgress: 0, taskDuration: 0,
+    level: 1, xp: 0,
     animFrame: 0, animTimer: 0,
     x: 200 + _snIdx * 30, y: 0, facing: 1,
   };

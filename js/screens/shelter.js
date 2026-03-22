@@ -249,7 +249,7 @@ function drawCharPanel(ctx, gs, mx, my) {
   }
   if (!who) { shelterUI.selectedChar = null; shelterUI.activeMenu = null; return; }
 
-  const PW = 184, PH = sel === 'parent' ? 242 : 202;
+  const PW = 184, PH = sel === 'parent' ? 260 : 220;
   const px = clamp(shelterUI.charPanelX, 2, MAIN_W - PW - 2);
   const py = clamp(shelterUI.charPanelY, 2, CFG.H - PH - 36);
 
@@ -266,6 +266,16 @@ function drawCharPanel(ctx, gs, mx, my) {
   drawStatBar(ctx, px+8, y, sw, 5, who.tiredness,     100,    C.tiredness,  null, 'Tired');    y += 9;
   drawStatBar(ctx, px+8, y, sw, 5, who.depression,    100,    C.depression, null, 'Depr.');    y += 10;
 
+  // Level & XP
+  const lvl    = who.level  || 1;
+  const curXP  = who.xp     || 0;
+  const needXP = xpForLevel(lvl);
+  drawText(ctx, `Lv.${lvl}`, px+8, y+8, '#d4aa40', 7, 'left', true);
+  drawText(ctx, `XP: ${curXP}/${needXP}`, px + PW - 8, y+8, C.textDim, 7, 'right');
+  y += 11;
+  drawStatBar(ctx, px+8, y, sw, 4, curXP, needXP, '#d4aa40');
+  y += 10;
+
   const taskLabel = who.isSleeping ? 'Sleeping...'
     : who.task ? (who.task.type[0].toUpperCase() + who.task.type.slice(1) + '...')
     : 'Idle';
@@ -275,7 +285,7 @@ function drawCharPanel(ctx, gs, mx, my) {
     drawStatBar(ctx, px+8, y, sw, 3, who.taskProgress, who.taskDuration, C.textGood);
     y += 7;
   }
-  y += 8;
+  y += 6;
   drawDivider(ctx, px+4, y, PW-8, C.border2); y += 8;
 
   gs._charPanelBtns = [];
@@ -718,7 +728,7 @@ function handleMenuClick(mx, my, gs) {
     }
     // Click outside panel closes it
     const sel = M.selectedChar;
-    const PH  = sel === 'parent' ? 242 : 202;
+    const PH  = sel === 'parent' ? 260 : 220;
     const PW  = 184;
     const px  = clamp(M.charPanelX, 2, MAIN_W - PW - 2);
     const py  = clamp(M.charPanelY, 2, CFG.H - PH - 36);

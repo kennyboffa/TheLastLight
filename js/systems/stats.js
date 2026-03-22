@@ -183,20 +183,26 @@ function finishTask(gs, who, task) {
     }
     case 'craft':
       notify('Crafting complete.', 'good');
+      giveXP(who, 15, gs);
       break;
     case 'build':
       completeBuildTask(gs, task);
+      giveXP(who, 25, gs);
       break;
     case 'play':
-      gs.child.depression = clamp(gs.child.depression - 18, 0, 100);
+      gs.child.depression  = clamp(gs.child.depression  - 18, 0, 100);
       gs.parent.depression = clamp(gs.parent.depression - 10, 0, 100);
       notify('Lily\'s mood has improved.', 'good');
+      giveXP(gs.parent, 8, gs);
+      giveXP(gs.child,  5, gs);
       break;
     case 'cook':
       finishCooking(gs, task);
+      giveXP(who, 10, gs);
       break;
     case 'hunt':
       finishHunt(gs, task);
+      giveXP(who, 20, gs);
       break;
   }
 }
@@ -282,10 +288,15 @@ function advanceDay(gs) {
   // Dog availability
   if (gs.day >= 10 && !gs.flags.dogEncountered) gs.flags.dogAvailable = true;
 
-  // Survivor morale gentle recovery
+  // Survivor morale gentle recovery + daily XP
   for (const s of gs.survivors) {
     s.depression = clamp(s.depression - 2, 0, 100);
+    giveXP(s, 5, gs);
   }
+
+  // Daily survival XP
+  giveXP(gs.parent, 8, gs);
+  giveXP(gs.child,  5, gs);
 
   notify(`Day ${gs.day}`, 'info');
 }
@@ -294,6 +305,47 @@ function advanceDay(gs) {
 function triggerGameOver(gs, reason) {
   gs.gameOverReason = reason;
   gs.screen = 'gameOver';
+}
+
+// ── XP & Leveling ─────────────────────────────────────────────────────────────
+
+function xpForLevel(lvl) {
+  // XP needed to go from lvl to lvl+1: 100, 140, 196, 274, …
+  return Math.floor(100 * Math.pow(1.4, lvl - 1));
+}
+
+// Attribute cycling order for level-up bonuses
+const _ATTR_CYCLE  = ['strength','agility','perception','intelligence','charisma'];
+const _SKILL_CYCLE = ['scavenging','stealth','exploration','bartering','speech','lockpick','melee','firearms'];
+
+function giveXP(who, amount, gs) {
+  if (!who || amount <= 0) return;
+  who.xp   = (who.xp   || 0) + amount;
+  who.level = (who.level || 1);
+  const needed = xpForLevel(who.level);
+  if (who.xp >= needed) {
+    who.xp -= needed;
+    who.level++;
+    who.maxHealth += 5;
+    who.health = Math.min((who.health || 0) + 5, who.maxHealth);
+
+    // Attribute boost — cycle through in order
+    const attrKey = _ATTR_CYCLE[(who.level - 2) % _ATTR_CYCLE.length];
+    if (who[attrKey] !== undefined) who[attrKey] = Math.min(10, who[attrKey] + 1);
+
+    // Skill boost every 2 levels
+    let skillMsg = '';
+    if (who.level % 2 === 0 && who.skills) {
+      const skillKey = _SKILL_CYCLE[(Math.floor(who.level / 2) - 1) % _SKILL_CYCLE.length];
+      if (who.skills[skillKey] !== undefined) {
+        who.skills[skillKey] = Math.min(10, who.skills[skillKey] + 1);
+        skillMsg = `, +1 ${skillKey}`;
+      }
+    }
+
+    notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}${skillMsg}, +5 HP`, 'good');
+    if (gs) addLog(`${who.name} leveled up to Level ${who.level}.`, 'good');
+  }
 }
 
 // ── Autonomous character AI ────────────────────────────────────────────────────

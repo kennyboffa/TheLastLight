@@ -28,8 +28,8 @@ function initCharCreate() {
     step: 0,
     gender: 'father',
     name: '',
-    attrPts: 5,
-    skillPts: 10,
+    attrPts: 2,
+    skillPts: 5,
     attrs:  { strength:5, agility:5, perception:5, intelligence:5, charisma:5 },
     skills: { scavenging:1, stealth:1, exploration:1, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },
     nameInputActive: false,
@@ -168,7 +168,7 @@ function renderStep2(ctx, gs, cx) {
   const ptsColor = cc.skillPts > 0 ? C.textWarn : C.textGood;
   drawText(ctx, `Skill points: ${cc.skillPts}`, cx, y, ptsColor, 9, 'center', true);
   y += 14;
-  drawText(ctx, '(All skills start at 1, max 10)', cx, y, C.textDim, 7, 'center');
+  drawText(ctx, '(All skills start at 1. More points earned by leveling up.)', cx, y, C.textDim, 7, 'center');
   y += 14;
 
   for (const skill of SKILLS_LIST) {
@@ -286,6 +286,7 @@ function finalizeCharacter(gs) {
     perception: cc.attrs.perception, intelligence: cc.attrs.intelligence,
     charisma:   cc.attrs.charisma,
     skills:  { ...cc.skills },
+    level: 1, xp: 0,
   });
 
   // Starting inventory based on skills

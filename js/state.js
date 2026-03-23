@@ -136,6 +136,9 @@ const GS = {
   // ── Zoom animation ────────────────────────────────────────────────────────
   zoomAnim: { scale: 1.0, target: 1.0 },
 
+  // ── Screen transition fade ────────────────────────────────────────────────
+  screenFade: { active: false, alpha: 0, phase: 'idle', pendingFn: null },
+
   // ── Game log ──────────────────────────────────────────────────────────────
   log: [],    // { text, type, day, time }
   notifications: [],   // short on-screen messages: { text, type, ttl }

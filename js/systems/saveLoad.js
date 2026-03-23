@@ -4,7 +4,7 @@
 const SAVE_KEY = 'tll_save_v1';
 
 // Fields that should NOT be persisted (runtime UI/input state)
-const SKIP_FIELDS = ['mouse', 'keys', 'dayFade', 'notifications', 'intro', 'cc'];
+const SKIP_FIELDS = ['mouse', 'keys', 'dayFade', 'screenFade', 'notifications', 'intro', 'cc'];
 
 function saveGame(gs) {
   try {
@@ -44,7 +44,8 @@ function loadGame(gs) {
     gs.event   = null;
     gs.explore = null;
     gs.paused  = false;
-    gs.dayFade = { active: false, alpha: 0, phase: 'out', timer: 0 };
+    gs.dayFade    = { active: false, alpha: 0, phase: 'out', timer: 0 };
+    gs.screenFade = { active: false, alpha: 0, phase: 'idle', pendingFn: null };
     gs.notifications = [];
     // Reset any UI state
     if (typeof shelterUI !== 'undefined') {

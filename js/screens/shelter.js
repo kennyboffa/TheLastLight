@@ -311,16 +311,19 @@ function drawShelterCharacters(ctx, gs) {
     }
     drawParent(ctx, drawPX, drawPY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender, pPose);
     if (p.isSleeping) {
-      drawText(ctx, 'zzz', drawPX + 10, drawPY - 28, C.textDim, 7);
-      drawText(ctx, 'Sleeping', drawPX, drawPY - 36, C.textDim, 6, 'center');
+      drawText(ctx, 'zzz', drawPX + 14, drawPY - 28, C.textDim, 7);
     }
     if (p.isWorking && p.task) {
       const prog = p.taskProgress / p.taskDuration;
-      drawStatBar(ctx, pStandX - 10, groundY - 29, 30, 4, prog * 100, 100, C.textGood);
+      drawStatBar(ctx, pStandX - 12, groundY - 32, 32, 4, prog * 100, 100, C.textGood);
       const taskLabelMap = { craft:'Crafting', build:'Building', cook:'Cooking', play:'Playing', hunt:'Hunting', eat:'Eating', drink:'Drinking' };
-      drawText(ctx, taskLabelMap[p.task.type] || 'Working', pStandX, groundY - 32, C.textDim, 6, 'center');
+      fillRect(ctx, pStandX - 18, groundY - 44, 36, 10, '#00000099');
+      drawText(ctx, taskLabelMap[p.task.type] || 'Working', pStandX, groundY - 36, C.textDim, 6, 'center');
     }
-    drawText(ctx, p.name, drawPX, drawPY - 26, sel ? '#aaaaff' : C.textDim, 6, 'center');
+    // Name label with dark background for readability
+    { const nm = p.name; const nw = nm.length * 5 + 6;
+      fillRect(ctx, drawPX - nw/2, drawPY - 42, nw, 10, '#000000bb');
+      drawText(ctx, nm, drawPX, drawPY - 34, sel ? '#aaaaff' : '#c8c8d8', 7, 'center'); }
     gs._charHitBounds.push({ id: 'parent', x: drawPX - 10, y: drawPY - 24, w: 22, h: 28 });
   }
 
@@ -339,8 +342,10 @@ function drawShelterCharacters(ctx, gs) {
     strokeRect(ctx, drawCX - 8, drawCY - 20, 18, 24, '#cc88cc');
   }
   drawChild(ctx, drawCX, drawCY, 2, ch.facing, ch.animFrame, chPose);
-  if (ch.isSleeping) drawText(ctx, 'zzz', drawCX + 8, drawCY - 22, C.textDim, 7);
-  drawText(ctx, ch.name, drawCX, drawCY - 22, csel ? '#ffaaff' : C.textDim, 6, 'center');
+  if (ch.isSleeping) drawText(ctx, 'zzz', drawCX + 12, drawCY - 22, C.textDim, 7);
+  { const nm = ch.name; const nw = nm.length * 5 + 6;
+    fillRect(ctx, drawCX - nw/2, drawCY - 38, nw, 10, '#000000bb');
+    drawText(ctx, nm, drawCX, drawCY - 30, csel ? '#ffaaff' : '#c8c8d8', 7, 'center'); }
   gs._charHitBounds.push({ id: 'child', x: drawCX - 8, y: drawCY - 20, w: 18, h: 24 });
 
   // ── Dog ─────────────────────────────────────────────────────────────────────
@@ -373,12 +378,14 @@ function drawShelterCharacters(ctx, gs) {
       strokeRect(ctx, drawSX - 9, drawSY - 22, 20, 26, '#88cc88');
     }
     drawSurvivor(ctx, drawSX, drawSY, 2, s.facing, s.animFrame, i, sPose);
-    if (s.isSleeping) drawText(ctx, 'zzz', drawSX + 8, drawSY - 26, C.textDim, 7);
+    if (s.isSleeping) drawText(ctx, 'zzz', drawSX + 12, drawSY - 26, C.textDim, 7);
     if (s.task && s.taskDuration > 0) {
       const prog = s.taskProgress / s.taskDuration;
-      drawStatBar(ctx, sStandX - 9, groundY - 27, 24, 3, prog * 100, 100, C.textGood);
+      drawStatBar(ctx, sStandX - 12, groundY - 30, 28, 3, prog * 100, 100, C.textGood);
     }
-    drawText(ctx, s.name, drawSX, drawSY - 24, ssel ? '#aaffaa' : C.textDim, 6, 'center');
+    { const nm = s.name; const nw = nm.length * 5 + 6;
+      fillRect(ctx, drawSX - nw/2, drawSY - 40, nw, 10, '#000000bb');
+      drawText(ctx, nm, drawSX, drawSY - 32, ssel ? '#aaffaa' : '#c8c8d8', 7, 'center'); }
     gs._charHitBounds.push({ id: s.id, x: drawSX - 9, y: drawSY - 22, w: 20, h: 26 });
   });
 }
@@ -508,7 +515,7 @@ function handleCharTask(taskId, gs) {
     case 'sleep':
       who.isSleeping   = true;
       who.task         = { type: 'sleep' };
-      who.taskDuration = randInt(5, 8);
+      who.taskDuration = randInt(3, 4);
       who.taskProgress = 0;
       if (sel === 'parent') gs.parent.isWorking = false;
       notify(`${who.name} went to sleep.`, 'normal');
@@ -1049,6 +1056,19 @@ function shelterClick(mx, my, gs) {
     }
   }
 
+  // Survivor stat panel click (right-side bar)
+  if (gs._survivorStatBounds) {
+    for (const bound of gs._survivorStatBounds) {
+      if (hitTest(mx, my, bound.x, bound.y, bound.w, bound.h)) {
+        M.selectedChar = bound.id;
+        M.activeMenu   = 'char';
+        M.charPanelX   = clamp(MAIN_W - 188, 2, MAIN_W - 188);
+        M.charPanelY   = clamp(bound.y, 2, CFG.H - 260);
+        return;
+      }
+    }
+  }
+
   // Character click (check before room clicks)
   if (GS._charHitBounds) {
     for (const bound of GS._charHitBounds) {
@@ -1098,7 +1118,7 @@ function handleControlBtn(id, gs, mx, my) {
     case 'sleep':
       gs.parent.isSleeping = true;
       gs.parent.task = { type:'sleep' };
-      gs.parent.taskDuration = randInt(5, 8);
+      gs.parent.taskDuration = randInt(3, 4);
       gs.parent.taskProgress = 0;
       notify('Sleeping...', 'normal');
       break;

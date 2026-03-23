@@ -1001,9 +1001,9 @@ function pickEvent(gs, context) {
   if (!gs.eventLastFired) gs.eventLastFired = {};
   const pool = EVENTS_DB.filter(e => {
     if (e.condition && !e.condition(gs)) return false;
-    // Prevent the same event from firing again within 10 in-game days
+    // Prevent the same event from firing again within 3 in-game days
     const lastDay = gs.eventLastFired[e.id] || 0;
-    if (gs.day - lastDay < 10) return false;
+    if (gs.day - lastDay < 3) return false;
     return true;
   });
   if (pool.length === 0) return null;

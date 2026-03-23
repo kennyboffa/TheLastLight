@@ -15,7 +15,7 @@ const CFG = {
   THIRST_PER_HOUR:        5.0,   // +5 thirst per in-game hour (faster)
   TIRE_IDLE_PER_HOUR:     1.5,   // tiredness while idle
   TIRE_ACTIVE_PER_HOUR:   6.0,   // tiredness while doing tasks / exploring
-  TIRE_SLEEP_PER_HOUR:   -18.0,  // sleep restores tiredness fast
+  TIRE_SLEEP_PER_HOUR:   -10.0,  // sleep restores 10% tiredness per game hour
   DEPR_CHILD_ALONE_PER_HOUR: 4.0,    // child alone → depression rises
   DEPR_CHILD_PARENT_PER_HOUR: -1.5,  // child with parent → depression falls
   DEPR_PARENT_IDLE_PER_HOUR: 0.5,    // parent ambient depression

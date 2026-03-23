@@ -185,10 +185,10 @@ function renderStep1(ctx, gs, cx) {
 
     drawText(ctx, label, 70, y + 12, C.text, 9);
 
-    const minX = CFG.W/2 - 50, plusX = CFG.W/2 + 28;
-    drawButton(ctx, minX, y, 18, 18, '−', hitTest(mx, my, minX, y, 18, 18), false, val <= 1);
+    const minX = CFG.W/2 - 56, plusX = CFG.W/2 + 28;
+    drawButton(ctx, minX, y - 2, 26, 24, '−', hitTest(mx, my, minX, y - 2, 26, 24), false, val <= 1);
     drawText(ctx, String(val), cx, y + 12, val >= 8 ? C.textGood : C.textBright, 10, 'center', true);
-    drawButton(ctx, plusX, y, 18, 18, '+', hitTest(mx, my, plusX, y, 18, 18), false, cc.attrPts <= 0 || val >= 10);
+    drawButton(ctx, plusX, y - 2, 26, 24, '+', hitTest(mx, my, plusX, y - 2, 26, 24), false, cc.attrPts <= 0 || val >= 10);
 
     y += 26;
   }
@@ -225,9 +225,9 @@ function renderStep2(ctx, gs, cx) {
       strokeRect(ctx, px, y + 3, 11, 11, p < val ? '#5a9a5a' : C.border);
     }
 
-    const minX = CFG.W - 80, plusX = CFG.W - 58;
-    drawButton(ctx, minX, y, 18, 18, '−', hitTest(mx, my, minX, y, 18, 18), false, val <= 1);
-    drawButton(ctx, plusX, y, 18, 18, '+', hitTest(mx, my, plusX, y, 18, 18), false, cc.skillPts <= 0 || val >= 10);
+    const minX = CFG.W - 84, plusX = CFG.W - 54;
+    drawButton(ctx, minX, y - 2, 26, 24, '−', hitTest(mx, my, minX, y - 2, 26, 24), false, val <= 1);
+    drawButton(ctx, plusX, y - 2, 26, 24, '+', hitTest(mx, my, plusX, y - 2, 26, 24), false, cc.skillPts <= 0 || val >= 10);
 
     y += 24;
   }
@@ -285,11 +285,11 @@ function charCreateClick(mx, my, gs) {
   if (cc.step === 2) {
     for (const attr of ATTRS) {
       const rowY = 81 + ATTRS.indexOf(attr) * 26;
-      const minX = CFG.W/2 - 50, plusX = CFG.W/2 + 28;
-      if (hitTest(mx, my, minX, rowY, 18, 18) && cc.attrs[attr] > 1) {
+      const minX = CFG.W/2 - 56, plusX = CFG.W/2 + 28;
+      if (hitTest(mx, my, minX, rowY - 2, 26, 24) && cc.attrs[attr] > 1) {
         cc.attrs[attr]--; cc.attrPts++;
       }
-      if (hitTest(mx, my, plusX, rowY, 18, 18) && cc.attrPts > 0 && cc.attrs[attr] < 10) {
+      if (hitTest(mx, my, plusX, rowY - 2, 26, 24) && cc.attrPts > 0 && cc.attrs[attr] < 10) {
         cc.attrs[attr]++; cc.attrPts--;
       }
     }
@@ -299,11 +299,11 @@ function charCreateClick(mx, my, gs) {
     for (let si = 0; si < SKILLS_LIST.length; si++) {
       const skill = SKILLS_LIST[si];
       const rowY = 93 + si * 24;
-      const minX = CFG.W - 80, plusX = CFG.W - 58;
-      if (hitTest(mx, my, minX, rowY, 18, 18) && cc.skills[skill] > 1) {
+      const minX = CFG.W - 84, plusX = CFG.W - 54;
+      if (hitTest(mx, my, minX, rowY - 2, 26, 24) && cc.skills[skill] > 1) {
         cc.skills[skill]--; cc.skillPts++;
       }
-      if (hitTest(mx, my, plusX, rowY, 18, 18) && cc.skillPts > 0 && cc.skills[skill] < 10) {
+      if (hitTest(mx, my, plusX, rowY - 2, 26, 24) && cc.skillPts > 0 && cc.skills[skill] < 10) {
         cc.skills[skill]++; cc.skillPts--;
       }
     }

@@ -135,6 +135,8 @@ canvas.addEventListener('touchmove', (e) => {
 
 canvas.addEventListener('touchend', (e) => {
   e.preventDefault();
+  Audio.init();    // initialise on first touch gesture
+  Audio.resume();  // iOS AudioContext starts suspended
   const rect = canvas.getBoundingClientRect();
 
   // If a screen transition happened while a D-pad button was held (e.g. an
@@ -386,6 +388,27 @@ function render(ctx) {
   }
 
   if (hasZoom) ctx.restore();
+
+  // Vignette — dark edges for a gritty, claustrophobic feel
+  const vig = ctx.createRadialGradient(CFG.W / 2, CFG.H / 2, CFG.W * 0.28, CFG.W / 2, CFG.H / 2, CFG.W * 0.82);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.62)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, CFG.W, CFG.H);
+
+  // Film grain — deterministic noise pattern cycling through 8 seeds
+  if (gs.screen !== 'intro') {
+    const seed = frameCount % 8;
+    ctx.save();
+    ctx.globalAlpha = 0.055;
+    for (let i = 0; i < 1200; i++) {
+      const gx = Math.floor(((i * 139 + seed * 1031) % 997) / 997 * CFG.W);
+      const gy = Math.floor(((i * 269 + seed * 877)  % 991) / 991 * CFG.H);
+      ctx.fillStyle = (i + seed) % 2 === 0 ? '#ffffff' : '#000000';
+      ctx.fillRect(gx, gy, 1, 1);
+    }
+    ctx.restore();
+  }
 
   // Screen transition black overlay
   const sf = gs.screenFade;

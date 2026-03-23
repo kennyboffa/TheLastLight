@@ -44,6 +44,17 @@ function renderCombat(ctx, gs) {
     drawText(ctx, ammoStr, COMBAT_PLAYER_X, COMBAT_GROUND_Y - 36, C.textDim, 7, 'center');
   }
 
+  // ── Draw companion ─────────────────────────────────────────────────────────
+  if (c.companion) {
+    const compX = Math.floor((COMBAT_PLAYER_X + COMBAT_ENEMY_X) / 2);
+    const compIdx = (gs.survivors || []).findIndex(s => s.id === c.companion.id);
+    drawSurvivor(ctx, compX, COMBAT_GROUND_Y, 3, 1, Math.floor(Date.now()/200) % 2, Math.max(0, compIdx));
+    drawStatBar(ctx, compX - 40, COMBAT_GROUND_Y - 48, 80, 7,
+      c.companion.health, c.companion.maxHealth,
+      (c.companion.health / c.companion.maxHealth) > 0.4 ? '#3a8a50' : '#cc6020');
+    drawText(ctx, c.companion.name, compX, COMBAT_GROUND_Y - 56, '#88cc88', 7, 'center');
+  }
+
   // ── Draw enemies ───────────────────────────────────────────────────────────
   const aliveEnemies = c.enemies.filter(e => !e.dead);
   const spacing = aliveEnemies.length > 1 ? 70 : 0;

@@ -43,9 +43,15 @@ function startCombat(gs, enemies) {
     aiTimer: randInt(0, 2),
   }));
 
+  // Companion combatant (survivor exploring with player)
+  const companionData = gs.exploreCompanionId
+    ? (gs.survivors || []).find(s => s.id === gs.exploreCompanionId) || null
+    : null;
+
   gs.combat = {
     player: playerCombatant,
     enemies: enemyCombatants,
+    companion: companionData,
     turn: 'player',   // 'player' | 'enemy'
     log: [],
     phase: 'action',  // 'action' | 'result' | 'flee' | 'victory' | 'defeat'
@@ -229,6 +235,29 @@ function enemyTurn(gs) {
       }
     } else {
       combatLog(gs, `${enemy.name} misses.`, 'normal');
+    }
+  }
+
+  // Companion auto-attack (fires after enemies act)
+  if (gs.exploreCompanionId && c.companion) {
+    const comp = c.companion;
+    const alive = c.enemies.filter(e => !e.dead);
+    if (alive.length > 0) {
+      const target = alive[Math.floor(Math.random() * alive.length)];
+      const compHit = clamp(50 + (comp.skills?.melee || 1) * 4, 20, 90);
+      if (chance(compHit)) {
+        const dmg = randInt(3, 8);
+        target.hp -= dmg;
+        combatLog(gs, `${comp.name} hits ${target.name} for ${dmg} dmg.`, 'good');
+        if (target.hp <= 0) {
+          target.dead = true;
+          combatLog(gs, `${target.name} destroyed.`, 'good');
+          collectLoot(gs, target);
+        }
+      } else {
+        combatLog(gs, `${comp.name} misses.`, 'normal');
+      }
+      if (checkCombatVictory(gs)) return;
     }
   }
 

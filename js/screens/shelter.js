@@ -20,7 +20,7 @@ function roomRect(col, row) {
 // ── Shelter action menus ───────────────────────────────────────────────────────
 
 let shelterUI = {
-  activeMenu: null,    // null | 'room' | 'crafting' | 'storage' | 'cooking' | 'char'
+  activeMenu: null,    // null | 'room' | 'crafting' | 'storage' | 'cooking' | 'char' | 'settings'
   selectedRoom: null,
   contextItem: null,
   storageScroll: 0,
@@ -30,6 +30,9 @@ let shelterUI = {
   tooltipX: 0, tooltipY: 0,
   selectedChar: null,    // null | 'parent' | 'child' | survivor.id
   charPanelX: 60, charPanelY: 100,
+  craftConfirm: null,  // null | { recipeId, maxQty }
+  craftQty: 1,         // chosen quantity in craft confirm dialog
+  statsPanelScroll: 0, // scroll offset for survivors in stats panel
 };
 
 // ── Room furniture drawing ─────────────────────────────────────────────────────
@@ -279,11 +282,15 @@ function drawShelterCharacters(ctx, gs) {
       strokeRect(ctx, px - 10, groundY - 24, 22, 28, '#8888ff');
     }
     drawParent(ctx, px, groundY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender);
-    if (p.isSleeping) drawText(ctx, 'zzz', px + 10, groundY - 26, C.textDim, 7);
+    if (p.isSleeping) {
+      drawText(ctx, 'zzz', px + 10, groundY - 26, C.textDim, 7);
+      drawText(ctx, 'Sleeping', px, groundY - 32, C.textDim, 6, 'center');
+    }
     if (p.isWorking && p.task) {
       const prog = p.taskProgress / p.taskDuration;
       drawStatBar(ctx, px - 10, groundY - 29, 30, 4, prog * 100, 100, C.textGood);
-      drawText(ctx, 'working', px, groundY - 32, C.textDim, 6, 'center');
+      const taskLabelMap = { craft:'Crafting', build:'Building', cook:'Cooking', play:'Playing', hunt:'Hunting', eat:'Eating', drink:'Drinking' };
+      drawText(ctx, taskLabelMap[p.task.type] || 'Working', px, groundY - 32, C.textDim, 6, 'center');
     }
     drawText(ctx, p.name, px, groundY - 26, sel ? '#aaaaff' : C.textDim, 6, 'center');
     gs._charHitBounds.push({ id: 'parent', x: px - 10, y: groundY - 24, w: 22, h: 28 });
@@ -427,6 +434,9 @@ function drawCharPanel(ctx, gs, mx, my) {
     const onMission = who.onMission;
     const tooWeak = who.hunger > 60 || who.thirst > 60 || who.tiredness > 75 || who.health < 30;
     addBtn(onMission ? 'On Mission...' : 'Send on Mission', 'mission', onMission || tooWeak);
+    const alreadyCompanion = gs.exploreCompanionId === who.id;
+    addBtn(alreadyCompanion ? 'Explore Together ✓' : 'Explore Together', 'explore_together',
+      onMission || gs.parent.isExploring);
   }
 
   // Character sheet button
@@ -459,7 +469,7 @@ function handleCharTask(taskId, gs) {
     case 'sleep':
       who.isSleeping   = true;
       who.task         = { type: 'sleep' };
-      who.taskDuration = 5;
+      who.taskDuration = randInt(5, 8);
       who.taskProgress = 0;
       if (sel === 'parent') gs.parent.isWorking = false;
       notify(`${who.name} went to sleep.`, 'normal');
@@ -513,6 +523,14 @@ function handleCharTask(taskId, gs) {
       }
       break;
 
+    case 'explore_together':
+      if (sel !== 'parent' && sel !== 'child') {
+        // Toggle companion selection
+        gs.exploreCompanionId = (gs.exploreCompanionId === who.id) ? null : who.id;
+        notify(gs.exploreCompanionId ? `${who.name} will join the next exploration.` : `${who.name} will stay behind.`, 'info');
+      }
+      break;
+
     case 'charSheet':
       shelterUI.activeMenu = 'charSheet';
       break;
@@ -563,6 +581,7 @@ const CTRL_BUTTONS = [
   { id: 'save',     label: 'Save',      w: 38 },
   { id: 'load',     label: 'Load',      w: 38 },
   { id: 'mute',     label: 'SFX',       w: 32 },
+  { id: 'settings', label: 'Settings',  w: 52 },
 ];
 
 function drawShelterControls(ctx, gs, mx, my) {
@@ -598,6 +617,7 @@ function drawShelterMenu(ctx, gs, mx, my) {
   else if (M.activeMenu === 'char')      drawCharPanel(ctx, gs, mx, my);
   else if (M.activeMenu === 'charSheet') drawCharSheet(ctx, gs, mx, my);
   else if (M.activeMenu === 'journal')   drawJournalPanel(ctx, gs, mx, my);
+  else if (M.activeMenu === 'settings')  drawSettingsMenu(ctx, gs, mx, my);
 }
 
 function drawRoomMenu(ctx, gs, mx, my) {
@@ -655,6 +675,42 @@ function drawCraftingMenu(ctx, gs, mx, my) {
   const px = 60, py = 50;
   drawModal(ctx, px, py, W2, H2, 'CRAFTING');
 
+  // ── Confirmation sub-panel ─────────────────────────────────────────────────
+  if (shelterUI.craftConfirm) {
+    const cf = shelterUI.craftConfirm;
+    const recipe = RECIPES_DB.find(r => r.id === cf.recipeId);
+    const upg    = !recipe ? UPGRADES_DB[cf.recipeId] : null;
+    const itemName = recipe ? recipe.name : (upg ? upg.name : cf.recipeId);
+    const maxQty   = cf.maxQty;
+
+    let cy = py + 28;
+    drawText(ctx, `Craft: ${itemName}`, px + W2/2, cy + 8, C.textBright, 9, 'center', true); cy += 18;
+    if (recipe) {
+      const timeH = (recipe.craftTime || 0.5) * Math.ceil(shelterUI.craftQty / (recipe.qty || 1));
+      drawText(ctx, `Time: ~${Math.round(timeH * 60)} min`, px + W2/2, cy + 8, C.textDim, 8, 'center');
+    }
+    cy += 16;
+    if (maxQty > 1) {
+      // Quantity selector
+      drawText(ctx, 'How many?', px + W2/2, cy + 8, C.text, 8, 'center'); cy += 16;
+      const qx = px + W2/2 - 45;
+      drawButton(ctx, qx,      cy, 28, 18, '−', hitTest(mx, my, qx,      cy, 28, 18), false, shelterUI.craftQty <= 1);
+      drawText(ctx,  `${shelterUI.craftQty}`, px + W2/2, cy + 12, C.textBright, 10, 'center', true);
+      drawButton(ctx, qx + 62, cy, 28, 18, '+', hitTest(mx, my, qx + 62, cy, 28, 18), false, shelterUI.craftQty >= maxQty);
+      cy += 26;
+    }
+    // Confirm / Cancel
+    drawButton(ctx, px + 10,      cy, 80, 20, 'Confirm', hitTest(mx, my, px + 10,      cy, 80, 20), false, false);
+    drawButton(ctx, px + W2 - 90, cy, 80, 20, 'Cancel',  hitTest(mx, my, px + W2 - 90, cy, 80, 20));
+    gs._craftConfirmBtns = {
+      minus:   { x: px + W2/2 - 45,      y: cy - 26, w: 28, h: 18 },
+      plus:    { x: px + W2/2 - 45 + 62, y: cy - 26, w: 28, h: 18 },
+      confirm: { x: px + 10,             y: cy,       w: 80, h: 20 },
+      cancel:  { x: px + W2 - 90,        y: cy,       w: 80, h: 20 },
+    };
+    return;
+  }
+
   let y = py + 24;
   const visRecipes = RECIPES_DB.concat(Object.values(UPGRADES_DB));
 
@@ -665,12 +721,13 @@ function drawCraftingMenu(ctx, gs, mx, my) {
     if (recipe.key && gs.shelter[recipe.key]) continue;
 
     const name = recipe.name;
+    const sel  = shelterUI.craftConfirm && shelterUI.craftConfirm.recipeId === recipe.id;
     const canMake = recipe.buildCost
       ? canAfford(recipe.buildCost, gs, true)
       : canAfford(recipe.cost || {}, gs, true);
 
     const hov = hitTest(mx, my, px+4, y, W2-8, 18);
-    if (hov) fillRect(ctx, px+4, y, W2-8, 18, C.highlight);
+    if (hov || sel) fillRect(ctx, px+4, y, W2-8, 18, C.highlight);
 
     const col = canMake ? C.text : C.textDim;
     drawText(ctx, name, px + 10, y + 11, col, 8);
@@ -785,6 +842,44 @@ function drawJournalPanel(ctx, gs, mx, my) {
   gs._journalClose = { x: closeX, y: closeY, w: 50, h: 16 };
 }
 
+// ── Settings menu ─────────────────────────────────────────────────────────────
+
+function drawSettingsMenu(ctx, gs, mx, my) {
+  const W2 = 240, H2 = 160;
+  const px = Math.floor((MAIN_W - W2) / 2), py = 80;
+  drawModal(ctx, px, py, W2, H2, 'SETTINGS');
+
+  let y = py + 30;
+
+  // Game scale
+  drawText(ctx, 'Display Scale', px + W2/2, y + 8, C.text, 9, 'center', true); y += 20;
+  const scale = gs.userScale || 1.0;
+  const pct   = Math.round(scale * 100);
+  const minusX = px + 20, plusX = px + W2 - 48;
+  drawButton(ctx, minusX, y, 28, 20, '−', hitTest(mx, my, minusX, y, 28, 20), false, scale <= 0.6);
+  drawText(ctx, `${pct}%`, px + W2/2, y + 13, C.textBright, 11, 'center', true);
+  drawButton(ctx, plusX,  y, 28, 20, '+', hitTest(mx, my, plusX,  y, 28, 20), false, scale >= 2.0);
+  y += 30;
+
+  // SFX toggle
+  const sfxOn  = Audio.isEnabled();
+  const sfxCol = sfxOn ? C.textGood : C.textDim;
+  drawText(ctx, `SFX: ${sfxOn ? 'ON' : 'OFF'}`, px + W2/2, y + 8, sfxCol, 8, 'center', true);
+  drawButton(ctx, px + W2/2 - 30, y + 14, 60, 16, sfxOn ? 'Disable' : 'Enable',
+    hitTest(mx, my, px + W2/2 - 30, y + 14, 60, 16));
+  y += 36;
+
+  const closeX = px + W2 - 58, closeY = py + H2 - 24;
+  drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
+
+  gs._settingsBtns = {
+    minus:   { x: minusX,      y: py + 50, w: 28, h: 20 },
+    plus:    { x: plusX,       y: py + 50, w: 28, h: 20 },
+    sfx:     { x: px + W2/2 - 30, y: py + 94, w: 60, h: 16 },
+    close:   { x: closeX,     y: closeY,  w: 50, h: 16 },
+  };
+}
+
 // ── Click handler ─────────────────────────────────────────────────────────────
 
 function shelterClick(mx, my, gs) {
@@ -847,6 +942,7 @@ function handleControlBtn(id, gs, mx, my) {
       break;
     case 'craft':
       M.activeMenu = M.activeMenu === 'crafting' ? null : 'crafting';
+      M.craftConfirm = null; M.craftQty = 1;
       break;
     case 'storage':
       M.activeMenu = M.activeMenu === 'storage' ? null : 'storage';
@@ -857,7 +953,7 @@ function handleControlBtn(id, gs, mx, my) {
     case 'sleep':
       gs.parent.isSleeping = true;
       gs.parent.task = { type:'sleep' };
-      gs.parent.taskDuration = 6;   // 6 game hours
+      gs.parent.taskDuration = randInt(5, 8);
       gs.parent.taskProgress = 0;
       notify('Sleeping...', 'normal');
       break;
@@ -889,6 +985,9 @@ function handleControlBtn(id, gs, mx, my) {
       } else {
         notify('No save file found.', 'warn');
       }
+      break;
+    case 'settings':
+      M.activeMenu = M.activeMenu === 'settings' ? null : 'settings';
       break;
   }
 }
@@ -923,23 +1022,65 @@ function handleMenuClick(mx, my, gs) {
   if (M.activeMenu === 'crafting') {
     const W2 = 280, H2 = 220;
     const px = 60, py = 50;
+
+    // Handle confirmation sub-panel clicks
+    if (M.craftConfirm) {
+      const btns = GS._craftConfirmBtns;
+      if (btns) {
+        if (hitTest(mx, my, btns.minus.x, btns.minus.y, btns.minus.w, btns.minus.h)) {
+          M.craftQty = Math.max(1, M.craftQty - 1);
+          return;
+        }
+        if (hitTest(mx, my, btns.plus.x, btns.plus.y, btns.plus.w, btns.plus.h)) {
+          M.craftQty = Math.min(M.craftConfirm.maxQty, M.craftQty + 1);
+          return;
+        }
+        if (hitTest(mx, my, btns.confirm.x, btns.confirm.y, btns.confirm.w, btns.confirm.h)) {
+          const cf = M.craftConfirm;
+          if (UPGRADES_DB[cf.recipeId]) {
+            const result = buildUpgrade(gs, cf.recipeId);
+            if (!result.ok) notify(result.msg, 'warn');
+          } else {
+            const result = craftItem(gs, cf.recipeId, M.craftQty);
+            if (!result.ok) notify(result.msg, 'warn');
+          }
+          M.craftConfirm = null; M.craftQty = 1;
+          return;
+        }
+        if (hitTest(mx, my, btns.cancel.x, btns.cancel.y, btns.cancel.w, btns.cancel.h)) {
+          M.craftConfirm = null; M.craftQty = 1;
+          return;
+        }
+      }
+      return;
+    }
+
+    // First click: select recipe → open confirmation
     const allRecipes = RECIPES_DB.concat(Object.values(UPGRADES_DB));
     let y = py + 24;
     for (const recipe of allRecipes) {
       if (recipe.key && gs.shelter[recipe.key]) continue;
       if (hitTest(mx, my, px+4, y, W2-8, 18)) {
-        // Is it a room upgrade or item recipe?
-        if (UPGRADES_DB[recipe.id]) {
-          const result = buildUpgrade(gs, recipe.id);
-          if (!result.ok) notify(result.msg, 'warn');
-        } else {
-          const result = craftItem(gs, recipe.id);
-          if (!result.ok) notify(result.msg, 'warn');
+        // Check parent is free
+        if (gs.parent.task) { notify('Already busy.', 'warn'); return; }
+        // Compute max craftable qty (upgrades always qty 1)
+        let maxQty = 1;
+        if (!UPGRADES_DB[recipe.id] && recipe.cost) {
+          const costPerBatch = recipe.cost;
+          let canBatch = 999;
+          for (const [id, amt] of Object.entries(costPerBatch)) {
+            const have = countInInventory(gs.shelter.storage, id) + countInInventory(gs.parent.inventory, id);
+            canBatch = Math.min(canBatch, Math.floor(have / amt));
+          }
+          maxQty = Math.max(1, canBatch * (recipe.qty || 1));
         }
+        M.craftConfirm = { recipeId: recipe.id, maxQty };
+        M.craftQty = 1;
+        return;
       }
       y += 20;
     }
-    if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16)) M.activeMenu = null;
+    if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16)) { M.activeMenu = null; M.craftConfirm = null; }
     return;
   }
 
@@ -1023,6 +1164,31 @@ function handleMenuClick(mx, my, gs) {
     const W2 = 320, H2 = 260;
     const jx = Math.floor((MAIN_W - W2) / 2), jy = 30;
     if (!hitTest(mx, my, jx, jy, W2, H2)) M.activeMenu = null;
+  }
+
+  if (M.activeMenu === 'settings') {
+    const btns = GS._settingsBtns;
+    if (!btns) return;
+    if (hitTest(mx, my, btns.minus.x, btns.minus.y, btns.minus.w, btns.minus.h)) {
+      gs.userScale = Math.max(0.6, Math.round(((gs.userScale || 1.0) - 0.1) * 10) / 10);
+      if (typeof resizeCanvas === 'function') resizeCanvas();
+      return;
+    }
+    if (hitTest(mx, my, btns.plus.x, btns.plus.y, btns.plus.w, btns.plus.h)) {
+      gs.userScale = Math.min(2.0, Math.round(((gs.userScale || 1.0) + 0.1) * 10) / 10);
+      if (typeof resizeCanvas === 'function') resizeCanvas();
+      return;
+    }
+    if (hitTest(mx, my, btns.sfx.x, btns.sfx.y, btns.sfx.w, btns.sfx.h)) {
+      Audio.toggle(); return;
+    }
+    if (hitTest(mx, my, btns.close.x, btns.close.y, btns.close.w, btns.close.h)) {
+      M.activeMenu = null; return;
+    }
+    // Click outside closes
+    const W2 = 240, H2 = 160;
+    const px = Math.floor((MAIN_W - W2) / 2), py = 80;
+    if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
   }
 }
 

@@ -27,8 +27,14 @@ function tickStats(gs, dt) {
       // Late return: player didn't make it back before nightfall
       const pName = gs.parent.name;
       gs.lateReturn = true;
-      gs.child.depression = clamp(gs.child.depression + 25, 0, 100);
-      gs.dayFade.message  = `${pName} didn't return before nightfall.\n${gs.child.name} spent the night alone and terrified.`;
+      const presentSurvivors = (gs.survivors || []).filter(s => !s.onMission);
+      const comfortName = presentSurvivors.length > 0 ? presentSurvivors[0].name : null;
+      const deprIncrease = comfortName ? 15 : 25;
+      gs.child.depression = clamp(gs.child.depression + deprIncrease, 0, 100);
+      const comfortLine = comfortName
+        ? `\nAt least ${gs.child.name} was comforted by ${comfortName}.`
+        : '';
+      gs.dayFade.message  = `${pName} didn't return before nightfall.\n${gs.child.name} spent the night alone and terrified.${comfortLine}`;
       endExploration(gs);
       notify(`${pName} didn't return in time — ${gs.child.name} is scared!`, 'danger');
     }
@@ -225,10 +231,16 @@ function finishTask(gs, who, task) {
       notify(`${who.name} drank ${def.name}.`, 'good');
       break;
     }
-    case 'craft':
-      notify('Crafting complete.', 'good');
+    case 'craft': {
+      const recipe = RECIPES_DB.find(r => r.id === task.recipeId);
+      if (recipe) {
+        const outQty = task.qty || recipe.qty || 1;
+        addToInventory(gs.shelter.storage, recipe.output, outQty);
+        notify(`Crafted ${outQty}x ${getItemDef(recipe.output)?.name || recipe.output}.`, 'good');
+      }
       giveXP(who, 15, gs);
       break;
+    }
     case 'build':
       completeBuildTask(gs, task);
       giveXP(who, 25, gs);

@@ -77,22 +77,22 @@ const UPGRADES_DB = {
 const RECIPES_DB = [
   // Basic (no workshop needed)
   { id:'r_bandage',   name:'Bandage',        output:'bandage',      qty:2,
-    cost:{ cloth:2 },         needsWorkshop:false, desc:'Tear cloth into bandages.' },
+    cost:{ cloth:2 },         needsWorkshop:false, craftTime:0.25, desc:'Tear cloth into bandages.' },
   { id:'r_torch',     name:'Torch',          output:'matches',      qty:3,
-    cost:{ wood:1, cloth:1 }, needsWorkshop:false, desc:'Improvised torch / matches.' },
+    cost:{ wood:1, cloth:1 }, needsWorkshop:false, craftTime:0.25, desc:'Improvised torch / matches.' },
 
   // Workshop recipes
   { id:'r_sbackpack', name:'Small Backpack', output:'small_backpack', qty:1,
-    cost:{ cloth:6, rope:2 }, needsWorkshop:true, desc:'Sew a small carrying pack.' },
+    cost:{ cloth:6, rope:2 }, needsWorkshop:true, craftTime:1.5, desc:'Sew a small carrying pack.' },
   { id:'r_backpack',  name:'Backpack',       output:'backpack',     qty:1,
-    cost:{ cloth:10, rope:4, metal:2 }, needsWorkshop:true, desc:'Standard backpack.' },
+    cost:{ cloth:10, rope:4, metal:2 }, needsWorkshop:true, craftTime:2.0, desc:'Standard backpack.' },
   { id:'r_pipe_wpn',  name:'Metal Pipe',     output:'pipe',         qty:1,
-    cost:{ metal:3 }, needsWorkshop:true, desc:'Shape scrap into a pipe weapon.' },
+    cost:{ metal:3 }, needsWorkshop:true, craftTime:1.0, desc:'Shape scrap into a pipe weapon.' },
   { id:'r_crowbar',   name:'Crowbar',        output:'crowbar',      qty:1,
-    cost:{ metal:5 }, needsWorkshop:true, needsTools:true, desc:'Forge a crowbar.' },
+    cost:{ metal:5 }, needsWorkshop:true, needsTools:true, craftTime:1.5, desc:'Forge a crowbar.' },
   { id:'r_purify',    name:'Purify Water',   output:'purified_water', qty:2,
     cost:{ dirty_water:2, chemicals:1 }, needsWorkshop:false, requiresUpgrade:'water_filter',
-    desc:'Filter dirty water. Requires water filter.' },
+    craftTime:0.5, desc:'Filter dirty water. Requires water filter.' },
   { id:'r_medkit',    name:'First Aid Kit',  output:'medkit',       qty:1,
-    cost:{ bandage:4, chemicals:2, cloth:2 }, needsWorkshop:true, desc:'Assemble a medkit.' },
+    cost:{ bandage:4, chemicals:2, cloth:2 }, needsWorkshop:true, craftTime:1.0, desc:'Assemble a medkit.' },
 ];

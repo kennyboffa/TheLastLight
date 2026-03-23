@@ -250,7 +250,20 @@ function startExploration(gs, loc) {
   gs.child.isAlone      = true;
   gs.screen             = 'explore';
   gs.zoomAnim           = { scale: 1.14, target: 1.0 };
-  addLog(`Exploring: ${loc.name}`, 'info');
+
+  // Mark companion as away on exploration
+  if (gs.exploreCompanionId) {
+    const comp = (gs.survivors || []).find(s => s.id === gs.exploreCompanionId);
+    if (comp && !comp.onMission) {
+      comp.isExploring = true;
+      addLog(`Exploring: ${loc.name} (with ${comp.name})`, 'info');
+    } else {
+      gs.exploreCompanionId = null;
+      addLog(`Exploring: ${loc.name}`, 'info');
+    }
+  } else {
+    addLog(`Exploring: ${loc.name}`, 'info');
+  }
 
   if (!gs.flags.firstExplore) {
     gs.flags.firstExplore = true;
@@ -715,6 +728,15 @@ function renderOutdoor(ctx, gs, es) {
   // Player
   drawParent(ctx, es.px, PLAYER_FOOT, 2, es.facing, es.animFrame, gs.parent.gender);
 
+  // Companion following player
+  if (gs.exploreCompanionId) {
+    const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
+    if (compIdx >= 0) {
+      const compX = es.px - es.facing * 22;
+      drawSurvivor(ctx, compX, PLAYER_FOOT, 2, -es.facing, es.animFrame, compIdx);
+    }
+  }
+
   ctx.restore();
 
   // Fog of war (drawn over world, not over HUD)
@@ -800,6 +822,14 @@ function renderBuildingInterior(ctx, gs, es) {
 
   // Player
   drawParent(ctx, bi.px, PLAYER_FOOT, 2, bi.facing, bi.animFrame || 0, gs.parent.gender);
+
+  // Companion in building
+  if (gs.exploreCompanionId) {
+    const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
+    if (compIdx >= 0) {
+      drawSurvivor(ctx, bi.px - bi.facing * 22, PLAYER_FOOT, 2, -bi.facing, bi.animFrame || 0, compIdx);
+    }
+  }
 
   ctx.restore();
 
@@ -1062,6 +1092,12 @@ function endExploration(gs) {
 
   gs.parent.isExploring = false;
   gs.child.isAlone      = false;
+  // Return companion
+  if (gs.exploreCompanionId) {
+    const comp = (gs.survivors || []).find(s => s.id === gs.exploreCompanionId);
+    if (comp) comp.isExploring = false;
+    gs.exploreCompanionId = null;
+  }
   exploreState          = null;
   gs.keys               = {};
   gs.screen             = 'shelter';

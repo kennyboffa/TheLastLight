@@ -271,7 +271,12 @@ function startExploration(gs, loc) {
 
   gs.parent.isExploring = true;
   gs.child.isAlone      = true;
-  gs.screenFade = { active: true, alpha: 0, phase: 'out', pendingFn: () => {
+
+  // Travel time: harder locations take longer to reach (diff 1-2: +1h, diff 3-4: +2h)
+  const travelMins = loc.difficulty >= 3 ? 120 : 60;
+  gs.time = Math.min(gs.time + travelMins, CFG.DAY_END - 60);
+
+  gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: loc.name, pendingFn: () => {
     gs.screen   = 'explore';
     gs.zoomAnim = { scale: 1.55, target: 1.0 };
   }};
@@ -378,9 +383,10 @@ function updateExplore(gs, dt) {
     }
   }
 
-  // Encounters
+  // Encounters — trigger distance grows by 20% at night
+  const nightMult = 1 + nightFactor(gs.time) * 0.2;
   for (const enc of es.encounters) {
-    if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance) {
+    if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance * nightMult) {
       enc.triggered = true;
       const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
       if (enemies.length > 0) { gs.mouse.down = false; startCombat(gs, enemies); gs.combat._encRef = enc; gs.screen = 'combat'; return; }
@@ -475,6 +481,7 @@ function finishSearch(container, gs) {
   }
   if (added > 0) {
     addLog(`Found: ${names.join(', ')}${container.loot.length > 2 ? '...' : ''}`, 'good');
+    giveXP(gs.parent, added * 2, gs); // +2 XP per item found
     // Check for map items
     for (const item of container.loot) {
       if (item.id === 'area_map_1' || item.id === 'area_map_2') {
@@ -517,6 +524,7 @@ function interactOutdoor(gs) {
     addToInventory(gs.parent.inventory, nearLoot.id, nearLoot.qty);
     nearLoot.taken = true;
     addLog(`Picked up: ${def?.name || nearLoot.id} x${nearLoot.qty}`, 'good');
+    giveXP(gs.parent, 2, gs); // +2 XP per pickup
     return;
   }
 
@@ -736,6 +744,7 @@ function exploreClick(mx, my, gs) {
     addToInventory(gs.parent.inventory, nearLoot.id, nearLoot.qty);
     nearLoot.taken = true;
     addLog(`Picked up: ${def?.name || nearLoot.id} x${nearLoot.qty}`, 'good');
+    giveXP(gs.parent, 2, gs);
     return;
   }
 
@@ -996,6 +1005,30 @@ function drawExploreHUD(ctx, gs, es) {
   } else {
     const curZone = loc.zones.find(z => es.px >= z.x && es.px < z.x + z.w);
     if (curZone) drawText(ctx, curZone.name, 12, 30, C.textDim, 7);
+  }
+
+  // Player HP / status bar below location panel
+  const p = gs.parent;
+  const hpPct = p.health / p.maxHealth;
+  const hpColor = hpPct > 0.6 ? '#3a8a3a' : hpPct > 0.3 ? '#aa6020' : '#cc2020';
+  drawPanel(ctx, 6, 39, 240, 22, C.panelBg);
+  drawText(ctx, 'HP', 11, 51, C.textDim, 7);
+  drawStatBar(ctx, 24, 42, 100, 7, p.health, p.maxHealth, hpColor, null, false);
+  drawText(ctx, `${Math.round(p.health)}/${p.maxHealth}`, 128, 51, C.textDim, 7);
+  if (p.hungry)    drawText(ctx, 'HUNGRY',    176, 51, C.hunger,    7);
+  else if (p.thirsty) drawText(ctx, 'THIRSTY', 176, 51, C.thirst,   7);
+  else if (p.wounded) drawText(ctx, 'WOUNDED', 176, 51, '#cc3030',  7);
+
+  // Mini log strip — last 3 messages below the status bar
+  if (gs.log && gs.log.length > 0) {
+    const logEntries = gs.log.slice(0, 3);
+    const LOG_COLS = { danger:'#cc4444', good:'#44aa55', warn:'#cc8830', info:'#7090c0' };
+    drawPanel(ctx, 6, 64, 240, 4 + logEntries.length * 10, C.panelBg);
+    let ly = 73;
+    for (const entry of logEntries) {
+      drawText(ctx, entry.text, 11, ly, LOG_COLS[entry.type] || C.textDim, 7);
+      ly += 10;
+    }
   }
 
   // Clock display (top-right of HUD)

@@ -131,6 +131,15 @@ function exploreSelectClick(mx, my, gs) {
         notify('This area is locked. Find a map to unlock new regions.', 'warn');
         return;
       }
+      // Block if parent is too exhausted or depressed
+      if (gs.parent.tiredness >= 70) {
+        notify('Too exhausted to go out. Rest first.', 'warn');
+        return;
+      }
+      if (gs.parent.depression >= 90) {
+        notify('Too overwhelmed to face the outside. Rest and recover.', 'warn');
+        return;
+      }
       gs.screen = 'packScreen';
       gs._pendingLoc = loc;
       return;

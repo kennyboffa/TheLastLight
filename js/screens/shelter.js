@@ -1316,6 +1316,17 @@ function handleMenuClick(mx, my, gs) {
         }
       }
     }
+    if (GS._infirmaryHealBtn && hitTest(mx, my,
+        GS._infirmaryHealBtn.x, GS._infirmaryHealBtn.y,
+        GS._infirmaryHealBtn.w, GS._infirmaryHealBtn.h)) {
+      const who = GS.parent;
+      const healAmt = Math.floor(who.maxHealth * 0.4);
+      who.health = clamp(who.health + healAmt, 0, who.maxHealth);
+      GS.time = Math.min(GS.time + 120, CFG.DAY_END - 30); // 2 hours treatment
+      addLog(`Infirmary: treated for +${healAmt} HP. 2 hours used.`, 'good');
+      GS._infirmaryHealBtn = null;
+      return;
+    }
     if (GS._charSheetClose && hitTest(mx, my,
         GS._charSheetClose.x, GS._charSheetClose.y,
         GS._charSheetClose.w, GS._charSheetClose.h)) {
@@ -1607,6 +1618,23 @@ function drawCharSheet(ctx, gs, mx, my) {
     drawText(ctx, `Level ${who.level || 1}  •  XP ${who.xp || 0}/${xpForLevel(who.level || 1)}`, px + PW/2, y + 8, C.textDim, 7, 'center');
   }
   y += 16;
+
+  // Infirmary heal option — only for parent when infirmary is unlocked
+  gs._infirmaryHealBtn = null;
+  if (sel === 'parent' && getRoomUnlocked('infirmary')) {
+    const missing = who.maxHealth - who.health;
+    const healAmt = Math.floor(who.maxHealth * 0.4);
+    const infY = py + PH - 46;
+    drawDivider(ctx, px + 4, infY - 3, PW - 8, C.border2);
+    if (missing > 0) {
+      const infBtnX = px + 8, infBtnW = PW - 16;
+      const infHov = hitTest(mx, my, infBtnX, infY, infBtnW, 16);
+      drawButton(ctx, infBtnX, infY, infBtnW, 16, `Infirmary: Treat (+${healAmt} HP, 2h)`, infHov);
+      gs._infirmaryHealBtn = { x: infBtnX, y: infY, w: infBtnW, h: 16 };
+    } else {
+      drawText(ctx, 'Infirmary: No injuries — HP Full', px + PW / 2, infY + 10, C.textGood, 7, 'center');
+    }
+  }
 
   // Back button
   const backHov = hitTest(mx, my, px + 8, py + PH - 24, 60, 16);

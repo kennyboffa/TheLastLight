@@ -421,6 +421,17 @@ function render(ctx) {
     ctx.fillRect(0, 0, CFG.W, CFG.H);
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    // Cinematic area title card — shown during the black phase
+    if (sf.titleText && sf.alpha > 0.7) {
+      const titleAlpha = (sf.alpha - 0.7) / 0.3;
+      ctx.save();
+      ctx.globalAlpha = titleAlpha;
+      drawText(ctx, sf.titleText.toUpperCase(), CFG.W / 2, CFG.H / 2 - 8, '#c4943a', 18, 'center', true);
+      drawDivider(ctx, CFG.W / 2 - 80, CFG.H / 2 + 2, 160, '#5a3a10');
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
   }
 }
 

@@ -35,6 +35,7 @@ const GS = {
     isExploring: false,
     isSleeping:  false,
     isWorking:   false,
+    wounded:     false,
     task: null,          // current shelter task
     taskProgress: 0,
     taskDuration: 0,
@@ -112,6 +113,9 @@ const GS = {
 
   // ── Current text event ────────────────────────────────────────────────────
   event: null,
+
+  // ── Difficulty ────────────────────────────────────────────────────────────
+  difficulty: 'normal',   // 'easy' | 'normal' | 'hard'
 
   // ── Flags ─────────────────────────────────────────────────────────────────
   flags: {

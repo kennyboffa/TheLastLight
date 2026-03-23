@@ -23,21 +23,26 @@ function renderEvent(ctx, gs) {
   }
   ctx.globalAlpha = 1;
 
+  const isDialogue = ev.type === 'dialogue';
   const panW = CFG.W - 100;
   const panX = 50;
   const panY = 25;
   const panH = CFG.H - 50;
 
-  drawPanel(ctx, panX, panY, panW, panH, C.panelBg, C.border2);
+  // Slightly warmer tint for dialogue events
+  drawPanel(ctx, panX, panY, panW, panH, isDialogue ? '#0d0d0e' : C.panelBg, isDialogue ? '#3a2a1a' : C.border2);
 
   // Title bar
-  fillRect(ctx, panX, panY, panW, 20, '#0a0a18');
-  drawText(ctx, ev.title, panX + panW / 2, panY + 14, C.textBright, 11, 'center', true);
-  drawDivider(ctx, panX + 4, panY + 20, panW - 8, C.border2);
+  const titleBg = isDialogue ? '#0e0a08' : '#0a0a18';
+  const titleColor = isDialogue ? '#c4a070' : C.textBright;
+  fillRect(ctx, panX, panY, panW, 20, titleBg);
+  drawText(ctx, ev.title, panX + panW / 2, panY + 14, titleColor, 11, 'center', true);
+  drawDivider(ctx, panX + 4, panY + 20, panW - 8, isDialogue ? '#3a2a1a' : C.border2);
 
   // Event body text
   let textY = panY + 36;
-  textY = drawWrapped(ctx, ev.text, panX + 14, textY, panW - 28, 9, C.text, 14);
+  const textColor = isDialogue ? '#c8b898' : C.text;
+  textY = drawWrapped(ctx, ev.text, panX + 14, textY, panW - 28, 9, textColor, 14);
 
   textY += 10;
   drawDivider(ctx, panX + 4, textY, panW - 8, C.border);
@@ -45,14 +50,19 @@ function renderEvent(ctx, gs) {
 
   const mx = gs.mouse.x, my = gs.mouse.y;
 
-  if (eventUI.resultText) {
-    // Show result
+  if (isDialogue) {
+    // Dialogue events: just a Continue button, no choices
+    const btnX = panX + (panW / 2) - 50;
+    const hov = hitTest(mx, my, btnX, textY, 100, 22);
+    drawButton(ctx, btnX, textY, 100, 22, 'Continue', hov);
+    gs._eventContinueBounds = { x: btnX, y: textY, w: 100, h: 22 };
+  } else if (eventUI.resultText) {
+    // Show result of choice
     textY = drawWrapped(ctx, eventUI.resultText, panX + 14, textY, panW - 28, 9, '#8a9a7a', 13);
     textY += 14;
     const btnX = panX + (panW / 2) - 50;
     drawButton(ctx, btnX, textY, 100, 22, 'Continue',
       hitTest(mx, my, btnX, textY, 100, 22));
-    // Store continue button bounds for click
     gs._eventContinueBounds = { x: btnX, y: textY, w: 100, h: 22 };
   } else {
     // Show choices
@@ -81,8 +91,9 @@ function eventClick(mx, my, gs) {
   if (!gs.event) return;
   if (eventUI.openLockFrames > 0) return;
 
-  if (eventUI.resultText) {
-    // Any click anywhere closes the event result
+  const isDialogue = gs.event.type === 'dialogue';
+
+  if (isDialogue || eventUI.resultText) {
     closeEvent(gs);
     return;
   }
@@ -93,6 +104,8 @@ function eventClick(mx, my, gs) {
       const choice = gs.event.choices[bound.idx];
       if (choice) {
         const result = choice.action(GS);
+        // If action returned null (e.g. started combat), close cleanly
+        if (result === null) { closeEvent(gs); return; }
         eventUI.resultText  = result || '...';
         eventUI.resultTimer = 180;
         gs._eventContinueBounds = null;
@@ -113,10 +126,11 @@ function closeEvent(gs) {
 
   const returnTo = gs._returnTo || 'shelter';
   gs._returnTo   = null;
-  gs.screen      = returnTo;
+  // Don't override screen if combat was started by an event action
+  if (gs.screen === 'event') gs.screen = returnTo;
 }
 
-// ── Random event trigger (called from main loop) ──────────────────────────────
+// ── Random event triggers (called from main loop) ─────────────────────────────
 
 let _eventCooldown = 0;
 
@@ -133,4 +147,23 @@ function maybeFireShelterEvent(gs) {
   gs._returnTo = 'shelter';
   eventUI.openLockFrames = 3;
   _eventCooldown = 60 * 45; // ~45 second cooldown at 60fps
+  Audio.alert();
+}
+
+let _dialogueCooldown = 0;
+
+function maybeFireDialogueEvent(gs) {
+  if (_dialogueCooldown > 0) { _dialogueCooldown--; return; }
+  if (gs.screen !== 'shelter') return;
+  if (!chance(0.08)) return;
+
+  const ev = pickDialogue(gs);
+  if (!ev) return;
+
+  gs.event     = ev;
+  gs.screen    = 'event';
+  gs._returnTo = 'shelter';
+  eventUI.openLockFrames = 3;
+  _dialogueCooldown = 60 * 70; // ~70 second cooldown — less frequent than events
+  Audio.dialogue();
 }

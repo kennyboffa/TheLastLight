@@ -354,7 +354,10 @@ function drawCharPanel(ctx, gs, mx, my) {
   }
   if (!who) { shelterUI.selectedChar = null; shelterUI.activeMenu = null; return; }
 
-  const PW = 184, PH = sel === 'parent' ? 260 : 220;
+  // Show personality for survivors
+  const personality = (sel !== 'parent' && sel !== 'child' && who.personality) ? who.personality : null;
+
+  const PW = 184, PH = sel === 'parent' ? 260 : (personality ? 230 : 220);
   const px = clamp(shelterUI.charPanelX, 2, MAIN_W - PW - 2);
   const py = clamp(shelterUI.charPanelY, 2, CFG.H - PH - 36);
 
@@ -362,6 +365,11 @@ function drawCharPanel(ctx, gs, mx, my) {
   strokeRect(ctx, px, py, PW, PH, selColor);
   fillRect(ctx, px, py, PW, 18, '#0a0a18');
   drawText(ctx, `${who.name.toUpperCase()}  (${role})`, px + PW/2, py + 12, selColor, 8, 'center', true);
+  if (personality) {
+    const PERS_COLORS = { cautious:'#6090b0', reckless:'#cc6030', optimistic:'#3aaa50', bitter:'#aa4060', quiet:'#707090', resourceful:'#d4aa40' };
+    const pc = PERS_COLORS[personality] || C.textDim;
+    drawText(ctx, personality.toUpperCase(), px + PW/2, py + 20, pc, 6, 'center');
+  }
 
   let y = py + 24;
   const sw = PW - 16;
@@ -550,9 +558,11 @@ const CTRL_BUTTONS = [
   { id: 'cook',     label: 'Cook',      w: 38, needsCampfire: true },
   { id: 'sleep',    label: 'Sleep',     w: 42 },
   { id: 'play',     label: 'Play',      w: 38 },
+  { id: 'journal',  label: 'Journal',   w: 48 },
   { id: 'endday',   label: 'End Day',   w: 50 },
   { id: 'save',     label: 'Save',      w: 38 },
   { id: 'load',     label: 'Load',      w: 38 },
+  { id: 'mute',     label: 'SFX',       w: 32 },
 ];
 
 function drawShelterControls(ctx, gs, mx, my) {
@@ -567,7 +577,9 @@ function drawShelterControls(ctx, gs, mx, my) {
                   || (btn.id === 'sleep'   && gs.parent.isSleeping);
     const active = (btn.id === 'craft'   && shelterUI.activeMenu === 'crafting')
                 || (btn.id === 'storage' && shelterUI.activeMenu === 'storage')
-                || (btn.id === 'cook'    && shelterUI.activeMenu === 'cooking');
+                || (btn.id === 'cook'    && shelterUI.activeMenu === 'cooking')
+                || (btn.id === 'journal' && shelterUI.activeMenu === 'journal')
+                || (btn.id === 'mute'    && !Audio.isEnabled());
     drawButton(ctx, bx, barY + 5, btn.w, 20, btn.label,
       hitTest(mx, my, bx, barY + 5, btn.w, 20), active, disabled);
     bx += btn.w + 4;
@@ -585,6 +597,7 @@ function drawShelterMenu(ctx, gs, mx, my) {
   else if (M.activeMenu === 'cooking')   drawCookingMenu(ctx, gs, mx, my);
   else if (M.activeMenu === 'char')      drawCharPanel(ctx, gs, mx, my);
   else if (M.activeMenu === 'charSheet') drawCharSheet(ctx, gs, mx, my);
+  else if (M.activeMenu === 'journal')   drawJournalPanel(ctx, gs, mx, my);
 }
 
 function drawRoomMenu(ctx, gs, mx, my) {
@@ -714,6 +727,64 @@ function drawCookingMenu(ctx, gs, mx, my) {
   drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
 }
 
+// ── Journal panel ─────────────────────────────────────────────────────────────
+
+function drawJournalPanel(ctx, gs, mx, my) {
+  const W2 = 320, H2 = 260;
+  const px = Math.floor((MAIN_W - W2) / 2), py = 30;
+  drawModal(ctx, px, py, W2, H2, 'JOURNAL');
+
+  const LOG_COLORS = {
+    normal:  '#a0a090',
+    info:    '#7090b0',
+    good:    '#3aaa50',
+    warn:    '#cc8830',
+    danger:  '#cc3030',
+    combat:  '#aa4040',
+  };
+
+  const entries = gs.log.slice(0, 40);  // last 40 entries
+  const visH = H2 - 48;
+  const lineH = 14;
+  const maxScroll = Math.max(0, entries.length * lineH - visH);
+  const scroll = clamp(shelterUI.storageScroll || 0, 0, maxScroll);
+
+  // Clip drawing to journal body
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(px + 4, py + 22, W2 - 8, visH);
+  ctx.clip();
+
+  let y = py + 24 - scroll;
+  for (const entry of entries) {
+    const col = LOG_COLORS[entry.type] || LOG_COLORS.normal;
+    drawText(ctx, `Day ${entry.day}: ${entry.text}`, px + 8, y + 10, col, 7);
+    y += lineH;
+  }
+
+  if (entries.length === 0) {
+    drawText(ctx, 'No entries yet.', px + W2 / 2, py + H2 / 2, C.textDim, 8, 'center');
+  }
+
+  ctx.restore();
+
+  // Scroll indicator
+  if (maxScroll > 0) {
+    const trackH = visH - 4;
+    const thumbH = Math.max(20, trackH * (visH / (entries.length * lineH)));
+    const thumbY = py + 24 + (scroll / maxScroll) * (trackH - thumbH);
+    fillRect(ctx, px + W2 - 8, py + 24, 4, trackH, '#1a1a28');
+    fillRect(ctx, px + W2 - 8, thumbY, 4, thumbH, '#3a3a5a');
+  }
+
+  // Scroll hint
+  drawText(ctx, 'Scroll: ↑↓ or drag', px + W2 / 2, py + H2 - 30, C.textDim, 7, 'center');
+
+  const closeX = px + W2 - 58, closeY = py + H2 - 24;
+  drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
+  gs._journalClose = { x: closeX, y: closeY, w: 50, h: 16 };
+}
+
 // ── Click handler ─────────────────────────────────────────────────────────────
 
 function shelterClick(mx, my, gs) {
@@ -798,6 +869,13 @@ function handleControlBtn(id, gs, mx, my) {
         gs.parent.isWorking = true;
         notify(`Playing with ${gs.child.name}.`, 'good');
       }
+      break;
+    case 'journal':
+      M.activeMenu = M.activeMenu === 'journal' ? null : 'journal';
+      M.storageScroll = 0;
+      break;
+    case 'mute':
+      Audio.toggle();
       break;
     case 'endday':
       startDayTransition(gs);
@@ -932,6 +1010,19 @@ function handleMenuClick(mx, my, gs) {
         GS._charSheetClose.w, GS._charSheetClose.h)) {
       M.activeMenu = 'char'; return;
     }
+  }
+
+  if (M.activeMenu === 'journal') {
+    // Close button
+    if (GS._journalClose && hitTest(mx, my,
+        GS._journalClose.x, GS._journalClose.y,
+        GS._journalClose.w, GS._journalClose.h)) {
+      M.activeMenu = null; GS._journalClose = null; return;
+    }
+    // Click outside closes
+    const W2 = 320, H2 = 260;
+    const jx = Math.floor((MAIN_W - W2) / 2), jy = 30;
+    if (!hitTest(mx, my, jx, jy, W2, H2)) M.activeMenu = null;
   }
 }
 

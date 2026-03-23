@@ -134,6 +134,92 @@ const LOCATIONS_DB = [
       { id:'back',    name:'Back Gardens',   x:1800, w:550, bgColor:'#0a0c06', lootTable:'food_light',   enemyChance:10, huntChance:15 },
     ],
   },
+
+  {
+    id: 'police',
+    name: 'Police Station',
+    desc: 'An old precinct building. Stripped of most weapons early on, but the armory was locked. Patrols are frequent — the AI uses it as a waypoint hub.',
+    difficulty: 3,
+    bgTheme: 'urban_dark',
+    ambientDesc: 'Overturned desks. Broken radios still cycling static. Someone left the coffee machine running.',
+    zones: [
+      { id:'lot',     name:'Parking Lot',    x:0,    w:400, bgColor:'#0c0c0f', lootTable:'urban_light',  enemyChance:20 },
+      { id:'lobby',   name:'Front Desk',     x:400,  w:400, bgColor:'#0b0b0e', lootTable:'police_main',  enemyChance:28,
+        buildings:[
+          { relX:150, label:'Station Block', numFloors:3, theme:'office', lootQuality:'police', enemyChance:32 },
+        ]},
+      { id:'cells',   name:'Holding Cells',  x:800,  w:450, bgColor:'#090910', lootTable:'police_main',  enemyChance:35, requiresLockpick:true },
+      { id:'armory',  name:'Armory',         x:1250, w:450, bgColor:'#07070c', lootTable:'police_rare',  enemyChance:50, requiresLockpick:true,
+        buildings:[
+          { relX:160, label:'Weapons Locker', numFloors:1, theme:'office', lootQuality:'rare', enemyChance:55, bossChance:12 },
+        ]},
+      { id:'evidence',name:'Evidence Room',  x:1700, w:400, bgColor:'#080810', lootTable:'mixed_rare',   enemyChance:40, requiresLockpick:true },
+    ],
+  },
+
+  {
+    id: 'church',
+    name: 'Old Church',
+    desc: 'A stone church at the edge of the district. Some survivors used it as a shelter early on — donations and supplies may remain. The crypt below was locked.',
+    difficulty: 1,
+    bgTheme: 'suburb',
+    ambientDesc: 'Stained glass. Silence that feels different from other silences. Someone left candles burning.',
+    zones: [
+      { id:'yard',    name:'Courtyard',     x:0,    w:450, bgColor:'#0d0d0a', lootTable:'home_light',   enemyChance:8 },
+      { id:'hall',    name:'Main Hall',     x:450,  w:500, bgColor:'#0c0c08', lootTable:'church_main',  enemyChance:10,
+        buildings:[
+          { relX:180, label:'Church Hall',  numFloors:2, theme:'house', lootQuality:'home', enemyChance:10 },
+        ]},
+      { id:'tower',   name:'Bell Tower',    x:950,  w:350, bgColor:'#0b0b07', lootTable:'mixed_light',  enemyChance:14 },
+      { id:'crypt',   name:'Crypt',         x:1300, w:450, bgColor:'#080806', lootTable:'church_main',  enemyChance:20, requiresLockpick:true,
+        buildings:[
+          { relX:140, label:'Underground Crypt', numFloors:1, theme:'pharmacy', lootQuality:'medical', enemyChance:18, bossChance:8 },
+        ]},
+    ],
+  },
+
+  {
+    id: 'bunker',
+    name: 'Underground Bunker',
+    desc: 'A pre-collapse government bunker. The AI has partially occupied it for server infrastructure. Deep in — very dangerous — but the supplies left behind are substantial.',
+    difficulty: 4,
+    bgTheme: 'urban_dark',
+    ambientDesc: 'Emergency lights. The hum of old ventilation. The AI\'s processes run here. Something watched you enter.',
+    zones: [
+      { id:'tunnel',  name:'Access Tunnel',   x:0,    w:400, bgColor:'#0a0a0e', lootTable:'mixed_light',  enemyChance:30 },
+      { id:'command', name:'Command Room',    x:400,  w:500, bgColor:'#08080d', lootTable:'bunker_main',  enemyChance:45,
+        buildings:[
+          { relX:180, label:'Command Block',  numFloors:2, theme:'factory', lootQuality:'heavy', enemyChance:50 },
+        ]},
+      { id:'barracks',name:'Barracks',        x:900,  w:500, bgColor:'#07070c', lootTable:'bunker_main',  enemyChance:40 },
+      { id:'vault',   name:'Armory Vault',    x:1400, w:400, bgColor:'#060609', lootTable:'bunker_rare',  enemyChance:60, requiresLockpick:true,
+        buildings:[
+          { relX:140, label:'Vault',          numFloors:1, theme:'office',  lootQuality:'rare',  enemyChance:65, bossChance:20 },
+        ]},
+      { id:'power',   name:'Power Room',      x:1800, w:450, bgColor:'#050508', lootTable:'electronics',  enemyChance:55,
+        buildings:[
+          { relX:150, label:'Server Core',    numFloors:2, theme:'factory', lootQuality:'factory', enemyChance:60, bossChance:15 },
+        ]},
+    ],
+  },
+
+  {
+    id: 'rooftop',
+    name: 'Rooftop Garden',
+    desc: 'Someone turned the roof of a city block into a garden. Overgrown now, but things still grow. Water tanks. A greenhouse. A moment of quiet in the ruins.',
+    difficulty: 1,
+    bgTheme: 'forest',
+    ambientDesc: 'Wind. Open sky. Plants growing through cracked concrete. Almost beautiful.',
+    zones: [
+      { id:'stair',   name:'Stairwell',       x:0,    w:350, bgColor:'#090c07', lootTable:'urban_light',  enemyChance:10 },
+      { id:'roof',    name:'Roof Level',      x:350,  w:500, bgColor:'#080b06', lootTable:'rooftop_main', enemyChance:8  },
+      { id:'green',   name:'Greenhouse',      x:850,  w:500, bgColor:'#070c05', lootTable:'rooftop_main', enemyChance:6,
+        buildings:[
+          { relX:170, label:'Greenhouse',     numFloors:1, theme:'tent', lootQuality:'light', enemyChance:5 },
+        ]},
+      { id:'tanks',   name:'Water Tanks',     x:1350, w:450, bgColor:'#060a06', lootTable:'water_heavy',  enemyChance:10 },
+    ],
+  },
 ];
 
 // ── Loot Tables ───────────────────────────────────────────────────────────────
@@ -161,6 +247,12 @@ const LOOT_TABLES = {
   water_heavy:     [['dirty_water',2,4],['raw_meat',0,2]],
   pharmacy_main:   [['bandage',2,4],['painkiller',1,3],['antibiotics',0,1],['cloth',1,3]],
   pharmacy_rare:   [['bandage',3,6],['medkit',1,2],['antibiotics',1,3],['painkiller',2,4],['chemicals',1,2]],
+  police_main:     [['cloth',1,2],['metal',1,3],['pistol_ammo',4,10],['bandage',0,2]],
+  police_rare:     [['pistol_ammo',8,16],['rifle_ammo',4,8],['medkit',0,1],['shotgun_ammo',2,6],['pistol',0,1]],
+  church_main:     [['cloth',2,4],['book',1,2],['canned_beans',0,3],['bandage',1,3],['matches',1,2]],
+  bunker_main:     [['electronics',2,4],['metal',1,3],['fuel',1,2],['batteries',2,4]],
+  bunker_rare:     [['medkit',1,2],['antibiotics',1,2],['pistol_ammo',8,16],['rifle_ammo',4,8],['electronics',2,4]],
+  rooftop_main:    [['canned_fruit',1,3],['mushroom',1,4],['dirty_water',1,3],['rope',0,2],['dried_berries',0,3]],
 };
 
 // ── Building interior loot tables (per theme+quality) ─────────────────────────
@@ -180,6 +272,7 @@ const BUILDING_LOOT = {
   pharmacy_pharma_rare:[['medkit',1,3],['antibiotics',1,3],['bandage',3,6],['painkiller',2,4],['chemicals',1,3]],
   generic_light:     [['cloth',0,2],['matches',0,1],['batteries',0,2]],
   generic_medium:    [['cloth',0,3],['canned_beans',0,2],['bandage',0,2],['rope',0,1]],
+  office_police:     [['pistol_ammo',4,10],['metal',1,3],['cloth',1,2],['bandage',0,2],['pistol',0,1]],
 };
 
 // ── Enemy Templates ────────────────────────────────────────────────────────────
@@ -240,6 +333,28 @@ const ENEMY_TEMPLATES = {
     desc:'Pack animal. More dangerous in groups.',
     sprite:'wolf', drops:[['raw_meat',1,2]],
   },
+  // ── Bosses ───────────────────────────────────────────────────────────────────
+  boss_hunter: {
+    id:'boss_hunter', name:'Elite Hunter', type:'machine',
+    hp:150, maxHp:150, armor:20, accuracy:80,
+    damage:[25,42], reward:{ suspicion:-12 }, isBoss:true,
+    desc:'Combat-grade AI unit. Fast, armoured, lethal.',
+    sprite:'drone_heavy', drops:[['electronics',3,5],['pistol_ammo',8,16],['rifle_ammo',4,8]],
+  },
+  boss_raider_chief: {
+    id:'boss_raider_chief', name:'Raider Chief', type:'human',
+    hp:120, maxHp:120, armor:15, accuracy:75,
+    damage:[22,38], isRanged:true, reward:{}, isBoss:true,
+    desc:'Veteran survivor gone ruthless. Leads the pack.',
+    sprite:'human_hostile', drops:[['pistol',1,1],['pistol_ammo',8,16],['canned_meat',2,4],['medkit',0,1]],
+  },
+  boss_patrol_heavy: {
+    id:'boss_patrol_heavy', name:'Heavy Patrol Unit', type:'machine',
+    hp:200, maxHp:200, armor:28, accuracy:72,
+    damage:[30,50], reward:{ suspicion:-15 }, isBoss:true,
+    desc:'Armoured combat chassis. Rare — extremely dangerous.',
+    sprite:'robot', drops:[['metal',4,6],['electronics',3,5],['fuel',2,3]],
+  },
 };
 
 // Enemy encounter groups by difficulty/theme
@@ -284,6 +399,18 @@ function buildEncounter(locationDifficulty, zone, locCanHunt) {
       const t = ENEMY_TEMPLATES[templateId];
       if (t) enemies.push(deepClone(t));
     }
+  }
+  // Boss spawn check
+  const bossChance = zone.bossChance || 0;
+  if (bossChance > 0 && Math.random() * 100 < bossChance) {
+    // Pick boss based on difficulty/type
+    const machineLoc = locationDifficulty >= 4;
+    const humanLoc   = locationDifficulty <= 2;
+    const bossId = machineLoc ? (chance(60) ? 'boss_hunter' : 'boss_patrol_heavy')
+                 : humanLoc   ? 'boss_raider_chief'
+                 : (chance(50) ? 'boss_hunter' : 'boss_raider_chief');
+    const boss = ENEMY_TEMPLATES[bossId];
+    if (boss) enemies.push(deepClone(boss));
   }
   return enemies;
 }

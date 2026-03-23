@@ -1,6 +1,18 @@
 // stats.js — Stat decay, healing, and daily tick
 'use strict';
 
+// Difficulty multiplier for stat decay
+function diffMult(gs) {
+  if (gs.difficulty === 'easy')   return 0.7;
+  if (gs.difficulty === 'hard')   return 1.4;
+  return 1.0;
+}
+function diffSuspMult(gs) {
+  if (gs.difficulty === 'easy')   return 0.6;
+  if (gs.difficulty === 'hard')   return 1.5;
+  return 1.0;
+}
+
 // Called every game frame with deltaTime in real seconds
 function tickStats(gs, dt) {
   if (gs.paused || gs.screen !== 'shelter' && gs.screen !== 'explore') return;
@@ -20,22 +32,27 @@ function tickStats(gs, dt) {
     return;
   }
 
+  const dm = diffMult(gs);
+
   // ── Parent ──────────────────────────────────────────────────────────────────
   const p = gs.parent;
   if (!p.isSleeping) {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * hrs, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * hrs, 0, 100);
+    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs, 0, 100);
+    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs, 0, 100);
     const tireRate = (p.isExploring || p.isWorking) ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR;
-    p.tiredness = clamp(p.tiredness + tireRate * hrs, 0, 100);
+    p.tiredness = clamp(p.tiredness + tireRate * dm * hrs, 0, 100);
   } else {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * hrs, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * hrs, 0, 100);
+    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs, 0, 100);
+    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs, 0, 100);
     p.tiredness = clamp(p.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
     if (p.tiredness <= 0) { p.isSleeping = false; p.tiredness = 0; }
   }
 
+  // Wounded heals naturally once HP recovers above 60%
+  if (p.wounded && p.health / p.maxHealth >= 0.6) p.wounded = false;
+
   // Depression (ambient rise + child-based effects handled below)
-  p.depression = clamp(p.depression + CFG.DEPR_PARENT_IDLE_PER_HOUR * hrs, 0, 100);
+  p.depression = clamp(p.depression + CFG.DEPR_PARENT_IDLE_PER_HOUR * dm * hrs, 0, 100);
 
   // HP damage from hunger/thirst
   if (p.hunger  >= CFG.HUNGER_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
@@ -126,7 +143,7 @@ function tickStats(gs, dt) {
 
   // ── AI Suspicion passive tick ───────────────────────────────────────────────
   // Very slow daily drift upward
-  const suspRise = 0.15 * hrs;
+  const suspRise = 0.15 * diffSuspMult(gs) * hrs;
   const suspReduce = gs.shelter.hasRadioDampener ? 0.12 * hrs : 0;
   const roomBonus  = getRoomUnlocked('security') ? 0.08 * hrs : 0;
   gs.suspicion = clamp(gs.suspicion + suspRise - suspReduce - roomBonus, 0, CFG.SUSPICION_MAX);
@@ -363,6 +380,7 @@ function giveXP(who, amount, gs) {
 
     notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}, +2 skill pts, +5 HP`, 'good');
     if (gs) addLog(`${who.name} leveled up to Level ${who.level}.`, 'good');
+    Audio.levelUp();
   }
 }
 

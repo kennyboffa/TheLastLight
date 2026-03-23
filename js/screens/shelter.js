@@ -33,6 +33,8 @@ let shelterUI = {
   craftConfirm: null,  // null | { recipeId, maxQty }
   craftQty: 1,         // chosen quantity in craft confirm dialog
   statsPanelScroll: 0, // scroll offset for survivors in stats panel
+  journalTab: 'log',   // 'log' | 'help'
+  helpScroll: 0,
 };
 
 // ── Room furniture drawing ─────────────────────────────────────────────────────
@@ -517,6 +519,7 @@ function handleCharTask(taskId, gs) {
 
     case 'explore':
       if (sel === 'parent') {
+        if (gs.parent.task || gs.parent.isSleeping) { notify('Finish current task first.', 'warn'); break; }
         shelterUI.activeMenu   = null;
         shelterUI.selectedChar = null;
         gs.screen = 'exploreSelect';
@@ -592,7 +595,7 @@ function drawShelterControls(ctx, gs, mx, my) {
   let bx = 6;
   for (const btn of CTRL_BUTTONS) {
     const disabled = (btn.needsCampfire && !gs.shelter.campfire)
-                  || (btn.id === 'explore' && gs.parent.isExploring)
+                  || (btn.id === 'explore' && (gs.parent.isExploring || !!gs.parent.task || gs.parent.isSleeping))
                   || (btn.id === 'sleep'   && gs.parent.isSleeping);
     const active = (btn.id === 'craft'   && shelterUI.activeMenu === 'crafting')
                 || (btn.id === 'storage' && shelterUI.activeMenu === 'storage')
@@ -786,58 +789,151 @@ function drawCookingMenu(ctx, gs, mx, my) {
 
 // ── Journal panel ─────────────────────────────────────────────────────────────
 
+const HELP_SECTIONS = [
+  { heading: 'BASICS', lines: [
+    'Time: 1 real second = 4 game minutes.',
+    'Day runs 06:00–23:00. Return before 23:00',
+    'or the night outside leaves you wounded.',
+    'Lily\'s death = game over. Keep her fed.',
+  ]},
+  { heading: 'EXPLORING', lines: [
+    'Move with A/D. [E] interacts / enters buildings.',
+    'Buildings have better loot than outdoors.',
+    'Encounters trigger nearby enemies.',
+    'Maps found in buildings unlock new areas.',
+    'Rain makes you tire much faster outside.',
+    'Companion survivors auto-fight in combat.',
+  ]},
+  { heading: 'ATTRIBUTES', lines: [
+    'Strength:     Melee damage & carry capacity.',
+    'Agility:      Dodge, move speed, flee chance.',
+    'Perception:   Spot loot & enemies earlier.',
+    'Intelligence: Faster crafting, more XP.',
+    'Charisma:     Events, bartering, recruitment.',
+  ]},
+  { heading: 'SKILLS', lines: [
+    'Scavenging:  Find more loot when searching.',
+    'Stealth:     Reduce encounter triggers.',
+    'Exploration: Faster movement in the field.',
+    'Melee:       Unarmed & melee weapon accuracy.',
+    'Firearms:    Gun accuracy & range.',
+    'Lockpick:    Open locked containers.',
+    'Speech:      Affects event outcomes.',
+  ]},
+  { heading: 'BUNKER ROOMS', lines: [
+    'Main Room:    Living area, cooking, storage.',
+    'Bedroom:      Faster sleep / tiredness recovery.',
+    'Storage Room: +40 kg storage capacity.',
+    'Workshop:     Unlocks advanced crafting.',
+    'Infirmary:    Faster healing, less infection.',
+    'Security:     Lowers daily suspicion gain.',
+  ]},
+  { heading: 'CRAFTING & COOKING', lines: [
+    'First click selects recipe, second confirms.',
+    'Materials deducted upfront; item given on done.',
+    'Cooking: canned goods 30 min, meat 60 min.',
+    'Crafting takes time — stay in the bunker!',
+  ]},
+  { heading: 'SUSPICION', lines: [
+    'AI systems patrol and search for survivors.',
+    'Building rooms & using a generator adds noise.',
+    'High suspicion = frequent drone patrols.',
+    'Radio Dampener + Security Room reduce it.',
+  ]},
+  { heading: 'SURVIVORS', lines: [
+    'Recruit survivors via exploration events.',
+    'Send on missions for passive loot.',
+    'Toggle "Explore Together" in their panel',
+    'to bring them as a combat companion.',
+    'Their presence comforts Lily when you\'re late.',
+  ]},
+];
+
 function drawJournalPanel(ctx, gs, mx, my) {
-  const W2 = 320, H2 = 260;
-  const px = Math.floor((MAIN_W - W2) / 2), py = 30;
+  const W2 = 320, H2 = 268;
+  const px = Math.floor((MAIN_W - W2) / 2), py = 26;
   drawModal(ctx, px, py, W2, H2, 'JOURNAL');
 
-  const LOG_COLORS = {
-    normal:  '#a0a090',
-    info:    '#7090b0',
-    good:    '#3aaa50',
-    warn:    '#cc8830',
-    danger:  '#cc3030',
-    combat:  '#aa4040',
+  // ── Tabs ─────────────────────────────────────────────────────────────────
+  const tabY = py + 16;
+  const logActive  = shelterUI.journalTab === 'log';
+  const helpActive = shelterUI.journalTab === 'help';
+  const tabW = 70;
+  drawButton(ctx, px + 8,        tabY, tabW, 15, 'Log',  hitTest(mx, my, px + 8,        tabY, tabW, 15), logActive);
+  drawButton(ctx, px + 8 + tabW + 4, tabY, tabW, 15, 'Help', hitTest(mx, my, px + 8 + tabW + 4, tabY, tabW, 15), helpActive);
+  gs._journalTabs = {
+    log:  { x: px + 8,             y: tabY, w: tabW, h: 15 },
+    help: { x: px + 8 + tabW + 4,  y: tabY, w: tabW, h: 15 },
   };
 
-  const entries = gs.log.slice(0, 40);  // last 40 entries
-  const visH = H2 - 48;
-  const lineH = 14;
-  const maxScroll = Math.max(0, entries.length * lineH - visH);
-  const scroll = clamp(shelterUI.storageScroll || 0, 0, maxScroll);
+  const bodyY  = tabY + 18;
+  const bodyH  = H2 - (bodyY - py) - 26;
 
-  // Clip drawing to journal body
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(px + 4, py + 22, W2 - 8, visH);
-  ctx.clip();
+  if (logActive) {
+    // ── Log tab ─────────────────────────────────────────────────────────────
+    const LOG_COLORS = {
+      normal:'#a0a090', info:'#7090b0', good:'#3aaa50',
+      warn:'#cc8830', danger:'#cc3030', combat:'#aa4040',
+    };
+    const entries = gs.log.slice(0, 40);
+    const lineH   = 14;
+    const maxScroll = Math.max(0, entries.length * lineH - bodyH);
+    const scroll    = clamp(shelterUI.storageScroll || 0, 0, maxScroll);
 
-  let y = py + 24 - scroll;
-  for (const entry of entries) {
-    const col = LOG_COLORS[entry.type] || LOG_COLORS.normal;
-    drawText(ctx, `Day ${entry.day}: ${entry.text}`, px + 8, y + 10, col, 7);
-    y += lineH;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px + 4, bodyY, W2 - 12, bodyH);
+    ctx.clip();
+    let y = bodyY + 2 - scroll;
+    for (const entry of entries) {
+      drawText(ctx, `Day ${entry.day}: ${entry.text}`, px + 8, y + 10, LOG_COLORS[entry.type] || LOG_COLORS.normal, 7);
+      y += lineH;
+    }
+    if (entries.length === 0) drawText(ctx, 'No entries yet.', px + W2 / 2, bodyY + bodyH / 2, C.textDim, 8, 'center');
+    ctx.restore();
+
+    if (maxScroll > 0) {
+      const trackH = bodyH - 4;
+      const thumbH = Math.max(16, trackH * (bodyH / (entries.length * lineH)));
+      const thumbY = bodyY + 2 + (scroll / maxScroll) * (trackH - thumbH);
+      fillRect(ctx, px + W2 - 8, bodyY + 2, 4, trackH, '#1a1a28');
+      fillRect(ctx, px + W2 - 8, thumbY,    4, thumbH, '#3a3a5a');
+    }
+
+  } else {
+    // ── Help tab ─────────────────────────────────────────────────────────────
+    const lineH   = 12;
+    let totalH = 0;
+    for (const sec of HELP_SECTIONS) totalH += 14 + sec.lines.length * lineH + 6;
+    const maxScroll = Math.max(0, totalH - bodyH);
+    shelterUI.helpScroll = clamp(shelterUI.helpScroll || 0, 0, maxScroll);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px + 4, bodyY, W2 - 12, bodyH);
+    ctx.clip();
+    let y = bodyY + 2 - shelterUI.helpScroll;
+    for (const sec of HELP_SECTIONS) {
+      drawText(ctx, sec.heading, px + 8, y + 9, '#c8a050', 8, 'left', true);
+      y += 14;
+      for (const line of sec.lines) {
+        drawText(ctx, line, px + 12, y + 9, C.textDim, 7);
+        y += lineH;
+      }
+      y += 6;
+    }
+    ctx.restore();
+
+    if (maxScroll > 0) {
+      const trackH = bodyH - 4;
+      const thumbH = Math.max(16, trackH * (bodyH / totalH));
+      const thumbY = bodyY + 2 + (shelterUI.helpScroll / maxScroll) * (trackH - thumbH);
+      fillRect(ctx, px + W2 - 8, bodyY + 2, 4, trackH, '#1a1a28');
+      fillRect(ctx, px + W2 - 8, thumbY,    4, thumbH, '#3a3a5a');
+    }
   }
 
-  if (entries.length === 0) {
-    drawText(ctx, 'No entries yet.', px + W2 / 2, py + H2 / 2, C.textDim, 8, 'center');
-  }
-
-  ctx.restore();
-
-  // Scroll indicator
-  if (maxScroll > 0) {
-    const trackH = visH - 4;
-    const thumbH = Math.max(20, trackH * (visH / (entries.length * lineH)));
-    const thumbY = py + 24 + (scroll / maxScroll) * (trackH - thumbH);
-    fillRect(ctx, px + W2 - 8, py + 24, 4, trackH, '#1a1a28');
-    fillRect(ctx, px + W2 - 8, thumbY, 4, thumbH, '#3a3a5a');
-  }
-
-  // Scroll hint
-  drawText(ctx, 'Scroll: ↑↓ or drag', px + W2 / 2, py + H2 - 30, C.textDim, 7, 'center');
-
-  const closeX = px + W2 - 58, closeY = py + H2 - 24;
+  const closeX = px + W2 - 58, closeY = py + H2 - 22;
   drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
   gs._journalClose = { x: closeX, y: closeY, w: 50, h: 16 };
 }
@@ -938,6 +1034,7 @@ function handleControlBtn(id, gs, mx, my) {
   const M = shelterUI;
   switch (id) {
     case 'explore':
+      if (gs.parent.task || gs.parent.isSleeping) { notify('Finish current task first.', 'warn'); break; }
       gs.screen = 'exploreSelect';
       break;
     case 'craft':
@@ -967,8 +1064,8 @@ function handleControlBtn(id, gs, mx, my) {
       }
       break;
     case 'journal':
-      M.activeMenu = M.activeMenu === 'journal' ? null : 'journal';
-      M.storageScroll = 0;
+      if (M.activeMenu === 'journal') { M.activeMenu = null; }
+      else { M.activeMenu = 'journal'; M.storageScroll = 0; M.journalTab = 'log'; }
       break;
     case 'mute':
       Audio.toggle();
@@ -1037,14 +1134,15 @@ function handleMenuClick(mx, my, gs) {
         }
         if (hitTest(mx, my, btns.confirm.x, btns.confirm.y, btns.confirm.w, btns.confirm.h)) {
           const cf = M.craftConfirm;
+          let result;
           if (UPGRADES_DB[cf.recipeId]) {
-            const result = buildUpgrade(gs, cf.recipeId);
-            if (!result.ok) notify(result.msg, 'warn');
+            result = buildUpgrade(gs, cf.recipeId);
           } else {
-            const result = craftItem(gs, cf.recipeId, M.craftQty);
-            if (!result.ok) notify(result.msg, 'warn');
+            result = craftItem(gs, cf.recipeId, M.craftQty);
           }
+          if (!result.ok) notify(result.msg, 'warn');
           M.craftConfirm = null; M.craftQty = 1;
+          if (result.ok) M.activeMenu = null;  // close menu after successful craft start
           return;
         }
         if (hitTest(mx, my, btns.cancel.x, btns.cancel.y, btns.cancel.w, btns.cancel.h)) {
@@ -1052,6 +1150,8 @@ function handleMenuClick(mx, my, gs) {
           return;
         }
       }
+      // Click outside the modal closes the confirm panel
+      if (!hitTest(mx, my, px, py, W2, H2)) { M.craftConfirm = null; M.craftQty = 1; }
       return;
     }
 
@@ -1080,7 +1180,9 @@ function handleMenuClick(mx, my, gs) {
       }
       y += 20;
     }
-    if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16)) { M.activeMenu = null; M.craftConfirm = null; }
+    if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16) || !hitTest(mx, my, px, py, W2, H2)) {
+      M.activeMenu = null; M.craftConfirm = null;
+    }
     return;
   }
 
@@ -1160,9 +1262,15 @@ function handleMenuClick(mx, my, gs) {
         GS._journalClose.w, GS._journalClose.h)) {
       M.activeMenu = null; GS._journalClose = null; return;
     }
+    // Tab buttons
+    if (GS._journalTabs) {
+      const t = GS._journalTabs;
+      if (hitTest(mx, my, t.log.x,  t.log.y,  t.log.w,  t.log.h))  { M.journalTab = 'log';  M.storageScroll = 0; return; }
+      if (hitTest(mx, my, t.help.x, t.help.y, t.help.w, t.help.h)) { M.journalTab = 'help'; M.helpScroll = 0;    return; }
+    }
     // Click outside closes
-    const W2 = 320, H2 = 260;
-    const jx = Math.floor((MAIN_W - W2) / 2), jy = 30;
+    const W2 = 320, H2 = 268;
+    const jx = Math.floor((MAIN_W - W2) / 2), jy = 26;
     if (!hitTest(mx, my, jx, jy, W2, H2)) M.activeMenu = null;
   }
 

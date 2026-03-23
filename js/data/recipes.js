@@ -71,6 +71,18 @@ const UPGRADES_DB = {
     buildCost: { metal:12, wood:6 }, needsTools:true, buildNoise:18,
     buildTime:12, requiresRoom:null, key:null, effect:'defense',
   },
+  bedroom_bed2: {
+    id:'bedroom_bed2', name:'Extra Bed (2nd)',
+    desc:'Build a second bed. Allows one more survivor to shelter here.',
+    buildCost: { wood:6, cloth:4 }, needsTools:false, buildNoise:4,
+    buildTime:3, requiresRoom:'bedroom', key:'bedroomBed2',
+  },
+  bedroom_bed3: {
+    id:'bedroom_bed3', name:'Extra Bed (3rd)',
+    desc:'Build a third bed. Allows one more survivor to shelter here.',
+    buildCost: { wood:6, cloth:4 }, needsTools:false, buildNoise:4,
+    buildTime:3, requiresRoom:'bedroom', key:'bedroomBed3',
+  },
 };
 
 // ── Item Crafting Recipes ─────────────────────────────────────────────────────

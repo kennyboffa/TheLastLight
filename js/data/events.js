@@ -30,7 +30,7 @@ const EVENTS_DB = [
       },
       { label: 'Offer to recruit them',
         action: gs => {
-          if (gs.survivors.length >= 4) return 'Your shelter is already at capacity. You can\'t take in more people.';
+          if (gs.survivors.length >= maxSurvivors(gs)) return 'Your shelter is already at capacity. You can\'t take in more people.';
           const s = makeSurvivor();
           gs.survivors.push(s);
           gs.parent.depression = Math.max(0, gs.parent.depression - 5);
@@ -589,7 +589,7 @@ const EVENTS_DB = [
           const has = countInInventory(gs.parent.inventory,'medkit') > 0;
           if (!has) return 'You have no medkit. You offer your last bandage and tell them to apply pressure. It\'s not enough. You walk away knowing the outcome.';
           removeFromInventory(gs.parent.inventory,'medkit',1);
-          if (gs.survivors.length >= 4) return 'You stabilise them completely. They thank you profusely — but your shelter is full. You leave them better than you found them.';
+          if (gs.survivors.length >= maxSurvivors(gs)) return 'You stabilise them completely. They thank you profusely — but your shelter is full. You leave them better than you found them.';
           const s = makeSurvivor();
           s.health = 55;
           gs.survivors.push(s);

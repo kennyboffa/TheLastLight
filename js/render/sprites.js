@@ -5,49 +5,89 @@
 // All sprites drawn at "natural" 1px = 1 logical px scale.
 // Caller passes ctx with appropriate transform/scale.
 
-function drawParent(ctx, x, y, s, facing, animFrame, gender) {
+function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   // s = scale factor (e.g. 2 for shelter view)
   // facing: 1=right, -1=left
+  // pose: 'front'(default) | 'side' | 'back' | 'sleep'
+  pose = pose || 'front';
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
 
-  const sk = gender === 'mother' ? '#c49878' : C.skin;
+  const sk      = gender === 'mother' ? '#c49878' : C.skin;
   const clothes = gender === 'mother' ? '#3a3a50' : '#2e3828';
   const hair    = C.hair;
   const pants   = gender === 'mother' ? '#1e1e30' : '#1e2218';
-
-  // Walking animation: leg offset
   const legSwing = (animFrame % 2 === 0) ? 0 : 1;
 
-  // Head
-  fillRect(ctx, -4*s, -18*s, 8*s, 8*s, sk);
-  // Hair (top)
-  fillRect(ctx, -4*s, -18*s, 8*s, 2*s, hair);
-  // Eyes
-  fillRect(ctx, -2*s, -14*s, 1*s, 1*s, '#111');
-  fillRect(ctx,  1*s, -14*s, 1*s, 1*s, '#111');
-  // Neck
-  fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
-  // Torso
-  fillRect(ctx, -4*s, -8*s, 8*s, 7*s, clothes);
-  // Arms
-  fillRect(ctx, -6*s, -8*s,  2*s, 5*s, clothes);
-  fillRect(ctx,  4*s, -8*s,  2*s, 5*s, clothes);
-  // Hands
-  fillRect(ctx, -6*s, -3*s,  2*s, 2*s, sk);
-  fillRect(ctx,  4*s, -3*s,  2*s, 2*s, sk);
-  // Legs
-  fillRect(ctx, -4*s, -1*s, 3*s, 6*s + legSwing*s, pants);
-  fillRect(ctx,  1*s, -1*s, 3*s, 6*s - legSwing*s, pants);
-  // Feet
-  fillRect(ctx, -4*s,  5*s + legSwing*s, 3*s, 2*s, '#222');
-  fillRect(ctx,  1*s,  5*s - legSwing*s, 3*s, 2*s, '#222');
+  if (pose === 'front') {
+    // Head
+    fillRect(ctx, -4*s, -18*s, 8*s, 8*s, sk);
+    fillRect(ctx, -4*s, -18*s, 8*s, 2*s, hair);
+    fillRect(ctx, -2*s, -14*s, 1*s, 1*s, '#111');
+    fillRect(ctx,  1*s, -14*s, 1*s, 1*s, '#111');
+    // Neck + torso + arms
+    fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
+    fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, clothes);
+    fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, clothes);
+    fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, clothes);
+    fillRect(ctx, -6*s,  -3*s, 2*s, 2*s, sk);
+    fillRect(ctx,  4*s,  -3*s, 2*s, 2*s, sk);
+    // Legs + feet
+    fillRect(ctx, -4*s, -1*s, 3*s, 6*s + legSwing*s, pants);
+    fillRect(ctx,  1*s, -1*s, 3*s, 6*s - legSwing*s, pants);
+    fillRect(ctx, -4*s,  5*s + legSwing*s, 3*s, 2*s, '#222');
+    fillRect(ctx,  1*s,  5*s - legSwing*s, 3*s, 2*s, '#222');
+
+  } else if (pose === 'side') {
+    // Side profile (facing direction = front of profile)
+    fillRect(ctx, -1*s, -18*s, 6*s, 7*s, sk);
+    fillRect(ctx, -1*s, -18*s, 6*s, 3*s, hair);
+    fillRect(ctx,  3*s, -13*s, 1*s, 1*s, '#111'); // eye
+    fillRect(ctx, -1*s, -11*s, 2*s, 2*s, sk); // neck
+    fillRect(ctx, -2*s,  -9*s, 5*s, 7*s, clothes); // torso
+    // Front arm (swings with stride)
+    fillRect(ctx,  2*s,  -9*s + legSwing*s, 2*s, 5*s, clothes);
+    fillRect(ctx,  2*s,  -4*s + legSwing*s, 2*s, 2*s, sk);
+    // Back arm (counter-swing, darker)
+    fillRect(ctx, -4*s,  -9*s - legSwing*s, 2*s, 4*s, '#1e2a1e');
+    // Front leg
+    fillRect(ctx,  0,    -2*s, 3*s, 5*s + legSwing*s, pants);
+    fillRect(ctx,  0,     3*s + legSwing*s, 4*s, 2*s, '#222');
+    // Back leg (darker)
+    fillRect(ctx, -2*s,  -2*s, 3*s, 5*s - legSwing*s, '#181820');
+    fillRect(ctx, -2*s,   3*s - legSwing*s, 3*s, 2*s, '#1a1a1a');
+
+  } else if (pose === 'back') {
+    // Back view — hair covers head, no eyes
+    fillRect(ctx, -4*s, -18*s, 8*s, 8*s, hair);
+    fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk); // neck
+    fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, clothes);
+    fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, clothes);
+    fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, clothes);
+    fillRect(ctx, -6*s,  -3*s, 2*s, 2*s, sk);
+    fillRect(ctx,  4*s,  -3*s, 2*s, 2*s, sk);
+    fillRect(ctx, -4*s, -1*s, 3*s, 6*s + legSwing*s, pants);
+    fillRect(ctx,  1*s, -1*s, 3*s, 6*s - legSwing*s, pants);
+    fillRect(ctx, -4*s,  5*s + legSwing*s, 3*s, 2*s, '#1a1a1a');
+    fillRect(ctx,  1*s,  5*s - legSwing*s, 3*s, 2*s, '#1a1a1a');
+
+  } else if (pose === 'sleep') {
+    // Lying horizontal — head at +x end (facing direction), body to left
+    fillRect(ctx,  3*s, -8*s, 10*s, 5*s, '#3a2e48'); // pillow
+    fillRect(ctx,  5*s, -7*s,  7*s, 3*s, '#504060'); // pillow highlight
+    fillRect(ctx, -9*s, -6*s, 18*s, 5*s, '#2a1e38'); // blanket
+    fillRect(ctx, -8*s, -5*s, 12*s, 3*s, clothes);   // body lump
+    fillRect(ctx,  5*s,-12*s,  7*s, 7*s, sk);         // head
+    fillRect(ctx,  5*s,-12*s,  7*s, 3*s, hair);       // hair
+    fillRect(ctx,  7*s, -8*s,  2*s, 1*s, '#333');     // closed eye
+  }
 
   ctx.restore();
 }
 
-function drawChild(ctx, x, y, s, facing, animFrame) {
+function drawChild(ctx, x, y, s, facing, animFrame, pose) {
+  pose = pose || 'front';
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
@@ -57,51 +97,119 @@ function drawChild(ctx, x, y, s, facing, animFrame) {
   const hair  = '#301808';
   const leg   = (animFrame % 2 === 0) ? 0 : 1;
 
-  // Head (bigger proportion for child)
-  fillRect(ctx, -3*s, -14*s, 7*s, 7*s, sk);
-  // Hair
-  fillRect(ctx, -3*s, -14*s, 7*s, 2*s, hair);
-  fillRect(ctx,  3*s, -13*s, 1*s, 4*s, hair); // side
-  // Eyes
-  fillRect(ctx, -1*s, -10*s, 1*s, 1*s, '#181830');
-  fillRect(ctx,  2*s, -10*s, 1*s, 1*s, '#181830');
-  // Neck
-  fillRect(ctx,  0,   -7*s, 2*s, 2*s, sk);
-  // Torso (dress)
-  fillRect(ctx, -3*s, -5*s, 7*s, 5*s, dress);
-  // Arms
-  fillRect(ctx, -5*s, -5*s, 2*s, 4*s, sk);
-  fillRect(ctx,  3*s, -5*s, 2*s, 4*s, sk);
-  // Legs
-  fillRect(ctx, -3*s,  0,   3*s, 5*s + leg*s, '#2a1a2e');
-  fillRect(ctx,  1*s,  0,   3*s, 5*s - leg*s, '#2a1a2e');
-  // Feet
-  fillRect(ctx, -3*s,  5*s + leg*s, 3*s, 2*s, '#201020');
-  fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#201020');
+  if (pose === 'front') {
+    fillRect(ctx, -3*s, -14*s, 7*s, 7*s, sk);
+    fillRect(ctx, -3*s, -14*s, 7*s, 2*s, hair);
+    fillRect(ctx,  3*s, -13*s, 1*s, 4*s, hair);
+    fillRect(ctx, -1*s, -10*s, 1*s, 1*s, '#181830');
+    fillRect(ctx,  2*s, -10*s, 1*s, 1*s, '#181830');
+    fillRect(ctx,  0,    -7*s, 2*s, 2*s, sk);
+    fillRect(ctx, -3*s,  -5*s, 7*s, 5*s, dress);
+    fillRect(ctx, -5*s,  -5*s, 2*s, 4*s, sk);
+    fillRect(ctx,  3*s,  -5*s, 2*s, 4*s, sk);
+    fillRect(ctx, -3*s,   0,   3*s, 5*s + leg*s, '#2a1a2e');
+    fillRect(ctx,  1*s,   0,   3*s, 5*s - leg*s, '#2a1a2e');
+    fillRect(ctx, -3*s,  5*s + leg*s, 3*s, 2*s, '#201020');
+    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#201020');
+
+  } else if (pose === 'side') {
+    fillRect(ctx, -1*s, -14*s, 5*s, 6*s, sk);
+    fillRect(ctx, -1*s, -14*s, 5*s, 2*s, hair);
+    fillRect(ctx,  2*s, -11*s, 1*s, 1*s, '#181830');
+    fillRect(ctx,  0,    -8*s, 2*s, 2*s, sk);
+    fillRect(ctx, -2*s,  -6*s, 4*s, 5*s, dress);
+    fillRect(ctx,  1*s,  -6*s + leg*s, 2*s, 3*s, sk);
+    fillRect(ctx, -3*s,  -6*s - leg*s, 2*s, 3*s, '#28203a');
+    fillRect(ctx,  0,     0,   2*s, 4*s + leg*s, '#2a1a2e');
+    fillRect(ctx,  0,    4*s + leg*s, 3*s, 2*s, '#201020');
+    fillRect(ctx, -1*s,   0,   2*s, 4*s - leg*s, '#1e1028');
+    fillRect(ctx, -1*s,  4*s - leg*s, 2*s, 2*s, '#181018');
+
+  } else if (pose === 'back') {
+    fillRect(ctx, -3*s, -14*s, 7*s, 7*s, hair);
+    fillRect(ctx,  0,    -7*s, 2*s, 2*s, sk);
+    fillRect(ctx, -3*s,  -5*s, 7*s, 5*s, dress);
+    fillRect(ctx, -5*s,  -5*s, 2*s, 4*s, sk);
+    fillRect(ctx,  3*s,  -5*s, 2*s, 4*s, sk);
+    fillRect(ctx, -3*s,   0,   3*s, 5*s + leg*s, '#2a1a2e');
+    fillRect(ctx,  1*s,   0,   3*s, 5*s - leg*s, '#2a1a2e');
+    fillRect(ctx, -3*s,  5*s + leg*s, 3*s, 2*s, '#181018');
+    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#181018');
+
+  } else if (pose === 'sleep') {
+    fillRect(ctx,  2*s,  -7*s, 8*s, 4*s, '#3a2e48'); // pillow
+    fillRect(ctx, -7*s,  -5*s, 14*s, 4*s, '#2a1e38'); // blanket
+    fillRect(ctx, -6*s,  -4*s,  9*s, 2*s, dress);
+    fillRect(ctx,  4*s, -10*s,  6*s, 6*s, sk);
+    fillRect(ctx,  4*s, -10*s,  6*s, 2*s, hair);
+    fillRect(ctx,  6*s,  -7*s,  2*s, 1*s, '#333');
+  }
 
   ctx.restore();
 }
 
-function drawSurvivor(ctx, x, y, s, facing, animFrame, idx) {
-  // Slightly different colours per idx
+function drawSurvivor(ctx, x, y, s, facing, animFrame, idx, pose) {
+  pose = pose || 'front';
   const clothColors = ['#2a3828','#282a38','#382820','#283030'];
+  const hairColors  = ['#201808','#101020','#301810','#102018'];
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
 
   const sk  = C.skin;
   const cl  = clothColors[idx % clothColors.length];
+  const hr  = hairColors[idx % hairColors.length];
   const leg = (animFrame % 2 === 0) ? 0 : 1;
 
-  fillRect(ctx, -4*s, -18*s, 8*s, 8*s, sk);
-  fillRect(ctx, -4*s, -18*s, 8*s, 2*s, C.hair);
-  fillRect(ctx, -4*s, -8*s, 8*s, 7*s, cl);
-  fillRect(ctx, -6*s, -8*s, 2*s, 5*s, cl);
-  fillRect(ctx,  4*s, -8*s, 2*s, 5*s, cl);
-  fillRect(ctx, -4*s, -1*s, 3*s, 6*s + leg*s, '#222');
-  fillRect(ctx,  1*s, -1*s, 3*s, 6*s - leg*s, '#222');
-  fillRect(ctx, -4*s,  5*s + leg*s, 3*s, 2*s, '#1a1a1a');
-  fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#1a1a1a');
+  if (pose === 'front') {
+    fillRect(ctx, -4*s, -18*s, 8*s, 8*s, sk);
+    fillRect(ctx, -4*s, -18*s, 8*s, 2*s, hr);
+    fillRect(ctx, -2*s, -14*s, 1*s, 1*s, '#111');
+    fillRect(ctx,  1*s, -14*s, 1*s, 1*s, '#111');
+    fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
+    fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, cl);
+    fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, cl);
+    fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, cl);
+    fillRect(ctx, -4*s, -1*s, 3*s, 6*s + leg*s, '#222');
+    fillRect(ctx,  1*s, -1*s, 3*s, 6*s - leg*s, '#222');
+    fillRect(ctx, -4*s,  5*s + leg*s, 3*s, 2*s, '#1a1a1a');
+    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#1a1a1a');
+
+  } else if (pose === 'side') {
+    fillRect(ctx, -1*s, -18*s, 6*s, 7*s, sk);
+    fillRect(ctx, -1*s, -18*s, 6*s, 3*s, hr);
+    fillRect(ctx,  3*s, -13*s, 1*s, 1*s, '#111');
+    fillRect(ctx, -1*s, -11*s, 2*s, 2*s, sk);
+    fillRect(ctx, -2*s,  -9*s, 5*s, 7*s, cl);
+    fillRect(ctx,  2*s,  -9*s + leg*s, 2*s, 5*s, cl);
+    fillRect(ctx,  2*s,  -4*s + leg*s, 2*s, 2*s, sk);
+    fillRect(ctx, -4*s,  -9*s - leg*s, 2*s, 4*s, '#1e2220');
+    fillRect(ctx,  0,    -2*s, 3*s, 5*s + leg*s, '#222');
+    fillRect(ctx,  0,     3*s + leg*s, 4*s, 2*s, '#1a1a1a');
+    fillRect(ctx, -2*s,  -2*s, 3*s, 5*s - leg*s, '#181818');
+    fillRect(ctx, -2*s,   3*s - leg*s, 3*s, 2*s, '#141414');
+
+  } else if (pose === 'back') {
+    fillRect(ctx, -4*s, -18*s, 8*s, 8*s, hr);
+    fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
+    fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, cl);
+    fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, cl);
+    fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, cl);
+    fillRect(ctx, -4*s, -1*s, 3*s, 6*s + leg*s, '#222');
+    fillRect(ctx,  1*s, -1*s, 3*s, 6*s - leg*s, '#222');
+    fillRect(ctx, -4*s,  5*s + leg*s, 3*s, 2*s, '#141414');
+    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#141414');
+
+  } else if (pose === 'sleep') {
+    fillRect(ctx,  3*s,  -8*s, 10*s, 5*s, '#3a2e48');
+    fillRect(ctx,  5*s,  -7*s,  7*s, 3*s, '#504060');
+    fillRect(ctx, -9*s,  -6*s, 18*s, 5*s, '#201830');
+    fillRect(ctx, -8*s,  -5*s, 12*s, 3*s, cl);
+    fillRect(ctx,  5*s, -12*s,  7*s, 7*s, sk);
+    fillRect(ctx,  5*s, -12*s,  7*s, 3*s, hr);
+    fillRect(ctx,  7*s,  -8*s,  2*s, 1*s, '#333');
+  }
+
   ctx.restore();
 }
 

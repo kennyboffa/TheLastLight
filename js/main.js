@@ -14,12 +14,27 @@ function resizeCanvas() {
   const vp = window.visualViewport;
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
+  const fitScale  = Math.min(ww / CFG.W, wh / CFG.H);
   const userScale = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
-  SCALE = Math.min(ww / CFG.W, wh / CFG.H) * userScale;
+  SCALE = fitScale * userScale;
+
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
-  canvas.style.width  = Math.floor(CFG.W * SCALE) + 'px';
-  canvas.style.height = Math.floor(CFG.H * SCALE) + 'px';
+
+  // Canvas CSS layout always fits the screen — no overflow in document layout
+  canvas.style.width  = Math.floor(CFG.W * fitScale) + 'px';
+  canvas.style.height = Math.floor(CFG.H * fitScale) + 'px';
+
+  // User zoom: CSS transform that scales from the BOTTOM so the bottom
+  // control bar always stays visible.  Overflow grows upward and is clipped
+  // by the body's overflow:hidden, hiding the top of the game content.
+  if (Math.abs(userScale - 1.0) > 0.001) {
+    canvas.style.transform       = `scale(${userScale})`;
+    canvas.style.transformOrigin = 'bottom center';
+  } else {
+    canvas.style.transform       = '';
+    canvas.style.transformOrigin = '';
+  }
 }
 
 window.addEventListener('resize', resizeCanvas);
@@ -157,9 +172,16 @@ canvas.addEventListener('wheel', (e) => {
   if (GS.screen === 'exploreSelect') {
     esScrollY = Math.max(0, esScrollY + delta * scrollAmt);
   } else if (GS.screen === 'shelter') {
-    // Scroll journal or storage
-    if (shelterUI && (shelterUI.activeMenu === 'journal' || shelterUI.activeMenu === 'storage')) {
-      shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
+    if (shelterUI) {
+      if (shelterUI.activeMenu === 'journal') {
+        if (shelterUI.journalTab === 'help') {
+          shelterUI.helpScroll = Math.max(0, (shelterUI.helpScroll || 0) + delta * scrollAmt);
+        } else {
+          shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
+        }
+      } else if (shelterUI.activeMenu === 'storage') {
+        shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
+      }
     }
   }
 }, { passive: false });

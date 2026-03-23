@@ -50,7 +50,9 @@ function tickStats(gs, dt) {
     p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs, 0, 100);
     p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs, 0, 100);
     const tireRate = (p.isExploring || p.isWorking) ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR;
-    p.tiredness = clamp(p.tiredness + tireRate * dm * hrs, 0, 100);
+    const rainTire = (p.isExploring && gs.weather && gs.weather.type === 'rain')
+      ? CFG.TIRE_ACTIVE_PER_HOUR * 0.6 : 0;
+    p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs, 0, 100);
   } else {
     p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs, 0, 100);
     p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs, 0, 100);
@@ -311,7 +313,13 @@ function tickWeather(gs, hrs) {
     const roll = Math.random();
     const prev = w.type;
     w.type = roll < 0.45 ? 'clear' : roll < 0.78 ? 'cloudy' : 'rain';
-    if (w.type !== prev) notify(`Weather: ${w.type}`, 'info');
+    if (w.type !== prev) {
+      if (w.type === 'rain' && gs.screen === 'explore') {
+        notify('It started raining — you tire faster outside.', 'warn');
+      } else {
+        notify(`Weather: ${w.type}`, 'info');
+      }
+    }
   }
   // Raincatcher fills when raining
   if (w.type === 'rain' && gs.shelter.hasRaincatcher) {

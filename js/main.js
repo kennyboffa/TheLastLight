@@ -21,9 +21,11 @@ function resizeCanvas() {
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
 
-  // Canvas CSS layout always fits the screen — no overflow in document layout
-  canvas.style.width  = Math.floor(CFG.W * fitScale) + 'px';
-  canvas.style.height = Math.floor(CFG.H * fitScale) + 'px';
+  // On desktop (fitScale >= 1) snap to integer multiples for crisp pixel-art.
+  // On mobile (fitScale < 1) use the exact fit to fill the screen.
+  const displayScale = fitScale >= 1 ? Math.floor(fitScale) || 1 : fitScale;
+  canvas.style.width  = Math.round(CFG.W * displayScale) + 'px';
+  canvas.style.height = Math.round(CFG.H * displayScale) + 'px';
 
   // User zoom: CSS transform that scales from the BOTTOM so the bottom
   // control bar always stays visible.  Overflow grows upward and is clipped

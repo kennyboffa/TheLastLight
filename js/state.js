@@ -85,6 +85,8 @@ const GS = {
     hasWaterFilter:   false,
     hasGenerator:     false,
     hasRadioDampener: false,
+    bedroomBed2: false,
+    bedroomBed3: false,
     hasRaincatcher:   false,
     campfire: false,
     noiseBudget: 100,
@@ -203,6 +205,15 @@ function getRoom(id) {
 
 function getRoomUnlocked(id) {
   return GS.shelter.rooms.find(r => r.id === id && r.unlocked);
+}
+
+function maxSurvivors(gs) {
+  // Base 3, +1 per built room (excluding main and bedroom which start unlocked)
+  const builtRooms = (gs.shelter.rooms || []).filter(
+    r => r.id !== 'main' && r.id !== 'bedroom' && r.unlocked
+  ).length;
+  const extraBeds = (gs.shelter.bedroomBed2 ? 1 : 0) + (gs.shelter.bedroomBed3 ? 1 : 0);
+  return 3 + builtRooms + extraBeds;
 }
 
 function parentTitle() {

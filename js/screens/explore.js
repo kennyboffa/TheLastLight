@@ -218,7 +218,7 @@ function startExploration(gs, loc) {
     animFrame: 0, animTimer: 0,
     showReturnPrompt: false,
     building: null,   // non-null when inside a building
-    invOpen: false, invScroll: 0,
+    invOpen: false, invScroll: 0, invSelected: null,
   };
 
   // Restore persistent loot/encounter state from previous visit
@@ -618,27 +618,77 @@ function exploreClick(mx, my, gs) {
 
   // Inventory overlay — handle before anything else
   if (es.invOpen) {
+    const px = 30, py = 40, pw = CFG.W - 60, ph = CFG.H - 80;
+
+    // Close button
     if (gs._exploreInvClose && hitTest(mx, my, gs._exploreInvClose.x, gs._exploreInvClose.y, gs._exploreInvClose.w, gs._exploreInvClose.h)) {
-      es.invOpen = false; return;
+      es.invOpen = false; es.invSelected = null; return;
     }
+
+    // Action buttons (shown when item is selected)
+    if (es.invSelected !== null && gs._exploreInvActionBtns) {
+      for (const btn of gs._exploreInvActionBtns) {
+        if (!hitTest(mx, my, btn.x, btn.y, btn.w, btn.h)) continue;
+        const slot = gs.parent.inventory[es.invSelected];
+        if (!slot) { es.invSelected = null; return; }
+        const def = getItemDef(slot.id);
+        if (!def) { es.invSelected = null; return; }
+
+        if (btn.action === 'equip') {
+          if (def.type === 'weapon') {
+            // Swap current weapon to inventory
+            if (gs.parent.equipped.weapon) {
+              addToInventory(gs.parent.inventory, gs.parent.equipped.weapon, 1);
+            }
+            gs.parent.equipped.weapon = slot.id;
+            removeFromInventory(gs.parent.inventory, slot.id, 1);
+            notify(`Equipped ${def.name}.`, 'good');
+          } else if (def.type === 'backpack') {
+            if (gs.parent.backpackId) {
+              addToInventory(gs.parent.inventory, gs.parent.backpackId, 1);
+            }
+            gs.parent.backpackId = slot.id;
+            removeFromInventory(gs.parent.inventory, slot.id, 1);
+            notify(`Equipped ${def.name}.`, 'good');
+          } else if (def.type === 'armor') {
+            if (gs.parent.equipped.armor) {
+              addToInventory(gs.parent.inventory, gs.parent.equipped.armor, 1);
+            }
+            gs.parent.equipped.armor = slot.id;
+            removeFromInventory(gs.parent.inventory, slot.id, 1);
+            notify(`Equipped ${def.name}.`, 'good');
+          }
+          es.invSelected = null;
+        } else if (btn.action === 'drop1') {
+          removeFromInventory(gs.parent.inventory, slot.id, 1);
+          const dropX = (es.px || 80) + randInt(-25, 25);
+          es.loot.push({ id: slot.id, qty: 1, wx: dropX, wy: PLAYER_FOOT, taken: false });
+          notify(`Dropped ${def.name}.`, 'warn');
+          if (!gs.parent.inventory.find(s => s.id === slot.id)) es.invSelected = null;
+        } else if (btn.action === 'dropAll') {
+          const qty = slot.qty;
+          removeFromInventory(gs.parent.inventory, slot.id, qty);
+          const dropX = (es.px || 80) + randInt(-25, 25);
+          es.loot.push({ id: slot.id, qty, wx: dropX, wy: PLAYER_FOOT, taken: false });
+          notify(`Dropped ${def.name} x${qty}.`, 'warn');
+          es.invSelected = null;
+        }
+        return;
+      }
+    }
+
+    // Item row click — select/deselect
     if (gs._exploreInvRows) {
       for (const row of gs._exploreInvRows) {
         if (my >= row.y1 && my < row.y2) {
-          const def = getItemDef(row.slot.id);
-          if (def) {
-            removeFromInventory(gs.parent.inventory, row.slot.id, row.slot.qty);
-            // Place dropped item on the ground near the player for later pickup
-            const dropX = (es.px || 80) + randInt(-25, 25);
-            es.loot.push({ id: row.slot.id, qty: row.slot.qty, wx: dropX, wy: PLAYER_FOOT, taken: false });
-            notify(`Dropped ${def.name} — it\'s on the ground.`, 'warn');
-          }
+          es.invSelected = (es.invSelected === row.idx) ? null : row.idx;
           return;
         }
       }
     }
+
     // Click outside modal to close
-    const px = 30, py = 40, pw = CFG.W - 60, ph = CFG.H - 80;
-    if (!hitTest(mx, my, px, py, pw, ph)) es.invOpen = false;
+    if (!hitTest(mx, my, px, py, pw, ph)) { es.invOpen = false; es.invSelected = null; }
     return;
   }
 
@@ -652,7 +702,7 @@ function exploreClick(mx, my, gs) {
 
   // INV button
   if (gs._exploreInvBtn && hitTest(mx, my, gs._exploreInvBtn.x, gs._exploreInvBtn.y, gs._exploreInvBtn.w, gs._exploreInvBtn.h)) {
-    es.invOpen = !es.invOpen; return;
+    es.invOpen = !es.invOpen; if (!es.invOpen) es.invSelected = null; return;
   }
 
   // Return Home button (bottom-left) — only at area edges and outside buildings
@@ -810,14 +860,16 @@ function renderOutdoor(ctx, gs, es) {
   }
 
   // Player
-  drawParent(ctx, es.px, PLAYER_FOOT, 2, es.facing, es.animFrame, gs.parent.gender);
+  const _outSearching = es.containers.some(c => c.searching);
+  const _outPose = Math.abs(es.velX) > 0.1 ? 'side' : (_outSearching ? 'back' : 'front');
+  drawParent(ctx, es.px, PLAYER_FOOT, 2, es.facing, es.animFrame, gs.parent.gender, _outPose);
 
   // Companion following player
   if (gs.exploreCompanionId) {
     const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
     if (compIdx >= 0) {
       const compX = es.px - es.facing * 22;
-      drawSurvivor(ctx, compX, PLAYER_FOOT, 2, -es.facing, es.animFrame, compIdx);
+      drawSurvivor(ctx, compX, PLAYER_FOOT, 2, -es.facing, es.animFrame, compIdx, Math.abs(es.velX) > 0.1 ? 'side' : 'front');
     }
   }
 
@@ -909,13 +961,15 @@ function renderBuildingInterior(ctx, gs, es) {
   }
 
   // Player
-  drawParent(ctx, bi.px, PLAYER_FOOT, 2, bi.facing, bi.animFrame || 0, gs.parent.gender);
+  const _biSearching = fl.containers.some(c => c.searching);
+  const _biPose = Math.abs(bi.velX) > 0.1 ? 'side' : (_biSearching ? 'back' : 'front');
+  drawParent(ctx, bi.px, PLAYER_FOOT, 2, bi.facing, bi.animFrame || 0, gs.parent.gender, _biPose);
 
   // Companion in building
   if (gs.exploreCompanionId) {
     const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
     if (compIdx >= 0) {
-      drawSurvivor(ctx, bi.px - bi.facing * 22, PLAYER_FOOT, 2, -bi.facing, bi.animFrame || 0, compIdx);
+      drawSurvivor(ctx, bi.px - bi.facing * 22, PLAYER_FOOT, 2, -bi.facing, bi.animFrame || 0, compIdx, Math.abs(bi.velX) > 0.1 ? 'side' : 'front');
     }
   }
 
@@ -1259,20 +1313,53 @@ function drawExploreInventory(ctx, gs, es) {
   const weapDef = eq.weapon ? getItemDef(eq.weapon) : null;
   const bpDef   = gs.parent.backpackId ? getItemDef(gs.parent.backpackId) : null;
   let ey = py + 22;
-  drawText(ctx, `Weapon: ${weapDef ? weapDef.name : 'none'}`, px + 8, ey + 8, weapDef ? C.textBright : C.textDim, 8);
-  drawText(ctx, `Backpack: ${bpDef ? bpDef.name : 'none'}`, px + pw/2, ey + 8, bpDef ? C.textBright : C.textDim, 8);
+  drawText(ctx, `Weapon: ${weapDef ? weapDef.name : 'none'}`, px + 8, ey + 8, weapDef ? '#88cc88' : C.textDim, 8);
+  drawText(ctx, `Backpack: ${bpDef ? bpDef.name : 'none'}`, px + pw/2, ey + 8, bpDef ? '#88cc88' : C.textDim, 8);
   ey += 14;
   drawDivider(ctx, px + 4, ey, pw - 8, C.border2);
   ey += 4;
 
-  const listH = ph - (ey - py) - 30;
+  // Action panel height: shown when item selected
+  const selSlot = es.invSelected !== null ? gs.parent.inventory[es.invSelected] : null;
+  const selDef  = selSlot ? getItemDef(selSlot.id) : null;
+  const actionH = selSlot ? 36 : 0;
+
+  const listH = ph - (ey - py) - 30 - actionH;
   const rows = drawInventoryList(ctx, gs.parent.inventory, px + 4, ey, pw - 8, listH,
     `CARRYING  ${calcWeight(gs.parent.inventory).toFixed(1)}/${parentMaxCarry().toFixed(1)}kg`,
-    es.invScroll || 0, mx, my);
+    es.invScroll || 0, mx, my, es.invSelected);
   gs._exploreInvRows = rows;
 
-  // Hint
-  drawText(ctx, 'Click item to drop it.  Tap anywhere outside to close.', px + pw/2, py + ph - 8, C.textDim, 7, 'center');
+  // Action panel
+  gs._exploreInvActionBtns = [];
+  if (selSlot && selDef) {
+    const ay = ey + listH + 4;
+    fillRect(ctx, px + 4, ay, pw - 8, actionH - 2, '#0e1525');
+    drawText(ctx, `Selected: ${selDef.name}${selSlot.qty > 1 ? ` x${selSlot.qty}` : ''}`, px + 10, ay + 10, '#c8c8d8', 8);
+    let bx = px + 10;
+    const by = ay + 16;
+    const bh = 14;
+    const isEquippable = def => def.type === 'weapon' || def.type === 'backpack' || def.type === 'armor';
+    if (isEquippable(selDef)) {
+      const bw = 44;
+      const hov = hitTest(mx, my, bx, by, bw, bh);
+      drawButton(ctx, bx, by, bw, bh, 'Equip', hov);
+      gs._exploreInvActionBtns.push({ action: 'equip', x: bx, y: by, w: bw, h: bh });
+      bx += bw + 5;
+    }
+    { const bw = 38;
+      const hov = hitTest(mx, my, bx, by, bw, bh);
+      drawButton(ctx, bx, by, bw, bh, 'Drop 1', hov);
+      gs._exploreInvActionBtns.push({ action: 'drop1', x: bx, y: by, w: bw, h: bh });
+      bx += bw + 5; }
+    { const bw = 48;
+      const hov = hitTest(mx, my, bx, by, bw, bh);
+      drawButton(ctx, bx, by, bw, bh, 'Drop All', hov);
+      gs._exploreInvActionBtns.push({ action: 'dropAll', x: bx, y: by, w: bw, h: bh });
+      bx += bw + 5; }
+  } else {
+    drawText(ctx, 'Click item to select it.', px + pw/2, py + ph - 18, C.textDim, 7, 'center');
+  }
 
   // Close button
   const closeX = px + pw - 54, closeY = py + ph - 20;

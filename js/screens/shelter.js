@@ -39,34 +39,43 @@ let shelterUI = {
 
 // ── Room furniture drawing ─────────────────────────────────────────────────────
 
-function drawRoomFurniture(ctx, roomId, r, level) {
+function drawRoomFurniture(ctx, roomId, r, level, gs) {
   const fl = r.y + r.h - 14;  // floor line
   const cx = r.x;
 
   if (roomId === 'bedroom') {
-    // Bed frame (upgradable)
-    const bx = cx + 8, by = fl - 20, bw = level >= 2 ? 54 : 42, bh = 18;
-    // Frame
-    fillRect(ctx, bx, by, bw, bh, level >= 2 ? '#3a2a18' : '#2a1e10');
-    strokeRect(ctx, bx, by, bw, bh, '#4a3a22');
-    // Mattress
-    fillRect(ctx, bx + 2, by + 3, bw - 4, bh - 6, level >= 2 ? '#4a3a50' : '#2a2230');
-    // Pillow
-    fillRect(ctx, bx + 3, by + 4, 10, 7, level >= 2 ? '#6a5a70' : '#3a2f40');
-    strokeRect(ctx, bx + 3, by + 4, 10, 7, '#50405a');
-    // Headboard
-    fillRect(ctx, bx, by - 6, 4, bh + 6, level >= 2 ? '#4a3a22' : '#352a18');
-    if (level >= 2) {
-      // Upgraded: footboard + side table
-      fillRect(ctx, bx + bw - 4, by, 4, bh, '#4a3a22');
-      // Small side table
-      fillRect(ctx, bx + bw + 4, by + 8, 10, 10, '#2a2015');
-      strokeRect(ctx, bx + bw + 4, by + 8, 10, 10, '#3a3020');
-      // Candle on table
-      fillRect(ctx, bx + bw + 8, by + 3, 3, 6, '#d4aa30');
+    const hasBed2 = gs && gs.shelter.bedroomBed2;
+    const hasBed3 = gs && gs.shelter.bedroomBed3;
+
+    // Helper to draw one bed
+    function drawBed(bx, by, upgraded) {
+      const bw = upgraded ? 50 : 42, bh = 16;
+      fillRect(ctx, bx, by, bw, bh, upgraded ? '#3a2a18' : '#2a1e10');
+      strokeRect(ctx, bx, by, bw, bh, '#4a3a22');
+      fillRect(ctx, bx + 2, by + 3, bw - 4, bh - 6, upgraded ? '#4a3a50' : '#2a2230');
+      fillRect(ctx, bx + 3, by + 4, 9, 6, upgraded ? '#6a5a70' : '#3a2f40');
+      strokeRect(ctx, bx + 3, by + 4, 9, 6, '#50405a');
+      fillRect(ctx, bx, by - 5, 4, bh + 5, upgraded ? '#4a3a22' : '#352a18');
+      if (upgraded) fillRect(ctx, bx + bw - 4, by, 4, bh, '#4a3a22');
     }
-    // Level badge
-    drawText(ctx, level >= 2 ? 'Lvl 2' : 'Cot', cx + r.w/2, fl - 2, '#4a3a28', 6, 'center');
+
+    // Main bed (always present)
+    drawBed(cx + 6, fl - 20, level >= 2);
+
+    // Extra beds
+    if (hasBed2) drawBed(cx + 60, fl - 20, true);
+    if (hasBed3) drawBed(cx + 114, fl - 20, true);
+
+    // Side table only for main bed when upgraded
+    if (level >= 2) {
+      const bw = 50;
+      fillRect(ctx, cx + 6 + bw + 3, fl - 12, 9, 9, '#2a2015');
+      strokeRect(ctx, cx + 6 + bw + 3, fl - 12, 9, 9, '#3a3020');
+      fillRect(ctx, cx + 6 + bw + 6, fl - 17, 2, 5, '#d4aa30');
+    }
+
+    const bedCount = 1 + (hasBed2 ? 1 : 0) + (hasBed3 ? 1 : 0);
+    drawText(ctx, `${bedCount} bed${bedCount > 1 ? 's' : ''}`, cx + r.w/2, fl - 2, '#4a3a28', 6, 'center');
 
   } else if (roomId === 'main') {
     // Storage container/barrel (left side)
@@ -170,7 +179,7 @@ function renderShelter(ctx, gs) {
       drawRoomInterior(ctx, r.x, r.y, r.w, r.h, room.unlocked, sel || hov);
 
       if (room.unlocked) {
-        drawRoomFurniture(ctx, roomId, r, room.level || 1);
+        drawRoomFurniture(ctx, roomId, r, room.level || 1, gs);
         drawText(ctx, def.name, r.x + r.w/2, r.y + 12, C.textDim, 8, 'center', true);
       } else {
         drawText(ctx, def.name, r.x + r.w/2, r.y + r.h/2 - 2, '#303035', 8, 'center', false);
@@ -273,44 +282,71 @@ function drawShelterCharacters(ctx, gs) {
 
   gs._charHitBounds = [];
 
+  // Bed positions in bedroom for sleeping characters
+  const bedroomR = roomRect(1, 0);
+  const bedFL    = bedroomR.y + bedroomR.h - 14;
+  const BED_POSITIONS = [
+    { x: bedroomR.x + 28, y: bedFL - 4 },
+    { x: bedroomR.x + 88, y: bedFL - 4 },
+    { x: bedroomR.x + 148, y: bedFL - 4 },
+  ];
+  let _bedSlot = 0;
+
   // ── Parent ──────────────────────────────────────────────────────────────────
   if (!p.isExploring) {
-    const px  = Math.round(p.shelterX !== undefined ? p.shelterX : 28);
+    const pStandX = Math.round(p.shelterX !== undefined ? p.shelterX : 28);
+    let drawPX = pStandX, drawPY = groundY, pPose = 'front';
+    if (p.isSleeping && _bedSlot < BED_POSITIONS.length) {
+      const bed = BED_POSITIONS[_bedSlot++];
+      drawPX = bed.x; drawPY = bed.y; pPose = 'sleep';
+    } else if (p.isWorking) {
+      pPose = 'back';
+    }
     const sel = shelterUI.selectedChar === 'parent';
     if (sel) {
       ctx.save(); ctx.globalAlpha = 0.18;
-      fillRect(ctx, px - 10, groundY - 24, 22, 28, '#8888ff');
+      fillRect(ctx, drawPX - 10, drawPY - 24, 22, 28, '#8888ff');
       ctx.globalAlpha = 1; ctx.restore();
-      strokeRect(ctx, px - 10, groundY - 24, 22, 28, '#8888ff');
+      strokeRect(ctx, drawPX - 10, drawPY - 24, 22, 28, '#8888ff');
     }
-    drawParent(ctx, px, groundY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender);
+    drawParent(ctx, drawPX, drawPY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender, pPose);
     if (p.isSleeping) {
-      drawText(ctx, 'zzz', px + 10, groundY - 26, C.textDim, 7);
-      drawText(ctx, 'Sleeping', px, groundY - 32, C.textDim, 6, 'center');
+      drawText(ctx, 'zzz', drawPX + 14, drawPY - 28, C.textDim, 7);
     }
     if (p.isWorking && p.task) {
       const prog = p.taskProgress / p.taskDuration;
-      drawStatBar(ctx, px - 10, groundY - 29, 30, 4, prog * 100, 100, C.textGood);
+      drawStatBar(ctx, pStandX - 12, groundY - 32, 32, 4, prog * 100, 100, C.textGood);
       const taskLabelMap = { craft:'Crafting', build:'Building', cook:'Cooking', play:'Playing', hunt:'Hunting', eat:'Eating', drink:'Drinking' };
-      drawText(ctx, taskLabelMap[p.task.type] || 'Working', px, groundY - 32, C.textDim, 6, 'center');
+      fillRect(ctx, pStandX - 18, groundY - 44, 36, 10, '#00000099');
+      drawText(ctx, taskLabelMap[p.task.type] || 'Working', pStandX, groundY - 36, C.textDim, 6, 'center');
     }
-    drawText(ctx, p.name, px, groundY - 26, sel ? '#aaaaff' : C.textDim, 6, 'center');
-    gs._charHitBounds.push({ id: 'parent', x: px - 10, y: groundY - 24, w: 22, h: 28 });
+    // Name label with dark background for readability
+    { const nm = p.name; const nw = nm.length * 5 + 6;
+      fillRect(ctx, drawPX - nw/2, drawPY - 42, nw, 10, '#000000bb');
+      drawText(ctx, nm, drawPX, drawPY - 34, sel ? '#aaaaff' : '#c8c8d8', 7, 'center'); }
+    gs._charHitBounds.push({ id: 'parent', x: drawPX - 10, y: drawPY - 24, w: 22, h: 28 });
   }
 
   // ── Child ───────────────────────────────────────────────────────────────────
-  const cpx  = Math.round(ch.shelterX !== undefined ? ch.shelterX : 52);
+  const cStandX = Math.round(ch.shelterX !== undefined ? ch.shelterX : 52);
+  let drawCX = cStandX, drawCY = groundY, chPose = 'front';
+  if (ch.isSleeping && _bedSlot < BED_POSITIONS.length) {
+    const bed = BED_POSITIONS[_bedSlot++];
+    drawCX = bed.x; drawCY = bed.y; chPose = 'sleep';
+  }
   const csel = shelterUI.selectedChar === 'child';
   if (csel) {
     ctx.save(); ctx.globalAlpha = 0.18;
-    fillRect(ctx, cpx - 8, groundY - 20, 18, 24, '#ff88ff');
+    fillRect(ctx, drawCX - 8, drawCY - 20, 18, 24, '#ff88ff');
     ctx.globalAlpha = 1; ctx.restore();
-    strokeRect(ctx, cpx - 8, groundY - 20, 18, 24, '#cc88cc');
+    strokeRect(ctx, drawCX - 8, drawCY - 20, 18, 24, '#cc88cc');
   }
-  drawChild(ctx, cpx, groundY, 2, ch.facing, ch.animFrame);
-  if (ch.isSleeping) drawText(ctx, 'zzz', cpx + 8, groundY - 20, C.textDim, 7);
-  drawText(ctx, ch.name, cpx, groundY - 22, csel ? '#ffaaff' : C.textDim, 6, 'center');
-  gs._charHitBounds.push({ id: 'child', x: cpx - 8, y: groundY - 20, w: 18, h: 24 });
+  drawChild(ctx, drawCX, drawCY, 2, ch.facing, ch.animFrame, chPose);
+  if (ch.isSleeping) drawText(ctx, 'zzz', drawCX + 12, drawCY - 22, C.textDim, 7);
+  { const nm = ch.name; const nw = nm.length * 5 + 6;
+    fillRect(ctx, drawCX - nw/2, drawCY - 38, nw, 10, '#000000bb');
+    drawText(ctx, nm, drawCX, drawCY - 30, csel ? '#ffaaff' : '#c8c8d8', 7, 'center'); }
+  gs._charHitBounds.push({ id: 'child', x: drawCX - 8, y: drawCY - 20, w: 18, h: 24 });
 
   // ── Dog ─────────────────────────────────────────────────────────────────────
   if (gs.dog && gs.dog.alive) {
@@ -321,28 +357,36 @@ function drawShelterCharacters(ctx, gs) {
   gs.survivors.forEach((s, i) => {
     s.animTimer = (s.animTimer || 0) + 1;
     if (s.animTimer % 28 === 0) s.animFrame = (s.animFrame || 0) + 1;
-    const sx   = Math.round(s.shelterX !== undefined ? s.shelterX : 82 + i * 26);
+    const sStandX = Math.round(s.shelterX !== undefined ? s.shelterX : 82 + i * 26);
+    let drawSX = sStandX, drawSY = groundY, sPose = 'front';
+    if (s.isSleeping && _bedSlot < BED_POSITIONS.length) {
+      const bed = BED_POSITIONS[_bedSlot++];
+      drawSX = bed.x; drawSY = bed.y; sPose = 'sleep';
+    } else if (s.task) {
+      sPose = 'back';
+    }
     const ssel = shelterUI.selectedChar === s.id;
     if (s.onMission) {
-      // Draw AWAY placeholder — not clickable
-      drawText(ctx, s.name, sx, groundY - 24, '#444450', 6, 'center');
-      drawText(ctx, 'AWAY', sx, groundY - 14, '#404060', 7, 'center');
+      drawText(ctx, s.name, sStandX, groundY - 24, '#444450', 6, 'center');
+      drawText(ctx, 'AWAY', sStandX, groundY - 14, '#404060', 7, 'center');
       return;
     }
     if (ssel) {
       ctx.save(); ctx.globalAlpha = 0.18;
-      fillRect(ctx, sx - 9, groundY - 22, 20, 26, '#88ff88');
+      fillRect(ctx, drawSX - 9, drawSY - 22, 20, 26, '#88ff88');
       ctx.globalAlpha = 1; ctx.restore();
-      strokeRect(ctx, sx - 9, groundY - 22, 20, 26, '#88cc88');
+      strokeRect(ctx, drawSX - 9, drawSY - 22, 20, 26, '#88cc88');
     }
-    drawSurvivor(ctx, sx, groundY, 2, s.facing, s.animFrame, i);
-    if (s.isSleeping) drawText(ctx, 'zzz', sx + 8, groundY - 22, C.textDim, 7);
+    drawSurvivor(ctx, drawSX, drawSY, 2, s.facing, s.animFrame, i, sPose);
+    if (s.isSleeping) drawText(ctx, 'zzz', drawSX + 12, drawSY - 26, C.textDim, 7);
     if (s.task && s.taskDuration > 0) {
       const prog = s.taskProgress / s.taskDuration;
-      drawStatBar(ctx, sx - 9, groundY - 27, 24, 3, prog * 100, 100, C.textGood);
+      drawStatBar(ctx, sStandX - 12, groundY - 30, 28, 3, prog * 100, 100, C.textGood);
     }
-    drawText(ctx, s.name, sx, groundY - 24, ssel ? '#aaffaa' : C.textDim, 6, 'center');
-    gs._charHitBounds.push({ id: s.id, x: sx - 9, y: groundY - 22, w: 20, h: 26 });
+    { const nm = s.name; const nw = nm.length * 5 + 6;
+      fillRect(ctx, drawSX - nw/2, drawSY - 40, nw, 10, '#000000bb');
+      drawText(ctx, nm, drawSX, drawSY - 32, ssel ? '#aaffaa' : '#c8c8d8', 7, 'center'); }
+    gs._charHitBounds.push({ id: s.id, x: drawSX - 9, y: drawSY - 22, w: 20, h: 26 });
   });
 }
 
@@ -471,7 +515,7 @@ function handleCharTask(taskId, gs) {
     case 'sleep':
       who.isSleeping   = true;
       who.task         = { type: 'sleep' };
-      who.taskDuration = randInt(5, 8);
+      who.taskDuration = randInt(3, 4);
       who.taskProgress = 0;
       if (sel === 'parent') gs.parent.isWorking = false;
       notify(`${who.name} went to sleep.`, 'normal');
@@ -667,6 +711,17 @@ function drawRoomMenu(ctx, gs, mx, my) {
   } else {
     drawText(ctx, 'Room level: ' + room.level, px+8, y+9, C.textGood, 8);
     y += 14;
+    if (roomId === 'bedroom') {
+      const maxSurv = maxSurvivors(gs);
+      drawText(ctx, `Max survivors: ${maxSurv}`, px+8, y+9, C.textDim, 8);
+      y += 12;
+      const bed2done = gs.shelter.bedroomBed2;
+      const bed3done = gs.shelter.bedroomBed3;
+      drawText(ctx, `2nd bed: ${bed2done ? '✓ Built' : 'Not built'}`, px+8, y+9, bed2done ? C.textGood : C.textDim, 8);
+      y += 11;
+      drawText(ctx, `3rd bed: ${bed3done ? '✓ Built' : 'Not built'}`, px+8, y+9, bed3done ? C.textGood : C.textDim, 8);
+      y += 11;
+    }
   }
 
   const closeX = px+8, closeY = py + H2 - 24;
@@ -1001,6 +1056,19 @@ function shelterClick(mx, my, gs) {
     }
   }
 
+  // Survivor stat panel click (right-side bar)
+  if (gs._survivorStatBounds) {
+    for (const bound of gs._survivorStatBounds) {
+      if (hitTest(mx, my, bound.x, bound.y, bound.w, bound.h)) {
+        M.selectedChar = bound.id;
+        M.activeMenu   = 'char';
+        M.charPanelX   = clamp(MAIN_W - 188, 2, MAIN_W - 188);
+        M.charPanelY   = clamp(bound.y, 2, CFG.H - 260);
+        return;
+      }
+    }
+  }
+
   // Character click (check before room clicks)
   if (GS._charHitBounds) {
     for (const bound of GS._charHitBounds) {
@@ -1050,7 +1118,7 @@ function handleControlBtn(id, gs, mx, my) {
     case 'sleep':
       gs.parent.isSleeping = true;
       gs.parent.task = { type:'sleep' };
-      gs.parent.taskDuration = randInt(5, 8);
+      gs.parent.taskDuration = randInt(3, 4);
       gs.parent.taskProgress = 0;
       notify('Sleeping...', 'normal');
       break;

@@ -57,7 +57,13 @@ function tickStats(gs, dt) {
     p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs, 0, 100);
     p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs, 0, 100);
     p.tiredness = clamp(p.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
-    if (p.tiredness <= 0) { p.isSleeping = false; p.tiredness = 0; }
+    if (p.tiredness <= 0) {
+      p.isSleeping = false; p.tiredness = 0;
+      if (p.task && p.task.type === 'sleep') {
+        p.task = null; p.taskProgress = 0; p.taskDuration = 0; p.isWorking = false;
+        notify(`${p.name} woke up rested.`, 'good');
+      }
+    }
   }
 
   // Wounded heals naturally once HP recovers above 60%
@@ -343,11 +349,27 @@ function startDayTransition(gs) {
 function advanceDay(gs) {
   gs.day++;
   gs.time = CFG.DAY_START;
-  gs.parent.isSleeping = false;
-  gs.parent.isWorking  = false;
-  gs.parent.task       = null;
-  gs.parent.taskProgress = 0;
+
+  // Parent: if sleeping when day ends, they wake up fully rested
+  if (gs.parent.isSleeping) {
+    gs.parent.isSleeping   = false;
+    gs.parent.tiredness    = 0;
+    gs.parent.task         = null;
+    gs.parent.taskProgress = 0;
+    gs.parent.taskDuration = 0;
+    gs.parent.isWorking    = false;
+  }
+  // Non-sleep tasks (craft, build, cook) are preserved across the day boundary.
+  // isWorking stays true if a non-sleep task is ongoing.
+
   gs.shelter.noiseToday = 0;
+
+  // Child rests at night
+  gs.child.isSleeping = false;
+  gs.child.tiredness  = 0;
+  if (gs.child.task && gs.child.task.type === 'sleep') {
+    gs.child.task = null; gs.child.taskProgress = 0; gs.child.taskDuration = 0;
+  }
 
   // Late return penalties — player spent the night outside
   if (gs.lateReturn) {
@@ -363,8 +385,13 @@ function advanceDay(gs) {
   // Dog availability
   if (gs.day >= 10 && !gs.flags.dogEncountered) gs.flags.dogAvailable = true;
 
-  // Survivor morale gentle recovery + daily XP
+  // Survivors: all rest at night → tiredness reset, sleep tasks cleared
   for (const s of gs.survivors) {
+    s.isSleeping = false;
+    if (!s.isExploring) s.tiredness = 0;
+    if (s.task && s.task.type === 'sleep') {
+      s.task = null; s.taskProgress = 0; s.taskDuration = 0;
+    }
     s.depression = clamp(s.depression - 2, 0, 100);
     giveXP(s, 5, gs);
   }

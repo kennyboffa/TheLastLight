@@ -44,9 +44,11 @@ function drawStatsPanel(ctx, gs) {
 
   // Survivors (hidden during combat — player fights alone)
   if (gs.survivors.length > 0 && gs.screen !== 'combat') {
+    gs._survivorStatBounds = [];
     drawDivider(ctx, x + 6, y, w - 12, C.border2);
     y += 5;
     for (const s of gs.survivors) {
+      const rowStartY = y;
       if (s.onMission) {
         ctx.save();
         ctx.globalAlpha = 0.38;
@@ -58,11 +60,14 @@ function drawStatsPanel(ctx, gs) {
         drawText(ctx, 'ON MISSION', x + w / 2, y + 3, '#4a6a8a', 7, 'center');
         y += 8;
       } else {
-        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, C.textDim, 8);
+        const isSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === s.id;
+        if (isSel) fillRect(ctx, x + 4, y, w - 8, 8, '#1a2a1a');
+        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, isSel ? '#aaffaa' : C.textDim, 8);
         y += 10;
         y = drawPersonStats(ctx, s, x + 8, y, w - 16, true);
         y += 3;
       }
+      gs._survivorStatBounds.push({ id: s.id, x, y: rowStartY, w, h: y - rowStartY });
     }
   }
 
@@ -108,34 +113,41 @@ function drawStatsPanel(ctx, gs) {
 }
 
 function drawPersonStats(ctx, person, x, y, w, compact) {
-  const bh = compact ? 5 : 6;
-  const gap = compact ? 7 : 8;
+  const bh  = compact ? 5 : 6;
+  const gap = compact ? 8 : 9;
+  const lblW = 32; // width reserved for stat label to left of bar
 
-  // HP bar with number
-  const hpPct = person.health / person.maxHealth;
+  const hpPct   = person.health / person.maxHealth;
   const hpColor = hpPct > 0.6 ? C.hp : hpPct > 0.3 ? '#cc6020' : '#dd1010';
-  drawStatBar(ctx, x, y, w, bh, person.health, person.maxHealth, hpColor, null, 'HP');
-  y += gap;
+  const dcolor  = person.depression > 70 ? '#9944dd' : C.depression;
 
-  drawStatBar(ctx, x, y, w, bh, person.hunger,     100, C.hunger,    null, 'Hunger');   y += gap;
-  drawStatBar(ctx, x, y, w, bh, person.thirst,     100, C.thirst,    null, 'Thirst');   y += gap;
-  drawStatBar(ctx, x, y, w, bh, person.tiredness,  100, C.tiredness, null, 'Tired');    y += gap;
+  const stats = [
+    { label: 'HP',     value: person.health,     max: person.maxHealth, color: hpColor },
+    { label: 'Hunger', value: person.hunger,      max: 100, color: C.hunger },
+    { label: 'Thirst', value: person.thirst,      max: 100, color: C.thirst },
+    { label: 'Tired',  value: person.tiredness,   max: 100, color: C.tiredness },
+    { label: 'Mood',   value: person.depression,  max: 100, color: dcolor },
+  ];
 
-  const dcolor = person.depression > 70 ? '#9944dd' : C.depression;
-  drawStatBar(ctx, x, y, w, bh, person.depression, 100, dcolor, null, 'Depr.');
-  y += gap;
-
-  // Warning icons (right side: needs, left side: conditions)
-  if (person.hunger > CFG.HUNGER_WARN)  { drawText(ctx, '! HUNGRY',  x + w - 38, y + 0, C.textWarn, 7); }
-  if (person.thirst > CFG.THIRST_WARN)  { drawText(ctx, '! THIRSTY', x + w - 42, y + 0, C.textWarn, 7); }
-  if (person.tiredness > 75)            { drawText(ctx, '! TIRED',    x + w - 35, y + 0, C.textDim, 7); }
-  if (person.depression > CFG.DEPR_WARN){ drawText(ctx, '! DEPR',     x,          y + 0, C.depression, 7); }
-  if (person.infected) {
-    y += 8;
-    drawText(ctx, '☣ INFECTED', x, y + 0, '#cc3388', 7);
+  for (const s of stats) {
+    drawText(ctx, s.label, x + lblW - 2, y + bh, C.textDim, 6, 'right');
+    drawStatBar(ctx, x + lblW, y, w - lblW, bh, s.value, s.max, s.color, null, true);
+    y += gap;
   }
 
-  return y + (compact ? 0 : 4);
+  // Compact warning line
+  const warns = [];
+  if (person.hunger > CFG.HUNGER_WARN)   warns.push('HUNGRY');
+  if (person.thirst > CFG.THIRST_WARN)   warns.push('THIRSTY');
+  if (person.tiredness > 75)             warns.push('TIRED');
+  if (person.depression > CFG.DEPR_WARN) warns.push('DEPR');
+  if (person.infected)                   warns.push('INFECTED');
+  if (warns.length > 0) {
+    drawText(ctx, warns.join(' · '), x + lblW, y, '#cc7730', 6);
+    y += 8;
+  }
+
+  return y + (compact ? 0 : 3);
 }
 
 // ── Notification popups (floating messages) ───────────────────────────────────
@@ -170,7 +182,7 @@ function drawActionButtons(ctx, buttons, mx, my) {
 
 // ── Inventory list ────────────────────────────────────────────────────────────
 
-function drawInventoryList(ctx, inv, x, y, w, h, title, scrollY, mx, my) {
+function drawInventoryList(ctx, inv, x, y, w, h, title, scrollY, mx, my, selectedIdx) {
   // Panel background
   drawPanel(ctx, x, y, w, h, C.panelBg2, C.border2);
 
@@ -199,14 +211,16 @@ function drawInventoryList(ctx, inv, x, y, w, h, title, scrollY, mx, my) {
     if (!def) continue;
 
     const hov = hitTest(mx, my, x, itemY, w, rowH);
-    if (hov) fillRect(ctx, x, itemY, w, rowH, C.highlight);
+    const sel = (selectedIdx !== undefined && selectedIdx !== null && i === selectedIdx);
+    if (sel)  fillRect(ctx, x, itemY, w, rowH, '#1a2a3a');
+    else if (hov) fillRect(ctx, x, itemY, w, rowH, C.highlight);
 
     // Type colour strip
     fillRect(ctx, x + 2, itemY + 2, 3, rowH - 4, itemTypeColor(def.type));
 
     // Name + qty
     const label = slot.qty > 1 ? `${def.name} x${slot.qty}` : def.name;
-    drawText(ctx, label, x + 10, itemY + rowH - 5, hov ? C.textBright : C.text, 9);
+    drawText(ctx, label, x + 10, itemY + rowH - 5, sel ? '#aaddff' : hov ? C.textBright : C.text, 9);
 
     // Weight
     const wt = `${(def.weight * slot.qty).toFixed(1)}kg`;

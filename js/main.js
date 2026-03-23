@@ -292,8 +292,23 @@ function update(dt) {
   // Zoom animation tick (runs even during day transitions)
   const za = gs.zoomAnim;
   if (za && Math.abs(za.scale - za.target) > 0.0005) {
-    za.scale = lerp(za.scale, za.target, 0.07);
+    za.scale = lerp(za.scale, za.target, 0.032);
     if (Math.abs(za.scale - za.target) < 0.002) za.scale = za.target;
+  }
+
+  // Screen transition fade tick
+  const sf = gs.screenFade;
+  if (sf && sf.active) {
+    if (sf.phase === 'out') {
+      sf.alpha = Math.min(1, sf.alpha + 0.04);
+      if (sf.alpha >= 1) {
+        if (sf.pendingFn) { sf.pendingFn(); sf.pendingFn = null; }
+        sf.phase = 'in';
+      }
+    } else if (sf.phase === 'in') {
+      sf.alpha = Math.max(0, sf.alpha - 0.025);
+      if (sf.alpha <= 0) { sf.active = false; sf.phase = 'idle'; }
+    }
   }
 
   // Day transition takes priority
@@ -307,7 +322,8 @@ function update(dt) {
 
   // Screen-specific update
   if (gs.screen === 'intro')      updateIntro(dt);
-  if (gs.screen === 'explore')    updateExplore(gs, dt);
+  if (gs.screen === 'explore' && !(gs.screenFade && gs.screenFade.active))
+    updateExplore(gs, dt);
   if (gs.screen === 'combat')     updateCombat(gs, dt);
 
   // Shelter ambient events (skip if day transition just started this frame)
@@ -370,6 +386,17 @@ function render(ctx) {
   }
 
   if (hasZoom) ctx.restore();
+
+  // Screen transition black overlay
+  const sf = gs.screenFade;
+  if (sf && sf.active && sf.alpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = sf.alpha;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, CFG.W, CFG.H);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 }
 
 function renderGameOver(ctx, gs) {
@@ -381,6 +408,8 @@ function renderGameOver(ctx, gs) {
 function handleClick(mx, my, gs) {
   // Day transition / game over
   if (gs.dayFade.active) return;
+  if (gs.screenFade && gs.screenFade.active) return;
+  Audio.click();
 
   switch (gs.screen) {
     case 'intro':

@@ -248,8 +248,10 @@ function startExploration(gs, loc) {
 
   gs.parent.isExploring = true;
   gs.child.isAlone      = true;
-  gs.screen             = 'explore';
-  gs.zoomAnim           = { scale: 1.14, target: 1.0 };
+  gs.screenFade = { active: true, alpha: 0, phase: 'out', pendingFn: () => {
+    gs.screen   = 'explore';
+    gs.zoomAnim = { scale: 1.55, target: 1.0 };
+  }};
 
   // Mark companion as away on exploration
   if (gs.exploreCompanionId) {
@@ -1098,10 +1100,12 @@ function endExploration(gs) {
     if (comp) comp.isExploring = false;
     gs.exploreCompanionId = null;
   }
-  exploreState          = null;
-  gs.keys               = {};
-  gs.screen             = 'shelter';
-  gs.zoomAnim           = { scale: 0.88, target: 1.0 };
   gs.suspicion = clamp(gs.suspicion + randInt(2, 5), 0, CFG.SUSPICION_MAX);
   addLog(`Returned from ${es.location?.name || 'exploration'}.`, 'info');
+  gs.screenFade = { active: true, alpha: 0, phase: 'out', pendingFn: () => {
+    exploreState = null;
+    gs.keys      = {};
+    gs.screen    = 'shelter';
+    gs.zoomAnim  = { scale: 0.55, target: 1.0 };
+  }};
 }

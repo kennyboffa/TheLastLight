@@ -236,6 +236,13 @@ function gameLoop(timestamp) {
 function update(dt) {
   const gs = GS;
 
+  // Zoom animation tick (runs even during day transitions)
+  const za = gs.zoomAnim;
+  if (za && Math.abs(za.scale - za.target) > 0.0005) {
+    za.scale = lerp(za.scale, za.target, 0.07);
+    if (Math.abs(za.scale - za.target) < 0.002) za.scale = za.target;
+  }
+
   // Day transition takes priority
   if (gs.dayFade.active) return;
 
@@ -263,6 +270,16 @@ function update(dt) {
 
 function render(ctx) {
   const gs = GS;
+
+  // Zoom transition (cinematic enter/exit for explore and shelter)
+  const zoom = gs.zoomAnim ? gs.zoomAnim.scale : 1.0;
+  const hasZoom = Math.abs(zoom - 1.0) > 0.001;
+  if (hasZoom) {
+    ctx.save();
+    ctx.translate(CFG.W / 2, CFG.H / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-CFG.W / 2, -CFG.H / 2);
+  }
 
   switch (gs.screen) {
     case 'intro':
@@ -298,6 +315,8 @@ function render(ctx) {
     default:
       fillRect(ctx, 0, 0, CFG.W, CFG.H, C.bg);
   }
+
+  if (hasZoom) ctx.restore();
 }
 
 function renderGameOver(ctx, gs) {

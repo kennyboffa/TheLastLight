@@ -74,8 +74,8 @@ function startExploration(gs, loc) {
   for (const zone of loc.zones) {
     for (const bdef of (zone.buildings || [])) {
       const bx     = zone.x + bdef.relX;
-      const bw     = 70 + randInt(0, 60);
-      const bh     = 48 + randInt(10, 44);
+      const bw     = 130 + randInt(0, 80);
+      const bh     = 85 + randInt(20, 55);
       const nFloors = bdef.numFloors || 1;
       const floors  = [];
       for (let fi = 0; fi < nFloors; fi++) {
@@ -94,8 +94,8 @@ function startExploration(gs, loc) {
     if ((zone.buildings || []).length === 0 && zone.lootTable &&
         !zone.lootTable.startsWith('nature') && !zone.lootTable.startsWith('water')) {
       const bx = zone.x + Math.floor(zone.w * 0.4);
-      const bw = 48 + randInt(0, 28);
-      const bh = 36 + randInt(0, 28);
+      const bw = 90 + randInt(0, 50);
+      const bh = 65 + randInt(0, 40);
       buildings.push({
         bx, bw, bh,
         label: zone.name,
@@ -231,9 +231,25 @@ function startExploration(gs, loc) {
     }
   }
 
+  // Inject area maps into specific buildings if not yet found
+  if (!gs.foundMaps) gs.foundMaps = { area_map_1: false, area_map_2: false };
+  if (!gs.foundMaps.area_map_1) {
+    const mapBldg = buildings.find(b => b.label === 'Forest Cabin' || b.label === 'Church Hall');
+    if (mapBldg && mapBldg.floors[0]?.containers.length > 0) {
+      mapBldg.floors[0].containers[0].loot.push({ id: 'area_map_1', qty: 1 });
+    }
+  }
+  if (!gs.foundMaps.area_map_2) {
+    const mapBldg2 = buildings.find(b => b.label?.startsWith('House No.') || b.label === 'Storage Depot');
+    if (mapBldg2 && mapBldg2.floors[0]?.containers.length > 0) {
+      mapBldg2.floors[0].containers[0].loot.push({ id: 'area_map_2', qty: 1 });
+    }
+  }
+
   gs.parent.isExploring = true;
   gs.child.isAlone      = true;
   gs.screen             = 'explore';
+  gs.zoomAnim           = { scale: 1.14, target: 1.0 };
   addLog(`Exploring: ${loc.name}`, 'info');
 
   if (!gs.flags.firstExplore) {
@@ -413,6 +429,12 @@ function finishSearch(container, gs) {
   }
   if (added > 0) {
     addLog(`Found: ${names.join(', ')}${container.loot.length > 2 ? '...' : ''}`, 'good');
+    // Check for map items
+    for (const item of container.loot) {
+      if (item.id === 'area_map_1' || item.id === 'area_map_2') {
+        handleMapPickup(item.id, gs);
+      }
+    }
   } else {
     notify('Too heavy to carry.', 'warn');
   }
@@ -430,8 +452,9 @@ function exploreKeyPress(key, gs) {
     return;
   }
   if (key === 'escape') {
-    if (!es.building) endExploration(gs);
-    else notify('Find the exit door to leave the building.', 'info');
+    if (es.building) notify('Find the exit door to leave the building.', 'info');
+    else if (es.showReturnPrompt) endExploration(gs);
+    else notify('Move to the edge of the area to return home.', 'info');
   }
 }
 
@@ -557,12 +580,13 @@ function exploreClick(mx, my, gs) {
     es.invOpen = !es.invOpen; return;
   }
 
-  // Return Home button (bottom-left)
-  const _retBtnY = CFG.H - 30;
-  if (hitTest(mx, my, 6, _retBtnY, 96, 20)) {
-    if (es.building) notify('Find the exit door first.', 'warn');
-    else endExploration(gs);
-    return;
+  // Return Home button (bottom-left) — only at area edges and outside buildings
+  if (es.showReturnPrompt && !es.building) {
+    const _retBtnY = CFG.H - 30;
+    if (hitTest(mx, my, 6, _retBtnY, 96, 20)) {
+      endExploration(gs);
+      return;
+    }
   }
 
   if (es.building) {
@@ -790,8 +814,8 @@ function drawExploreHUD(ctx, gs, es) {
   const loc = es.location;
   const mx = gs.mouse.x, my = gs.mouse.y;
 
-  // Location / floor info panel (shifted right to leave room for Return Home)
-  drawPanel(ctx, 6, 6, 220, 30, C.panelBg);
+  // Location / zone info panel + clock
+  drawPanel(ctx, 6, 6, 240, 30, C.panelBg);
   drawText(ctx, loc.name, 12, 18, C.text, 8);
   if (es.building) {
     const bi  = es.building;
@@ -801,6 +825,12 @@ function drawExploreHUD(ctx, gs, es) {
     const curZone = loc.zones.find(z => es.px >= z.x && es.px < z.x + z.w);
     if (curZone) drawText(ctx, curZone.name, 12, 30, C.textDim, 7);
   }
+
+  // Clock display (top-right of HUD)
+  const timeStr = formatTime(gs.time);
+  const timeWarnColor = gs.time >= 20 * 60 ? (gs.time >= 22 * 60 ? '#cc2828' : '#cc7020') : C.textBright;
+  drawPanel(ctx, CFG.W - 72, 6, 66, 20, C.panelBg);
+  drawText(ctx, timeStr, CFG.W - 39, 19, timeWarnColor, 10, 'center', true);
 
   // Pick-up hint
   if (!es.building) {
@@ -835,10 +865,11 @@ function drawExploreHUD(ctx, gs, es) {
     drawText(ctx, 'WOUNDED', CFG.W / 2, 62, '#cc2828', 8, 'center', true);
   }
 
-
-  // Return Home button — placed below the d-pad row to avoid overlap
-  const retBtnY = CFG.H - 30;
-  drawButton(ctx, 6, retBtnY, 96, 20, 'Return Home', hitTest(mx, my, 6, retBtnY, 96, 20));
+  // Return Home button — only visible at the area edges, not inside a building
+  if (es.showReturnPrompt && !es.building) {
+    const retBtnY = CFG.H - 30;
+    drawButton(ctx, 6, retBtnY, 96, 20, 'Return Home', hitTest(mx, my, 6, retBtnY, 96, 20));
+  }
 
   // ── Mobile D-pad (always visible; only meaningful on touch devices) ──────────
   const MB = _MOBILE_BTNS;
@@ -983,9 +1014,32 @@ function drawExploreWeather(ctx, gs) {
     ctx.restore();
   }
 
-  // Small weather icon top-right (not scrolled)
+  // Small weather icon top-right (not scrolled) — placed left of clock panel
   const icon  = w === 'rain' ? '🌧' : w === 'cloudy' ? '☁' : '☀';
-  drawText(ctx, icon, CFG.W - CFG.PANEL_W - 14, 16, C.textDim, 9, 'right');
+  drawText(ctx, icon, CFG.W - 80, 16, C.textDim, 9, 'right');
+}
+
+// ── Map pickup ────────────────────────────────────────────────────────────────
+
+function handleMapPickup(mapId, gs) {
+  if (!gs.foundMaps) gs.foundMaps = { area_map_1: false, area_map_2: false };
+  if (gs.foundMaps[mapId]) return;
+  gs.foundMaps[mapId] = true;
+  if (mapId === 'area_map_1') {
+    if (!gs.unlockedLocations) gs.unlockedLocations = ['forest', 'church'];
+    ['suburb', 'pharmacy'].forEach(id => {
+      if (!gs.unlockedLocations.includes(id)) gs.unlockedLocations.push(id);
+    });
+    addLog('Found a map — Suburban Ruins and City Pharmacy are now accessible!', 'good');
+    notify('NEW AREAS UNLOCKED: Suburbs + Pharmacy!', 'good');
+  } else if (mapId === 'area_map_2') {
+    if (!gs.unlockedLocations) gs.unlockedLocations = ['forest', 'church'];
+    ['mall', 'hospital', 'factory', 'police', 'bunker', 'rooftop'].forEach(id => {
+      if (!gs.unlockedLocations.includes(id)) gs.unlockedLocations.push(id);
+    });
+    addLog('Found a detailed map — all remaining areas are now accessible!', 'good');
+    notify('ALL AREAS UNLOCKED!', 'good');
+  }
 }
 
 // ── End exploration ───────────────────────────────────────────────────────────
@@ -1011,6 +1065,7 @@ function endExploration(gs) {
   exploreState          = null;
   gs.keys               = {};
   gs.screen             = 'shelter';
+  gs.zoomAnim           = { scale: 0.88, target: 1.0 };
   gs.suspicion = clamp(gs.suspicion + randInt(2, 5), 0, CFG.SUSPICION_MAX);
   addLog(`Returned from ${es.location?.name || 'exploration'}.`, 'info');
 }

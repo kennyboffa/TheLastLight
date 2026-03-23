@@ -6,7 +6,7 @@ const COMBAT_ENEMY_X   = 460;
 const COMBAT_GROUND_Y  = 230;
 const COMBAT_LOG_X     = 10;
 const COMBAT_LOG_Y     = 270;
-const COMBAT_LOG_W     = CFG.W - CFG.PANEL_W - 20;
+const COMBAT_LOG_W     = CFG.W - 20;
 const COMBAT_LOG_H     = 82;
 const ACTION_BAR_Y     = CFG.H - 38;
 
@@ -14,10 +14,10 @@ function renderCombat(ctx, gs) {
   if (!gs.combat) return;
   const c = gs.combat;
 
-  // Background — dark, ominous
-  fillRect(ctx, 0, 0, CFG.W - CFG.PANEL_W, CFG.H, '#06060c');
+  // Background — dark, ominous (full width, no sidebar in combat)
+  fillRect(ctx, 0, 0, CFG.W, CFG.H, '#06060c');
   // Ground
-  fillRect(ctx, 0, COMBAT_GROUND_Y, CFG.W - CFG.PANEL_W, 4, C.dirt);
+  fillRect(ctx, 0, COMBAT_GROUND_Y, CFG.W, 4, C.dirt);
 
   // Distant bg elements
   ctx.globalAlpha = 0.18;
@@ -111,8 +111,6 @@ function renderCombat(ctx, gs) {
   const turnCol = c.turn === 'player' ? C.textBright : C.textDanger;
   drawText(ctx, turnMsg, 10, 14, turnCol, 9, 'left', c.turn === 'player');
 
-  // Right stats panel
-  drawStatsPanel(ctx, gs);
   drawNotifications(ctx, gs);
   drawDayTransition(ctx, gs);
 }
@@ -143,8 +141,8 @@ function drawEnemySprite(ctx, x, y, enemy) {
 function drawCombatActionBar(ctx, gs, c, mx, my) {
   if (c.turn !== 'player' || c.phase !== 'action') return;
 
-  fillRect(ctx, 0, ACTION_BAR_Y - 6, CFG.W - CFG.PANEL_W, 44, C.panelBg);
-  drawDivider(ctx, 0, ACTION_BAR_Y - 6, CFG.W - CFG.PANEL_W, C.border2);
+  fillRect(ctx, 0, ACTION_BAR_Y - 6, CFG.W, 44, C.panelBg);
+  drawDivider(ctx, 0, ACTION_BAR_Y - 6, CFG.W, C.border2);
 
   // Weapons
   const wd = gs.parent.equipped.weapon ? getItemDef(gs.parent.equipped.weapon) : null;

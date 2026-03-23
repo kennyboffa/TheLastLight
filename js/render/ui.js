@@ -311,9 +311,21 @@ function drawDayTransition(ctx, gs) {
     }
   } else if (df.phase === 'text') {
     drawFade(ctx, 1);
-    drawText(ctx, `Day ${gs.day}`, CFG.W / 2, CFG.H / 2 - 8, C.textBright, 20, 'center', true);
-    drawText(ctx, formatTime(gs.time), CFG.W / 2, CFG.H / 2 + 14, C.textDim, 10, 'center');
-    if (df.timer > 100) { df.phase = 'in'; df.timer = 0; }
+    if (df.message) {
+      // Late return: show custom dramatic message
+      drawText(ctx, `Day ${gs.day}`, CFG.W / 2, CFG.H / 2 - 50, C.textBright, 20, 'center', true);
+      const lines = df.message.split('\n');
+      let ly = CFG.H / 2 - 10;
+      for (const line of lines) {
+        drawText(ctx, line, CFG.W / 2, ly, '#cc4444', 9, 'center');
+        ly += 16;
+      }
+      if (df.timer > 180) { df.phase = 'in'; df.timer = 0; df.message = null; }
+    } else {
+      drawText(ctx, `Day ${gs.day}`, CFG.W / 2, CFG.H / 2 - 8, C.textBright, 20, 'center', true);
+      drawText(ctx, formatTime(gs.time), CFG.W / 2, CFG.H / 2 + 14, C.textDim, 10, 'center');
+      if (df.timer > 100) { df.phase = 'in'; df.timer = 0; }
+    }
   } else if (df.phase === 'in') {
     df.alpha = Math.max(0, 1 - df.timer / 60);
     drawFade(ctx, df.alpha);

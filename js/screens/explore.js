@@ -23,11 +23,25 @@ function initFogCanvas() {
   fogCanvas.height = CFG.H;
 }
 
+function nightFactor(time) {
+  // Returns 0=full day, 1=full night
+  if (time >= 7*60 && time < 19*60) return 0;          // day
+  if (time >= 21*60 || time < 5*60) return 1;          // night
+  if (time >= 19*60) return (time - 19*60) / (2*60);   // dusk (19-21)
+  return 1 - (time - 5*60) / (2*60);                   // dawn (5-7)
+}
+
 function renderFog(ctx, playerScreenX, playerScreenY, gs, isIndoor) {
   if (!fogCanvas) initFogCanvas();
   const fc = fogCanvas.getContext('2d');
   const df = dayFactor(gs.time);
-  const radius = (isIndoor ? CFG.FOG_RADIUS_IN : CFG.FOG_RADIUS_OUT) + Math.round((isIndoor ? 60 : 130) * df);
+  const nf = nightFactor(gs.time);
+  // Night shrinks fog radius significantly
+  const baseOut = CFG.FOG_RADIUS_OUT + Math.round(130 * df);
+  const baseIn  = CFG.FOG_RADIUS_IN  + Math.round(60  * df);
+  const nightShrinkOut = Math.round(120 * nf);
+  const nightShrinkIn  = Math.round(80  * nf);
+  const radius = (isIndoor ? baseIn - nightShrinkIn : baseOut - nightShrinkOut);
 
   fc.clearRect(0, 0, CFG.W, CFG.H);
   fc.fillStyle = 'rgba(0,0,0,0.84)';
@@ -282,8 +296,9 @@ function updateExplore(gs, dt) {
   const dpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || dpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || dpadRight;
-  if (left)       { es.velX = -CFG.PLAYER_SPEED; es.facing = -1; }
-  else if (right) { es.velX =  CFG.PLAYER_SPEED; es.facing =  1; }
+  const speedMult = gs.parent.wounded ? 0.55 : 1.0;
+  if (left)       { es.velX = -CFG.PLAYER_SPEED * speedMult; es.facing = -1; }
+  else if (right) { es.velX =  CFG.PLAYER_SPEED * speedMult; es.facing =  1; }
   else es.velX = 0;
 
   es.px = clamp(es.px + es.velX, 10, CFG.WORLD_W - 10);
@@ -806,6 +821,19 @@ function drawExploreHUD(ctx, gs, es) {
   const maxWt = parentMaxCarry().toFixed(1);
   const wtCol = parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : C.textDim;
   drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 38, wtCol, 8);
+
+  // Night run warning
+  const nf = nightFactor(gs.time);
+  if (nf > 0.3) {
+    const nightCol = nf > 0.7 ? '#cc2828' : '#cc7020';
+    const nightLabel = nf > 0.7 ? 'NIGHT RUN' : 'DUSK';
+    drawText(ctx, nightLabel, CFG.W / 2, 50, nightCol, 9, 'center', true);
+  }
+
+  // Wounded indicator
+  if (gs.parent.wounded) {
+    drawText(ctx, 'WOUNDED', CFG.W / 2, 62, '#cc2828', 8, 'center', true);
+  }
 
   // Return Home button — placed below the d-pad row to avoid overlap
   const retBtnY = CFG.H - 30;

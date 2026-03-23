@@ -110,13 +110,16 @@ function playerAttack(gs, targetIdx) {
     const damage = Math.max(1, raw - (target.armor || 0));
     target.hp   -= damage;
     combatLog(gs, `${p.name} hits ${target.name} for ${damage} dmg.`, 'good');
+    Audio.hit();
     if (target.hp <= 0) {
       target.dead = true;
       combatLog(gs, `${target.name} destroyed.`, 'good');
       collectLoot(gs, target);
+      Audio.loot();
     }
   } else {
     combatLog(gs, `${p.name} misses ${target.name}.`, 'normal');
+    Audio.miss();
   }
 
   // Check win
@@ -166,6 +169,11 @@ function playerUseItem(gs, itemId) {
   combatLog(gs, `Used ${def.name}.`, 'good');
   // Sync HP
   c.player.hp = clamp(p.health, 0, p.maxHealth);
+  // Medkit clears wounded
+  if (itemId === 'medkit' && p.wounded && p.health / p.maxHealth >= 0.5) {
+    p.wounded = false;
+    combatLog(gs, 'Wounds treated — movement restored.', 'good');
+  }
 
   c.turn = 'enemy';
   c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
@@ -206,6 +214,12 @@ function enemyTurn(gs) {
         gs.parent.infected = true;
         combatLog(gs, 'Wound may be infected!', 'danger');
         notify('Infection risk — treat with antibiotics.', 'danger');
+      }
+      // Trigger wounded state if HP drops below 35%
+      if (!gs.parent.wounded && gs.parent.health / gs.parent.maxHealth < 0.35) {
+        gs.parent.wounded = true;
+        combatLog(gs, `${gs.parent.name} is seriously wounded — movement slowed.`, 'danger');
+        notify('Seriously wounded — movement is slow. Use a medkit!', 'danger');
       }
       if (c.player.hp <= 0) {
         c.phase = 'defeat';

@@ -54,6 +54,7 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 canvas.addEventListener('mouseup', (e) => {
+  Audio.init();   // initialise audio context on first user gesture
   const { x, y } = canvasCoords(e);
   GS.mouse.down    = false;
   GS.mouse.clicked = true;
@@ -252,6 +253,7 @@ function update(dt) {
   // Shelter ambient events (skip if day transition just started this frame)
   if (gs.screen === 'shelter' && !gs.dayFade.active) {
     maybeFireShelterEvent(gs);
+    maybeFireDialogueEvent(gs);
     autoFeedLogic(gs);
     updateShelterAmbient(gs);
   }

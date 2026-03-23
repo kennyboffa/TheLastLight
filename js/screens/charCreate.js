@@ -21,11 +21,18 @@ const SKILL_DESCS = {
   firearms:     'Ranged accuracy & handling',
 };
 
+const DIFFICULTIES = {
+  easy:   { label: 'Easy',   desc: 'Slower stat decay. Less suspicion build-up. Recommended for new players.',  decayMult: 0.7, suspMult: 0.6, color: '#3aaa50' },
+  normal: { label: 'Normal', desc: 'Balanced challenge. The world is hard but fair.',                           decayMult: 1.0, suspMult: 1.0, color: '#c4c4b0' },
+  hard:   { label: 'Hard',   desc: 'Faster hunger and thirst. The AI is more alert. Every decision counts.',   decayMult: 1.4, suspMult: 1.5, color: '#cc4428' },
+};
+
 let CC_scroll = 0;
 
 function initCharCreate() {
   GS.cc = {
     step: 0,
+    difficulty: 'normal',
     gender: 'father',
     name: 'Survivor',
     attrPts: 2,
@@ -48,36 +55,68 @@ function renderCharCreate(ctx, gs) {
   drawText(ctx, 'CHARACTER CREATION', cx, 22, C.textBright, 13, 'center', true);
   drawDivider(ctx, 40, 28, CFG.W - 80, C.border2);
 
-  // Step indicator
-  const steps = ['Identity', 'Attributes', 'Skills'];
-  let sx = cx - 90;
+  // Step indicator (4 steps now)
+  const steps = ['Difficulty', 'Identity', 'Attributes', 'Skills'];
+  let sx = cx - (steps.length * 68) / 2 + 10;
   for (let i = 0; i < steps.length; i++) {
     const active = i === cc.step;
     const col = active ? C.textBright : (i < cc.step ? C.textGood : C.textDim);
     drawText(ctx, `${i+1}. ${steps[i]}`, sx, 42, col, 8, 'left', active);
-    sx += 65;
+    sx += 68;
   }
   drawDivider(ctx, 40, 47, CFG.W - 80, C.border);
 
-  if (cc.step === 0)      renderStep0(ctx, gs, cx);
-  else if (cc.step === 1) renderStep1(ctx, gs, cx);
-  else if (cc.step === 2) renderStep2(ctx, gs, cx);
+  if (cc.step === 0)      renderStepDifficulty(ctx, gs, cx);
+  else if (cc.step === 1) renderStep0(ctx, gs, cx);
+  else if (cc.step === 2) renderStep1(ctx, gs, cx);
+  else if (cc.step === 3) renderStep2(ctx, gs, cx);
 
   // Bottom navigation
   const mx = gs.mouse.x, my = gs.mouse.y;
   if (cc.step > 0) {
     drawButton(ctx, 40, CFG.H - 32, 80, 20, '< Back', hitTest(mx, my, 40, CFG.H-32, 80, 20));
   }
-  const nextDisabledStep0 = false; // default name always valid
-  const nextDisabledStep1 = cc.step === 1 && cc.attrPts > 0;
-  const nextDisabledStep2 = false; // can proceed with unspent skill pts
-  const nextLabel = cc.step === 2 ? 'Begin →' : 'Next >';
+  const nextDisabledStep2 = cc.step === 2 && cc.attrPts > 0;
+  const nextLabel = cc.step === 3 ? 'Begin →' : 'Next >';
   drawButton(ctx, CFG.W - 120, CFG.H - 32, 80, 20, nextLabel,
-    hitTest(mx, my, CFG.W-120, CFG.H-32, 80, 20), false,
-    nextDisabledStep0 || nextDisabledStep1 || nextDisabledStep2);
+    hitTest(mx, my, CFG.W-120, CFG.H-32, 80, 20), false, nextDisabledStep2);
 }
 
-// ── Step 0: Gender & Name ─────────────────────────────────────────────────────
+// ── Step 0: Difficulty ────────────────────────────────────────────────────────
+
+function renderStepDifficulty(ctx, gs, cx) {
+  const cc = gs.cc;
+  const mx = gs.mouse.x, my = gs.mouse.y;
+  let y = 68;
+
+  drawText(ctx, 'Choose difficulty:', cx, y, C.textDim, 9, 'center');
+  y += 18;
+
+  const keys = ['easy','normal','hard'];
+  const btnW = 150, btnH = 36;
+  for (const key of keys) {
+    const def = DIFFICULTIES[key];
+    const bx = cx - btnW / 2;
+    const sel = cc.difficulty === key;
+    const hov = hitTest(mx, my, bx, y, btnW, btnH);
+    fillRect(ctx, bx, y, btnW, btnH, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
+    strokeRect(ctx, bx, y, btnW, btnH, sel ? def.color : (hov ? C.border2 : C.border));
+    drawText(ctx, def.label, cx, y + 14, sel ? def.color : C.textBright, 11, 'center', true);
+    drawText(ctx, def.desc, cx, y + 26, C.textDim, 7, 'center');
+    y += btnH + 10;
+  }
+
+  // Show selected difficulty summary
+  const selDef = DIFFICULTIES[cc.difficulty];
+  y += 8;
+  drawDivider(ctx, 80, y, CFG.W - 160, C.border);
+  y += 12;
+  drawText(ctx, `Selected: ${selDef.label}`, cx, y, selDef.color, 9, 'center', true);
+  y += 14;
+  drawText(ctx, `Decay rate ×${selDef.decayMult}  ·  Suspicion ×${selDef.suspMult}`, cx, y, C.textDim, 8, 'center');
+}
+
+// ── Step 1: Gender & Name ─────────────────────────────────────────────────────
 
 function renderStep0(ctx, gs, cx) {
   const cc = gs.cc;
@@ -112,8 +151,7 @@ function renderStep0(ctx, gs, cx) {
   strokeRect(ctx, nameX, y, nameW, nameH, cc.nameInputActive ? C.border2 : C.border);
 
   const displayName = cc.name || (cc.nameInputActive ? '' : 'Click to change name');
-  const nameColor = C.textBright;
-  drawText(ctx, displayName, nameX + nameW/2, y + nameH - 5, nameColor, 10, 'center');
+  drawText(ctx, displayName, nameX + nameW/2, y + nameH - 5, C.textBright, 10, 'center');
   if (cc.nameInputActive && Math.floor(Date.now() / 500) % 2 === 0) {
     ctx.font = '10px monospace';
     const nameW2 = ctx.measureText(cc.name).width;
@@ -124,7 +162,7 @@ function renderStep0(ctx, gs, cx) {
   drawText(ctx, 'Your child is named Lily, 8 years old.', cx, y + 10, C.textDim, 8, 'center');
 }
 
-// ── Step 1: Attributes ────────────────────────────────────────────────────────
+// ── Step 2: Attributes ────────────────────────────────────────────────────────
 
 function renderStep1(ctx, gs, cx) {
   const cc = gs.cc;
@@ -139,7 +177,6 @@ function renderStep1(ctx, gs, cx) {
     const val = cc.attrs[attr];
     const label = attr.charAt(0).toUpperCase() + attr.slice(1);
 
-    // Row background
     const hov = hitTest(mx, my, 60, y - 2, CFG.W - 120, 22);
     if (hov) {
       fillRect(ctx, 60, y - 2, CFG.W - 120, 22, C.highlight);
@@ -148,7 +185,6 @@ function renderStep1(ctx, gs, cx) {
 
     drawText(ctx, label, 70, y + 12, C.text, 9);
 
-    // Minus button
     const minX = CFG.W/2 - 50, plusX = CFG.W/2 + 28;
     drawButton(ctx, minX, y, 18, 18, '−', hitTest(mx, my, minX, y, 18, 18), false, val <= 1);
     drawText(ctx, String(val), cx, y + 12, val >= 8 ? C.textGood : C.textBright, 10, 'center', true);
@@ -158,7 +194,7 @@ function renderStep1(ctx, gs, cx) {
   }
 }
 
-// ── Step 2: Skills ────────────────────────────────────────────────────────────
+// ── Step 3: Skills ────────────────────────────────────────────────────────────
 
 function renderStep2(ctx, gs, cx) {
   const cc = gs.cc;
@@ -183,7 +219,6 @@ function renderStep2(ctx, gs, cx) {
 
     drawText(ctx, label, 70, y + 11, C.text, 9);
 
-    // Pips
     for (let p = 0; p < 10; p++) {
       const px = CFG.W/2 - 50 + p * 13;
       fillRect(ctx, px, y + 3, 11, 11, p < val ? '#3a6a3a' : '#151520');
@@ -205,12 +240,11 @@ function charCreateClick(mx, my, gs) {
   const cx = CFG.W / 2;
 
   // Navigation
-  const nextDisabled = (cc.step === 1 && cc.attrPts > 0);
+  const nextDisabled = (cc.step === 2 && cc.attrPts > 0);
   if (hitTest(mx, my, CFG.W - 120, CFG.H - 32, 80, 20) && !nextDisabled) {
-    if (cc.step < 2) {
+    if (cc.step < 3) {
       cc.step++;
     } else {
-      // Finalize character
       finalizeCharacter(gs);
       return;
     }
@@ -218,7 +252,19 @@ function charCreateClick(mx, my, gs) {
   if (cc.step > 0 && hitTest(mx, my, 40, CFG.H - 32, 80, 20)) cc.step--;
 
   if (cc.step === 0) {
-    // Gender (renderStep0: y starts at 70, then +16 for text, so buttons at y=86)
+    // Difficulty selection
+    const keys = ['easy','normal','hard'];
+    const btnW = 150, btnH = 36;
+    let y = 86;
+    for (const key of keys) {
+      const bx = cx - btnW / 2;
+      if (hitTest(mx, my, bx, y, btnW, btnH)) cc.difficulty = key;
+      y += btnH + 10;
+    }
+  }
+
+  if (cc.step === 1) {
+    // Gender
     const btnW = 100, btnH = 28;
     const fatherX = cx - btnW - 10;
     const motherX = cx + 10;
@@ -236,7 +282,7 @@ function charCreateClick(mx, my, gs) {
     }
   }
 
-  if (cc.step === 1) {
+  if (cc.step === 2) {
     for (const attr of ATTRS) {
       const rowY = 81 + ATTRS.indexOf(attr) * 26;
       const minX = CFG.W/2 - 50, plusX = CFG.W/2 + 28;
@@ -249,7 +295,7 @@ function charCreateClick(mx, my, gs) {
     }
   }
 
-  if (cc.step === 2) {
+  if (cc.step === 3) {
     for (let si = 0; si < SKILLS_LIST.length; si++) {
       const skill = SKILLS_LIST[si];
       const rowY = 93 + si * 24;
@@ -278,6 +324,10 @@ function showNameInput(gs) {
 
 function finalizeCharacter(gs) {
   const cc = gs.cc;
+
+  // Apply difficulty
+  gs.difficulty = cc.difficulty || 'normal';
+
   Object.assign(gs.parent, {
     name:    cc.name.trim() || (cc.gender === 'father' ? 'Mark' : 'Amanda'),
     gender:  cc.gender,
@@ -307,5 +357,6 @@ function finalizeCharacter(gs) {
   addToInventory(storage, 'matches', 2);
 
   setScreen('shelter');
-  addLog(`Day 1. ${gs.parent.name} and Lily are hiding below ground. Supplies are running low.`, 'info');
+  const diffLabel = DIFFICULTIES[gs.difficulty].label;
+  addLog(`Day 1. ${gs.parent.name} and Lily are hiding below ground. Difficulty: ${diffLabel}.`, 'info');
 }

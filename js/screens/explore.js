@@ -835,6 +835,7 @@ function drawExploreHUD(ctx, gs, es) {
     drawText(ctx, 'WOUNDED', CFG.W / 2, 62, '#cc2828', 8, 'center', true);
   }
 
+
   // Return Home button — placed below the d-pad row to avoid overlap
   const retBtnY = CFG.H - 30;
   drawButton(ctx, 6, retBtnY, 96, 20, 'Return Home', hitTest(mx, my, 6, retBtnY, 96, 20));

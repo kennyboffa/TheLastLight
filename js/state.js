@@ -125,6 +125,16 @@ const GS = {
     traderMet:      false,
   },
 
+  // ── Location unlock system ────────────────────────────────────────────────
+  unlockedLocations: ['forest', 'church'],
+  foundMaps: { area_map_1: false, area_map_2: false },
+
+  // ── Late return flag (player didn't come home before 23:00) ──────────────
+  lateReturn: false,
+
+  // ── Zoom animation ────────────────────────────────────────────────────────
+  zoomAnim: { scale: 1.0, target: 1.0 },
+
   // ── Game log ──────────────────────────────────────────────────────────────
   log: [],    // { text, type, day, time }
   notifications: [],   // short on-screen messages: { text, type, ttl }

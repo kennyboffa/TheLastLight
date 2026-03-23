@@ -23,10 +23,14 @@ function tickStats(gs, dt) {
   // ── Advance time ────────────────────────────────────────────────────────────
   gs.time += mins;
   if (gs.time >= CFG.DAY_END) {
-    // Auto-return from exploration before starting day transition
     if (gs.screen === 'explore') {
+      // Late return: player didn't make it back before nightfall
+      const pName = gs.parent.name;
+      gs.lateReturn = true;
+      gs.child.depression = clamp(gs.child.depression + 25, 0, 100);
+      gs.dayFade.message  = `${pName} didn't return before nightfall.\n${gs.child.name} spent the night alone and terrified.`;
       endExploration(gs);
-      notify('Night falls — returned to shelter.', 'warn');
+      notify(`${pName} didn't return in time — ${gs.child.name} is scared!`, 'danger');
     }
     startDayTransition(gs);
     return;
@@ -324,6 +328,17 @@ function advanceDay(gs) {
   gs.parent.task       = null;
   gs.parent.taskProgress = 0;
   gs.shelter.noiseToday = 0;
+
+  // Late return penalties — player spent the night outside
+  if (gs.lateReturn) {
+    gs.lateReturn = false;
+    gs.parent.wounded   = true;
+    gs.parent.tiredness = clamp(gs.parent.tiredness + 50, 0, 100);
+    gs.parent.health    = Math.max(1, Math.floor(gs.parent.health * 0.65));
+    gs.time             = CFG.DAY_START + randInt(120, 300); // returns 8–11 AM
+    gs.child.depression = clamp(gs.child.depression + 10, 0, 100);
+    addLog(`${gs.parent.name} returned wounded and exhausted after a night outside.`, 'danger');
+  }
 
   // Dog availability
   if (gs.day >= 10 && !gs.flags.dogEncountered) gs.flags.dogAvailable = true;

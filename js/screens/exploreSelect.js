@@ -18,8 +18,13 @@ function renderExploreSelect(ctx, gs) {
   const cardX = 40;
   let cy = 55;
 
+  const unlocked = gs.unlockedLocations || ['forest', 'church'];
+
   for (const loc of LOCATIONS_DB) {
-    const hov = hitTest(mx, my, cardX, cy, cardW, cardH);
+    const isUnlocked = unlocked.includes(loc.id);
+    const hov = isUnlocked && hitTest(mx, my, cardX, cy, cardW, cardH);
+
+    if (!isUnlocked) ctx.globalAlpha = 0.35;
 
     // Card bg
     fillRect(ctx, cardX, cy, cardW, cardH, hov ? '#111120' : C.panelBg);
@@ -32,26 +37,37 @@ function renderExploreSelect(ctx, gs) {
     // Location name
     drawText(ctx, loc.name, cardX + 14, cy + 16, hov ? C.textBright : C.text, 11, 'left', true);
 
-    // Difficulty stars
-    const stars = '★'.repeat(loc.difficulty) + '☆'.repeat(Math.max(0, 4 - loc.difficulty));
-    drawText(ctx, stars, cardX + cardW - 6, cy + 16, diffColor, 9, 'right');
-
-    // Description
-    drawWrapped(ctx, loc.desc, cardX + 14, cy + 26, cardW - 30, 8, C.textDim, 11);
-
-    // What to find tags
-    const tags = getLocationTags(loc);
-    let tx = cardX + 14;
-    for (const tag of tags) {
-      if (tx + 50 > cardX + cardW - 10) break;
-      const tw = ctx.measureText(tag).width + 6;
-      ctx.font = '7px monospace';
-      fillRect(ctx, tx, cy + cardH - 14, tw, 11, '#1a2a18');
-      strokeRect(ctx, tx, cy + cardH - 14, tw, 11, '#3a5a30');
-      drawText(ctx, tag, tx + 3, cy + cardH - 5, '#6a9a60', 7);
-      tx += tw + 4;
+    if (!isUnlocked) {
+      ctx.globalAlpha = 1;
+      drawText(ctx, '🔒 LOCKED', cardX + cardW - 8, cy + 16, '#664444', 8, 'right', true);
+    } else {
+      // Difficulty stars
+      const stars = '★'.repeat(loc.difficulty) + '☆'.repeat(Math.max(0, 4 - loc.difficulty));
+      drawText(ctx, stars, cardX + cardW - 6, cy + 16, diffColor, 9, 'right');
     }
 
+    if (!isUnlocked) ctx.globalAlpha = 0.35;
+
+    // Description
+    drawWrapped(ctx, isUnlocked ? loc.desc : 'Area not yet accessible. Find a map to unlock new regions.',
+      cardX + 14, cy + 26, cardW - 30, 8, C.textDim, 11);
+
+    // What to find tags (only for unlocked)
+    if (isUnlocked) {
+      const tags = getLocationTags(loc);
+      let tx = cardX + 14;
+      for (const tag of tags) {
+        if (tx + 50 > cardX + cardW - 10) break;
+        const tw = ctx.measureText(tag).width + 6;
+        ctx.font = '7px monospace';
+        fillRect(ctx, tx, cy + cardH - 14, tw, 11, '#1a2a18');
+        strokeRect(ctx, tx, cy + cardH - 14, tw, 11, '#3a5a30');
+        drawText(ctx, tag, tx + 3, cy + cardH - 5, '#6a9a60', 7);
+        tx += tw + 4;
+      }
+    }
+
+    ctx.globalAlpha = 1;
     cy += cardH + 6;
   }
 
@@ -85,8 +101,13 @@ function exploreSelectClick(mx, my, gs) {
   const cardX = 40;
   let cy = 55;
 
+  const unlocked = gs.unlockedLocations || ['forest', 'church'];
   for (const loc of LOCATIONS_DB) {
     if (hitTest(mx, my, cardX, cy, cardW, cardH)) {
+      if (!unlocked.includes(loc.id)) {
+        notify('This area is locked. Find a map to unlock new regions.', 'warn');
+        return;
+      }
       gs.screen = 'packScreen';
       gs._pendingLoc = loc;
       return;

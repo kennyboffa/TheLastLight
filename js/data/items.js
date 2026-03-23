@@ -107,6 +107,12 @@ const ITEMS_DB = {
     desc:'AA batteries.', stackable:true },
   dog_food:      { id:'dog_food',      name:'Dog Food',       type:'misc', weight:0.8, value:5,
     desc:'For the dog.', stackable:true },
+
+  // ── Maps (unlock new exploration areas) ──────────────────────────────────
+  area_map_1:    { id:'area_map_1',    name:'Area Map',        type:'misc', weight:0.1, value:40,
+    desc:'A hand-drawn map revealing two new exploration areas nearby.', stackable:false, isMap:1 },
+  area_map_2:    { id:'area_map_2',    name:'Detailed Map',    type:'misc', weight:0.1, value:60,
+    desc:'A detailed map uncovering all remaining known areas in the region.', stackable:false, isMap:2 },
 };
 
 function getItemDef(id) { return ITEMS_DB[id] || null; }

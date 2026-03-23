@@ -43,7 +43,7 @@ const CFG = {
   // ── Exploration ──────────────────────────────────────────────────────────
   WORLD_W: 2800,         // exploration world pixel width
   SCROLL_SPEED: 2.2,
-  PLAYER_SPEED: 1.75,
+  PLAYER_SPEED: 1.575,  // reduced 10% from 1.75
 
   // ── Building interiors ───────────────────────────────────────────────────
   BLDG_GROUND_Y: 230,    // floor y inside buildings

@@ -271,6 +271,11 @@ function startExploration(gs, loc) {
 
   gs.parent.isExploring = true;
   gs.child.isAlone      = true;
+
+  // Travel time: harder locations take longer to reach (diff 1-2: +1h, diff 3-4: +2h)
+  const travelMins = loc.difficulty >= 3 ? 120 : 60;
+  gs.time = Math.min(gs.time + travelMins, CFG.DAY_END - 60);
+
   gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: loc.name, pendingFn: () => {
     gs.screen   = 'explore';
     gs.zoomAnim = { scale: 1.55, target: 1.0 };
@@ -378,9 +383,10 @@ function updateExplore(gs, dt) {
     }
   }
 
-  // Encounters
+  // Encounters — trigger distance grows by 20% at night
+  const nightMult = 1 + nightFactor(gs.time) * 0.2;
   for (const enc of es.encounters) {
-    if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance) {
+    if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance * nightMult) {
       enc.triggered = true;
       const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
       if (enemies.length > 0) { gs.mouse.down = false; startCombat(gs, enemies); gs.combat._encRef = enc; gs.screen = 'combat'; return; }
@@ -475,6 +481,7 @@ function finishSearch(container, gs) {
   }
   if (added > 0) {
     addLog(`Found: ${names.join(', ')}${container.loot.length > 2 ? '...' : ''}`, 'good');
+    giveXP(gs.parent, added * 2, gs); // +2 XP per item found
     // Check for map items
     for (const item of container.loot) {
       if (item.id === 'area_map_1' || item.id === 'area_map_2') {
@@ -517,6 +524,7 @@ function interactOutdoor(gs) {
     addToInventory(gs.parent.inventory, nearLoot.id, nearLoot.qty);
     nearLoot.taken = true;
     addLog(`Picked up: ${def?.name || nearLoot.id} x${nearLoot.qty}`, 'good');
+    giveXP(gs.parent, 2, gs); // +2 XP per pickup
     return;
   }
 
@@ -736,6 +744,7 @@ function exploreClick(mx, my, gs) {
     addToInventory(gs.parent.inventory, nearLoot.id, nearLoot.qty);
     nearLoot.taken = true;
     addLog(`Picked up: ${def?.name || nearLoot.id} x${nearLoot.qty}`, 'good');
+    giveXP(gs.parent, 2, gs);
     return;
   }
 

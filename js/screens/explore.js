@@ -74,8 +74,9 @@ function startExploration(gs, loc) {
   for (const zone of loc.zones) {
     for (const bdef of (zone.buildings || [])) {
       const bx     = zone.x + bdef.relX;
-      const bw     = 130 + randInt(0, 80);
-      const bh     = 85 + randInt(20, 55);
+      // Tents are much smaller than proper buildings
+      const bw     = bdef.isTent ? 55 + randInt(0, 20) : 130 + randInt(0, 80);
+      const bh     = bdef.isTent ? 40 + randInt(0, 10) : 85 + randInt(20, 55);
       const nFloors = bdef.numFloors || 1;
       const floors  = [];
       for (let fi = 0; fi < nFloors; fi++) {
@@ -88,6 +89,7 @@ function startExploration(gs, loc) {
         numFloors: nFloors,
         floors,
         doorX:    bx + Math.floor(bw / 2) - 8,
+        isTent:   !!bdef.isTent,
       });
     }
     // Add a small generic structure for zones with no explicit buildings but outdoor loot
@@ -107,34 +109,33 @@ function startExploration(gs, loc) {
     }
   }
 
-  // Outdoor containers (2-4 per zone, scattered)
-  // Crates and chests are only found near/inside buildings — not in forest/nature exterior
+  // Outdoor containers — scarce: 0-1 per zone only outside nature zones
   const containers = [];
   for (const zone of loc.zones) {
     const isNatureZone = zone.lootTable && (zone.lootTable.startsWith('nature') || zone.lootTable.startsWith('water'));
-    const count = isNatureZone ? 0 : 2 + randInt(0, 2);
+    const count = isNatureZone ? 0 : randInt(0, 1);
     for (let i = 0; i < count; i++) {
       const cx = zone.x + 50 + randInt(0, zone.w - 100);
       if (buildings.some(b => Math.abs(cx - (b.doorX + 8)) < 35)) continue;
-      // Nature-adjacent zones only spawn bags/backpacks, never crates or chests
       const types = ['locker', 'bag'];
+      // 30% chance container is empty (already picked over)
+      const loot = chance(30) ? [] : rollLoot(zone.lootTable);
       containers.push({
         wx: cx, wy: GROUND_Y,
         type: randChoice(types),
         searched: false, searching: false,
         searchProgress: 0,
-        searchDuration: 1 + randFloat(0.5, 2),
-        loot: rollLoot(zone.lootTable),
+        searchDuration: 1.5 + randFloat(0.5, 2.5),
+        loot,
       });
     }
   }
 
-  // Sparse ground loot (fewer items since containers added)
+  // Sparse ground loot — only ~15% of rolled items end up visible on the ground
   const lootItems = [];
   for (const zone of loc.zones) {
     const items = rollLoot(zone.lootTable);
-    // Only place ~40% of rolled items on the ground; rest in containers
-    const groundItems = items.filter(() => Math.random() < 0.4);
+    const groundItems = items.filter(() => Math.random() < 0.15);
     for (const item of groundItems) {
       lootItems.push({
         id: item.id, qty: item.qty,
@@ -181,6 +182,26 @@ function startExploration(gs, loc) {
     }
   }
 
+  // Pre-generate decorative elements (bushes, grass, bones)
+  const foliage = [];
+  const bonesPiles = [];
+  for (const zone of loc.zones) {
+    const isNature = zone.lootTable && zone.lootTable.startsWith('nature');
+    const bushCount = isNature ? 6 + randInt(0, 6) : randInt(0, 2);
+    const grassCount = isNature ? 8 + randInt(0, 8) : randInt(0, 3);
+    for (let i = 0; i < bushCount; i++) {
+      foliage.push({ type: 'bush', wx: zone.x + 20 + randInt(0, zone.w - 40) });
+    }
+    for (let i = 0; i < grassCount; i++) {
+      foliage.push({ type: 'grass', wx: zone.x + 10 + randInt(0, zone.w - 20) });
+    }
+    // Bones: small chance in each zone, higher in dangerous zones
+    const boneChance = isNature ? 8 : (zone.enemyChance || 0) > 25 ? 35 : 15;
+    if (chance(boneChance)) {
+      bonesPiles.push({ wx: zone.x + 30 + randInt(0, zone.w - 60) });
+    }
+  }
+
   exploreState = {
     location:  loc,
     scrollX:   0,
@@ -190,6 +211,8 @@ function startExploration(gs, loc) {
     encounters,
     events,
     huntSpots,
+    foliage,
+    bonesPiles,
     px: 80, py: PLAYER_FOOT,
     velX: 0, facing: 1,
     animFrame: 0, animTimer: 0,
@@ -277,7 +300,7 @@ function startExploration(gs, loc) {
 function genBuildingFloor(floorIdx, totalFloors, bdef) {
   const theme   = bdef.theme    || 'urban';
   const quality = bdef.lootQuality || 'light';
-  const cCount  = 2 + randInt(0, 2);
+  const cCount  = 1 + randInt(0, 2);
   const containers = [];
   const usedX = [];
   for (let i = 0; i < cCount; i++) {
@@ -300,8 +323,9 @@ function genBuildingFloor(floorIdx, totalFloors, bdef) {
       type: randChoice(types),
       searched: false, searching: false,
       searchProgress: 0,
-      searchDuration: 1 + randFloat(0.5, 2),
-      loot: rollBuildingLoot(theme, quality),
+      searchDuration: 1.5 + randFloat(0.5, 2.5),
+      // 25% chance a building container is empty — already looted by others
+      loot: chance(25) ? [] : rollBuildingLoot(theme, quality),
     });
   }
   return {
@@ -358,7 +382,7 @@ function updateExplore(gs, dt) {
   for (const enc of es.encounters) {
     if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance) {
       enc.triggered = true;
-      const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt);
+      const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
       if (enemies.length > 0) { gs.mouse.down = false; startCombat(gs, enemies); gs.combat._encRef = enc; gs.screen = 'combat'; return; }
     }
   }
@@ -431,6 +455,7 @@ function finishSearch(container, gs) {
     return;
   }
   let added = 0;
+  let tooHeavy = 0;
   const names = [];
   for (const item of container.loot) {
     const def  = getItemDef(item.id);
@@ -440,7 +465,13 @@ function finishSearch(container, gs) {
       addToInventory(gs.parent.inventory, item.id, item.qty);
       if (names.length < 2) names.push(def.name);
       added++;
+    } else if (def) {
+      tooHeavy++;
     }
+  }
+  if (tooHeavy > 0 && added === 0) {
+    notify('Too heavy to carry — drop something first.', 'warn');
+    return;
   }
   if (added > 0) {
     addLog(`Found: ${names.join(', ')}${container.loot.length > 2 ? '...' : ''}`, 'good');
@@ -497,8 +528,34 @@ function interactOutdoor(gs) {
   const nearC = es.containers.find(c => !c.searched && !c.searching && Math.abs(es.px - c.wx) < 30);
   if (nearC) { nearC.searching = true; nearC.searchProgress = 0; notify('Searching...', 'info'); return; }
 
-  // Enter a building
-  const nearB = es.buildings.find(b => Math.abs(es.px - (b.doorX + 8)) < 24);
+  // Search a tent (not enterable — just a search prompt)
+  const nearTent = es.buildings.find(b => b.isTent && !b._tentSearched && Math.abs(es.px - (b.bx + b.bw / 2)) < 30);
+  if (nearTent) {
+    nearTent._tentSearched = true;
+    const loot = nearTent.floors[0].containers[0]?.loot || [];
+    if (loot.length === 0) {
+      notify('The tent has been picked clean — nothing left.', 'info');
+    } else {
+      let added = 0;
+      const names = [];
+      for (const item of loot) {
+        const def  = getItemDef(item.id);
+        const maxW = parentMaxCarry();
+        const curW = calcWeight(gs.parent.inventory);
+        if (def && curW + def.weight * item.qty <= maxW) {
+          addToInventory(gs.parent.inventory, item.id, item.qty);
+          if (names.length < 3) names.push(def.name);
+          added++;
+        }
+      }
+      if (added > 0) notify(`Found in tent: ${names.join(', ')}.`, 'good');
+      else notify('Too heavy to carry what\'s in the tent.', 'warn');
+    }
+    return;
+  }
+
+  // Enter a building (non-tent)
+  const nearB = es.buildings.find(b => !b.isTent && Math.abs(es.px - (b.doorX + 8)) < 24);
   if (nearB) {
     const bldgIdx = es.buildings.indexOf(nearB);
     es.building = {
@@ -570,7 +627,10 @@ function exploreClick(mx, my, gs) {
           const def = getItemDef(row.slot.id);
           if (def) {
             removeFromInventory(gs.parent.inventory, row.slot.id, row.slot.qty);
-            notify(`Dropped ${def.name}.`, 'warn');
+            // Place dropped item on the ground near the player for later pickup
+            const dropX = (es.px || 80) + randInt(-25, 25);
+            es.loot.push({ id: row.slot.id, qty: row.slot.qty, wx: dropX, wy: PLAYER_FOOT, taken: false });
+            notify(`Dropped ${def.name} — it\'s on the ground.`, 'warn');
           }
           return;
         }
@@ -653,7 +713,7 @@ function renderExplore(ctx, gs) {
 function renderOutdoor(ctx, gs, es) {
   const loc = es.location;
 
-  drawExploreBackground(ctx, es.scrollX, null, CFG.H, gs.time);
+  drawExploreBackground(ctx, es.scrollX, null, CFG.H, gs.time, loc.bgTheme);
   fillRect(ctx, 0, GROUND_Y, CFG.W, CFG.H - GROUND_Y, C.ground);
   fillRect(ctx, 0, GROUND_Y, CFG.W, 3, C.dirt2);
 
@@ -667,23 +727,45 @@ function renderOutdoor(ctx, gs, es) {
 
   // Trees for nature/forest zones
   for (const zone of loc.zones) {
-    if (zone.bgColor && (zone.bgColor.startsWith('#0') || zone.bgColor.startsWith('#06') ||
-        zone.bgColor.startsWith('#07') || zone.bgColor.startsWith('#08') ||
-        zone.bgColor.startsWith('#09') || zone.bgColor.startsWith('#060'))) {
-      const isNature = zone.lootTable && zone.lootTable.startsWith('nature');
-      if (isNature) {
-        for (let tx = zone.x + 30; tx < zone.x + zone.w - 20; tx += 58) {
-          drawExploreTree(ctx, tx, GROUND_Y);
-        }
+    const isNature = zone.lootTable && zone.lootTable.startsWith('nature');
+    if (isNature) {
+      for (let tx = zone.x + 30; tx < zone.x + zone.w - 20; tx += 64) {
+        drawExploreTree(ctx, tx, GROUND_Y);
       }
     }
   }
 
-  // Buildings (pre-generated data — no randInt here)
+  // Foliage: bushes and grass patches (pre-generated positions)
+  if (es.foliage) {
+    for (const f of es.foliage) {
+      if (f.type === 'bush')  drawExploreBush(ctx, f.wx, GROUND_Y);
+      else                    drawExploreGrass(ctx, f.wx, GROUND_Y);
+    }
+  }
+
+  // Bones / skeleton piles
+  if (es.bonesPiles) {
+    for (const b of es.bonesPiles) {
+      drawExploreBones(ctx, b.wx, GROUND_Y);
+    }
+  }
+
+  // Buildings / tents (pre-generated data — no randInt here)
   for (const bld of es.buildings) {
-    drawExploreBuilding(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
-    if (Math.abs(es.px - (bld.doorX + 8)) < 24) {
-      drawText(ctx, '[E] Enter', bld.doorX + 8, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
+    if (bld.isTent) {
+      drawExploreTent(ctx, bld.bx + bld.bw / 2, GROUND_Y, bld.bw, bld.bh, bld.label);
+      if (Math.abs(es.px - (bld.bx + bld.bw / 2)) < 30) {
+        if (bld._tentSearched) {
+          drawText(ctx, 'Searched', bld.bx + bld.bw / 2, GROUND_Y - bld.bh - 8, C.textDim, 6, 'center');
+        } else {
+          drawText(ctx, '[E] Search Tent', bld.bx + bld.bw / 2, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
+        }
+      }
+    } else {
+      drawExploreBuilding(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
+      if (Math.abs(es.px - (bld.doorX + 8)) < 24) {
+        drawText(ctx, '[E] Enter', bld.doorX + 8, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
+      }
     }
   }
 
@@ -776,11 +858,15 @@ function renderBuildingInterior(ctx, gs, es) {
   drawText(ctx, `${bld.label}  —  Floor ${bi.floorIdx + 1} / ${bld.numFloors}`,
     fl.width / 2, 20, C.textDim, 7, 'center');
 
-  // Ambient wall lamps
+  // Ambient wall lamps (flickering, some broken)
   for (let lx = 130; lx < fl.width - 100; lx += 200) {
     fillRect(ctx, lx - 4, 28, 8, 3, '#303040');
-    fillRect(ctx, lx - 2, 31, 4, 3, '#b0a050', 0.45);
+    const lit = (lx / 200 + bi.floorIdx) % 3 !== 0;
+    if (lit) fillRect(ctx, lx - 2, 31, 4, 3, '#b0a050', 0.45);
   }
+
+  // Theme-relevant interior decoration
+  drawBuildingInteriorDecor(ctx, bld.theme, fl.width, GROUND_Y);
 
   // Exit door
   if (fl.exitX !== null) {
@@ -914,8 +1000,8 @@ function drawExploreHUD(ctx, gs, es) {
   drawButton(ctx, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h,  '▶', rightHov, isRight);
   drawButton(ctx, MB.action.x, MB.action.y, MB.action.w, MB.action.h, '[E]', actHov);
 
-  // INV button (top-right)
-  const invBtnX = CFG.W - 50, invBtnY = 6;
+  // INV button (top-right, below clock panel)
+  const invBtnX = CFG.W - 50, invBtnY = 28;
   const invHov = hitTest(mx, my, invBtnX, invBtnY, 40, 18);
   drawButton(ctx, invBtnX, invBtnY, 40, 18, 'INV', invHov, es.invOpen);
   gs._exploreInvBtn = { x: invBtnX, y: invBtnY, w: 40, h: 18 };
@@ -923,22 +1009,95 @@ function drawExploreHUD(ctx, gs, es) {
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
 
+function drawExploreTent(ctx, cx, groundY, w, h, label) {
+  // A-frame tent shape — triangle roof with small floor
+  const hw = w / 2;
+  ctx.save();
+  ctx.fillStyle = '#2a3020';
+  ctx.beginPath();
+  ctx.moveTo(cx, groundY - h);
+  ctx.lineTo(cx - hw, groundY);
+  ctx.lineTo(cx + hw, groundY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#3a4a28';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Door opening
+  ctx.fillStyle = '#111810';
+  ctx.beginPath();
+  ctx.moveTo(cx, groundY - h * 0.55);
+  ctx.lineTo(cx - hw * 0.22, groundY);
+  ctx.lineTo(cx + hw * 0.22, groundY);
+  ctx.closePath();
+  ctx.fill();
+  // Rope guys
+  ctx.strokeStyle = '#4a4030';
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath(); ctx.moveTo(cx, groundY - h); ctx.lineTo(cx - hw - 10, groundY - 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, groundY - h); ctx.lineTo(cx + hw + 10, groundY - 2); ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  if (label) drawText(ctx, label, cx, groundY - h - 6, C.textDim, 6, 'center');
+}
+
 function drawExploreTree(ctx, x, groundY) {
-  fillRect(ctx, x - 3, groundY - 28, 6, 28, '#3a2810');
+  // Trunk
+  fillRect(ctx, x - 3, groundY - 30, 6, 30, '#3a2810');
+  // Dark canopy layers
   ctx.fillStyle = '#18380e';
-  ctx.beginPath();
-  ctx.moveTo(x, groundY - 78);
-  ctx.lineTo(x - 16, groundY - 42);
-  ctx.lineTo(x + 16, groundY - 42);
-  ctx.closePath();
-  ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x, groundY - 88); ctx.lineTo(x - 18, groundY - 48); ctx.lineTo(x + 18, groundY - 48); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#1e4810';
+  ctx.beginPath(); ctx.moveTo(x, groundY - 70); ctx.lineTo(x - 22, groundY - 36); ctx.lineTo(x + 22, groundY - 36); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#264a14';
+  ctx.beginPath(); ctx.moveTo(x, groundY - 56); ctx.lineTo(x - 14, groundY - 28); ctx.lineTo(x + 14, groundY - 28); ctx.closePath(); ctx.fill();
+}
+
+function drawExploreBush(ctx, x, groundY) {
+  ctx.save();
+  ctx.fillStyle = '#1a3a0e';
   ctx.beginPath();
-  ctx.moveTo(x, groundY - 62);
-  ctx.lineTo(x - 12, groundY - 30);
-  ctx.lineTo(x + 12, groundY - 30);
-  ctx.closePath();
+  ctx.arc(x,      groundY - 10, 12, Math.PI, 0);
+  ctx.arc(x - 10, groundY - 8,   9, Math.PI, 0);
+  ctx.arc(x + 10, groundY - 8,   9, Math.PI, 0);
   ctx.fill();
+  ctx.fillStyle = '#234a12';
+  ctx.beginPath();
+  ctx.arc(x, groundY - 13, 8, Math.PI, 0);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawExploreGrass(ctx, x, groundY) {
+  ctx.save();
+  ctx.strokeStyle = '#1e3a10';
+  ctx.lineWidth = 1;
+  for (let i = -3; i <= 3; i++) {
+    const bx = x + i * 5;
+    ctx.beginPath();
+    ctx.moveTo(bx, groundY);
+    ctx.lineTo(bx + (i % 2 === 0 ? -2 : 2), groundY - 8 - Math.abs(i) * 1.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawExploreBones(ctx, x, groundY) {
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  // Skull
+  fillRect(ctx, x - 4, groundY - 10, 8, 7, '#a89878');
+  fillRect(ctx, x - 2, groundY - 3,  4, 4, '#a89878');
+  // Eye sockets
+  fillRect(ctx, x - 3, groundY - 9, 2, 2, '#1a1a1a');
+  fillRect(ctx, x + 1, groundY - 9, 2, 2, '#1a1a1a');
+  // Ribs / scattered bones
+  for (let i = 0; i < 3; i++) {
+    fillRect(ctx, x + 6 + i * 5, groundY - 6 + i, 12, 2, '#9a8868');
+  }
+  fillRect(ctx, x + 6, groundY - 2, 18, 2, '#9a8868');
+  ctx.restore();
 }
 
 function drawExploreContainer(ctx, wx, groundY, type, highlighted) {
@@ -968,14 +1127,122 @@ function drawSearchBar(ctx, wx, y, progress) {
   drawText(ctx, 'searching...', wx, y - 2, C.textDim, 6, 'center');
 }
 
+function drawBuildingInteriorDecor(ctx, theme, floorW, groundY) {
+  const W = floorW;
+  const G = groundY;
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  switch (theme) {
+    case 'hospital': {
+      // Hospital beds along walls
+      for (let bx = 120; bx < W - 100; bx += 220) {
+        fillRect(ctx, bx, G - 24, 60, 20, '#1c1c28');
+        fillRect(ctx, bx, G - 30, 60, 8,  '#151520'); // pillow
+        strokeRect(ctx, bx, G - 30, 60, 26, '#2a2a3a');
+        drawText(ctx, '———', bx + 30, G - 17, '#2a2a44', 6, 'center');
+        // Medical drip stand
+        fillRect(ctx, bx + 65, G - 45, 2, 45, '#2a2a3a');
+        fillRect(ctx, bx + 62, G - 46, 8, 3,  '#3a3a4a');
+      }
+      // Overturned wheelchair
+      fillRect(ctx, W * 0.6, G - 14, 22, 12, '#1a1a28');
+      strokeRect(ctx, W * 0.6, G - 14, 22, 12, '#2a2a3a');
+      break;
+    }
+    case 'office': {
+      // Desks with monitors
+      for (let dx = 100; dx < W - 80; dx += 180) {
+        fillRect(ctx, dx, G - 22, 55, 18, '#181820');
+        strokeRect(ctx, dx, G - 22, 55, 18, '#242430');
+        // Monitor
+        fillRect(ctx, dx + 10, G - 44, 28, 22, '#0e0e18');
+        strokeRect(ctx, dx + 10, G - 44, 28, 22, '#1c1c2c');
+        fillRect(ctx, dx + 22, G - 22, 4, 4, '#181820'); // monitor stand
+        // Chair
+        fillRect(ctx, dx + 15, G - 12, 18, 14, '#141420');
+        strokeRect(ctx, dx + 15, G - 12, 18, 14, '#1e1e2e');
+      }
+      // Filing cabinet
+      fillRect(ctx, W * 0.75, G - 38, 24, 38, '#161622');
+      strokeRect(ctx, W * 0.75, G - 38, 24, 38, '#222230');
+      for (let i = 0; i < 3; i++) fillRect(ctx, W * 0.75 + 2, G - 36 + i * 13, 20, 10, '#0e0e18');
+      break;
+    }
+    case 'factory': {
+      // Heavy machinery and conveyor belts
+      for (let mx2 = 80; mx2 < W - 80; mx2 += 230) {
+        fillRect(ctx, mx2, G - 50, 60, 50, '#141418');
+        strokeRect(ctx, mx2, G - 50, 60, 50, '#202028');
+        fillRect(ctx, mx2 + 10, G - 44, 40, 20, '#0e0e14');
+        fillRect(ctx, mx2 + 20, G - 48, 18, 6,  '#2a2a38'); // exhaust
+        fillRect(ctx, mx2 + 22, G - 54, 4, 8,   '#2a2a38');
+      }
+      // Conveyor belt
+      fillRect(ctx, 150, G - 12, W - 300, 10, '#1a1820');
+      strokeRect(ctx, 150, G - 12, W - 300, 10, '#28283a');
+      for (let sx2 = 160; sx2 < W - 300; sx2 += 30)
+        fillRect(ctx, sx2, G - 12, 2, 10, '#222230');
+      break;
+    }
+    case 'mall': {
+      // Shop shelves and mannequins
+      for (let sx2 = 80; sx2 < W - 80; sx2 += 200) {
+        fillRect(ctx, sx2, G - 50, 8, 50, '#181818');   // shelf post
+        for (let sh = 1; sh <= 3; sh++) fillRect(ctx, sx2, G - sh * 16, 60, 4, '#1c1c24');
+        fillRect(ctx, sx2 + 65, G - 40, 12, 40, '#161620'); // mannequin body
+        fillRect(ctx, sx2 + 67, G - 52, 8, 12,  '#161620'); // mannequin head
+      }
+      break;
+    }
+    case 'house': case 'cabin': {
+      // Furniture: table, chairs, broken shelves
+      fillRect(ctx, W * 0.35, G - 28, 60, 20, '#1a1410');
+      strokeRect(ctx, W * 0.35, G - 28, 60, 20, '#242018');
+      fillRect(ctx, W * 0.35 + 5,  G - 14, 12, 14, '#141210');
+      fillRect(ctx, W * 0.35 + 43, G - 14, 12, 14, '#141210');
+      // Couch / sofa
+      fillRect(ctx, W * 0.6, G - 26, 52, 22, '#1c1818');
+      fillRect(ctx, W * 0.6, G - 34, 52, 10, '#141414'); // backrest
+      strokeRect(ctx, W * 0.6, G - 34, 52, 30, '#242020');
+      break;
+    }
+    case 'pharmacy': {
+      // Medicine shelves
+      for (let sx2 = 80; sx2 < W - 60; sx2 += 100) {
+        fillRect(ctx, sx2, G - 52, 50, 50, '#121216');
+        strokeRect(ctx, sx2, G - 52, 50, 50, '#1c1c24');
+        for (let sh = 0; sh < 3; sh++) {
+          fillRect(ctx, sx2 + 2, G - 48 + sh * 16, 46, 12, '#0e0e18');
+          // Pill bottles (some knocked over)
+          for (let b = 0; b < 3; b++)
+            fillRect(ctx, sx2 + 5 + b * 14, G - 48 + sh * 16 + 2, 6, 8, '#1a2030');
+        }
+      }
+      break;
+    }
+    default: {
+      // Generic: some rubble and debris
+      for (let rx = 100; rx < W - 100; rx += 180) {
+        fillRect(ctx, rx, G - 10, 30, 10, '#141418');
+        fillRect(ctx, rx + 5, G - 16, 20, 8,  '#101014');
+      }
+      break;
+    }
+  }
+  ctx.restore();
+}
+
 function drawBuildingStairs(ctx, sx, groundY, dir) {
   const col = '#30283c';
-  for (let i = 0; i < 4; i++) {
-    const ox  = dir === 'up' ? i * 5 : (3 - i) * 5;
-    const stepY = groundY - (i + 1) * 5;
-    fillRect(ctx, sx + ox, stepY, 22 - i * 2, 5, col);
+  const colLight = '#48387a';
+  for (let i = 0; i < 6; i++) {
+    const ox    = dir === 'up' ? i * 9 : (5 - i) * 9;
+    const stepY = groundY - (i + 1) * 9;
+    const sw    = 42 - i * 3;
+    fillRect(ctx, sx + ox, stepY, sw, 9, col);
+    fillRect(ctx, sx + ox, stepY, sw, 2, colLight); // step edge highlight
   }
-  drawText(ctx, dir === 'up' ? '▲' : '▼', sx + 12, groundY - 24, '#6a5a88', 8, 'center');
+  drawText(ctx, dir === 'up' ? '▲ STAIRS UP' : '▼ STAIRS DOWN', sx + 22, groundY - 68, '#8a7aaa', 7, 'center');
 }
 
 // ── In-explore inventory overlay ──────────────────────────────────────────────

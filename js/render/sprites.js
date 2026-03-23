@@ -422,7 +422,7 @@ function drawEarth(ctx, x, y, w, h) {
 
 // ── Exploration environment ───────────────────────────────────────────────────
 
-function drawExploreBackground(ctx, scrollX, zone, worldH, time) {
+function drawExploreBackground(ctx, scrollX, zone, worldH, time, bgTheme) {
   const W = CFG.W;
   const H = worldH;
 
@@ -432,17 +432,69 @@ function drawExploreBackground(ctx, scrollX, zone, worldH, time) {
   // Ground
   fillRect(ctx, 0, H * 0.45, W, H * 0.55, C.ground);
 
-  // Distant silhouettes (parallax 0.2)
-  const px = -(scrollX * 0.2) % (W * 2);
-  ctx.globalAlpha = 0.28;
-  ctx.fillStyle = '#12121a';
-  const bdata = [0,55,80,45, 90,60,50,50, 155,70,60,55, 220,50,40,60, 265,65,55,45, 320,80,40,65];
-  for (let i = 0; i < bdata.length; i += 4) {
-    const bx = ((bdata[i] + W - px % W) % (W * 2));
-    ctx.fillRect(Math.round(bx - W), bdata[i+3], bdata[i+2], bdata[i+1]);
-    ctx.fillRect(Math.round(bx), bdata[i+3], bdata[i+2], bdata[i+1]);
+  if (bgTheme === 'ruined_city') {
+    // Ruined city skyline — collapsed skyscrapers with broken silhouettes
+    const rpx = -(scrollX * 0.15) % (W * 2);
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#0d0d18';
+    // Tall ruined towers with jagged tops
+    const towers = [
+      [0,  H*0.08, 44, H*0.37],
+      [50, H*0.15, 30, H*0.30],
+      [86, H*0.04, 52, H*0.41],
+      [145,H*0.12, 36, H*0.33],
+      [188,H*0.07, 28, H*0.38],
+      [220,H*0.18, 48, H*0.27],
+      [275,H*0.06, 38, H*0.39],
+      [320,H*0.14, 55, H*0.31],
+      [382,H*0.09, 30, H*0.36],
+      [418,H*0.16, 44, H*0.28],
+      [468,H*0.05, 40, H*0.40],
+      [516,H*0.13, 50, H*0.32],
+      [572,H*0.08, 32, H*0.37],
+      [610,H*0.17, 46, H*0.29],
+    ];
+    for (const [tx, ty, tw, th] of towers) {
+      for (let rep = -1; rep <= 1; rep++) {
+        const bx = Math.round(tx + rpx % W + rep * W);
+        ctx.fillRect(bx, ty, tw, th);
+        // Jagged broken top
+        ctx.fillStyle = '#0a0a14';
+        ctx.beginPath();
+        ctx.moveTo(bx, ty);
+        ctx.lineTo(bx + tw * 0.3, ty - 8);
+        ctx.lineTo(bx + tw * 0.5, ty - 3);
+        ctx.lineTo(bx + tw * 0.7, ty - 12);
+        ctx.lineTo(bx + tw, ty);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#0d0d18';
+        // Broken windows
+        for (let wy = ty + 8; wy < ty + th - 10; wy += 14) {
+          for (let wx2 = bx + 4; wx2 < bx + tw - 8; wx2 += 10) {
+            if ((wx2 + wy + (tx | 0)) % 3 !== 0)
+              ctx.fillRect(wx2, wy, 5, 6);
+          }
+        }
+      }
+    }
+    ctx.restore();
+    // Heavy dark overhead haze for bunker-area atmosphere
+    fillRect(ctx, 0, 0, W, H * 0.45, '#060610', 0.35);
+  } else {
+    // Default distant silhouettes (parallax 0.2)
+    const px = -(scrollX * 0.2) % (W * 2);
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = '#12121a';
+    const bdata = [0,55,80,45, 90,60,50,50, 155,70,60,55, 220,50,40,60, 265,65,55,45, 320,80,40,65];
+    for (let i = 0; i < bdata.length; i += 4) {
+      const bx = ((bdata[i] + W - px % W) % (W * 2));
+      ctx.fillRect(Math.round(bx - W), bdata[i+3], bdata[i+2], bdata[i+1]);
+      ctx.fillRect(Math.round(bx), bdata[i+3], bdata[i+2], bdata[i+1]);
+    }
+    ctx.globalAlpha = 1;
   }
-  ctx.globalAlpha = 1;
 
   // Ground texture
   fillRect(ctx, 0, Math.round(H * 0.45), W, 3, C.dirt2);

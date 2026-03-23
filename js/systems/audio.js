@@ -14,6 +14,11 @@ const Audio = (() => {
     } catch (e) { ctx = null; }
   }
 
+  // iOS / mobile: AudioContext starts suspended — must resume after user gesture
+  function resume() {
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+  }
+
   function beep(freq, dur, vol, type, delay) {
     if (!ctx || !enabled) return;
     try {
@@ -51,7 +56,7 @@ const Audio = (() => {
   }
 
   return {
-    init,
+    init, resume,
 
     // UI
     click:   () => beep(480, 0.04, 0.05, 'square'),

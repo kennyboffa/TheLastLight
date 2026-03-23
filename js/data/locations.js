@@ -16,7 +16,7 @@ const LOCATIONS_DB = [
       { id:'edge',    name:'Forest Edge',  x:0,    w:550, bgColor:'#090e07', lootTable:'nature_light', enemyChance:8,  huntChance:15 },
       { id:'deep',    name:'Deep Forest',  x:550,  w:650, bgColor:'#060c04', lootTable:'nature_heavy', enemyChance:6,  huntChance:35,
         buildings:[
-          { relX:200, label:'Abandoned Tent',  numFloors:1, theme:'tent',  lootQuality:'light', enemyChance:5  },
+          { relX:200, label:'Abandoned Tent',  numFloors:1, theme:'tent',  lootQuality:'light', enemyChance:5, isTent:true },
         ]},
       { id:'clearing',name:'Clearing',     x:1200, w:500, bgColor:'#080e06', lootTable:'nature_rare',  enemyChance:12, huntChance:40 },
       { id:'cabin',   name:'Forest Cabin', x:1700, w:600, bgColor:'#070c05', lootTable:'home_medium',  enemyChance:18,
@@ -183,7 +183,7 @@ const LOCATIONS_DB = [
     name: 'Underground Bunker',
     desc: 'A pre-collapse government bunker. The AI has partially occupied it for server infrastructure. Deep in — very dangerous — but the supplies left behind are substantial.',
     difficulty: 4,
-    bgTheme: 'urban_dark',
+    bgTheme: 'ruined_city',
     ambientDesc: 'Emergency lights. The hum of old ventilation. The AI\'s processes run here. Something watched you enter.',
     zones: [
       { id:'tunnel',  name:'Access Tunnel',   x:0,    w:400, bgColor:'#0a0a0e', lootTable:'mixed_light',  enemyChance:30 },
@@ -357,13 +357,14 @@ const ENEMY_TEMPLATES = {
   },
 };
 
-// Enemy encounter groups by difficulty/theme
+// Enemy encounter groups — each group is a SINGLE enemy type (no mixing)
+// [templateId, minCount, maxCount] — count further capped by game day in buildEncounter
 const ENCOUNTER_GROUPS = {
-  1: [['scout_drone',1,1],['wild_dog',0,1]],
-  2: [['scout_drone',1,2],['raider',0,1],['wild_dog',0,1]],
-  3: [['patrol_robot',1,1],['scout_drone',0,1],['raider_armed',0,1],['survivor_bandit',0,1]],
-  4: [['hunter_drone',1,2],['patrol_robot',1,1],['raider_armed',1,2]],
-  forest: [['wolf',1,2],['wild_dog',0,2],['scout_drone',0,1]],
+  1:  [ [['scout_drone',   1, 2]], [['wild_dog',  1, 2]], [['raider',         1, 1]] ],
+  2:  [ [['scout_drone',   1, 3]], [['raider',    1, 2]], [['raider_armed',   1, 2]] ],
+  3:  [ [['patrol_robot',  1, 2]], [['raider_armed',1,3]],[['survivor_bandit',1, 3]] ],
+  4:  [ [['hunter_drone',  1, 3]], [['patrol_robot',1,2]],[['raider_armed',   2, 4]] ],
+  forest: [ [['wolf',1,3]], [['wild_dog',1,4]] ],
 };
 
 function rollLoot(tableId) {
@@ -388,13 +389,22 @@ function rollBuildingLoot(theme, quality) {
   return result;
 }
 
-function buildEncounter(locationDifficulty, zone, locCanHunt) {
+function buildEncounter(locationDifficulty, zone, locCanHunt, day) {
   const key = (locCanHunt || zone.canHunt) ? 'forest' : Math.min(4, locationDifficulty);
-  const group = ENCOUNTER_GROUPS[key];
-  if (!group) return [];
+  const options = ENCOUNTER_GROUPS[key];
+  if (!options) return [];
+
+  // Pick one random enemy type group (no mixing)
+  const group = randChoice(options);
+
+  // Max enemies scales with game day: day 1-10 = 1 max, +15% per 10 days
+  const dayVal = day || 1;
+  const bonusGroups = Math.floor(dayVal / 10);
+  const maxCount = Math.min(1 + bonusGroups, 5);
+
   const enemies = [];
   for (const [templateId, min, max] of group) {
-    const count = randInt(min, max);
+    const count = Math.min(randInt(min, max), maxCount);
     for (let i = 0; i < count; i++) {
       const t = ENEMY_TEMPLATES[templateId];
       if (t) enemies.push(deepClone(t));
@@ -403,7 +413,6 @@ function buildEncounter(locationDifficulty, zone, locCanHunt) {
   // Boss spawn check
   const bossChance = zone.bossChance || 0;
   if (bossChance > 0 && Math.random() * 100 < bossChance) {
-    // Pick boss based on difficulty/type
     const machineLoc = locationDifficulty >= 4;
     const humanLoc   = locationDifficulty <= 2;
     const bossId = machineLoc ? (chance(60) ? 'boss_hunter' : 'boss_patrol_heavy')

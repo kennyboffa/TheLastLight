@@ -14,7 +14,8 @@ function resizeCanvas() {
   const vp = window.visualViewport;
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
-  SCALE = Math.min(ww / CFG.W, wh / CFG.H);
+  const userScale = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
+  SCALE = Math.min(ww / CFG.W, wh / CFG.H) * userScale;
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
   canvas.style.width  = Math.floor(CFG.W * SCALE) + 'px';
@@ -78,6 +79,8 @@ function _isMobileBtn(x, y) {
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
+  const firstT = e.changedTouches[0];
+  _touchLastY = (firstT.clientY - rect.top) / SCALE;
   // Handle all active touches (multi-touch for e.g. left + action simultaneously)
   for (const t of e.changedTouches) {
     const x = (t.clientX - rect.left) / SCALE;
@@ -95,12 +98,24 @@ canvas.addEventListener('touchstart', (e) => {
   }
 }, { passive: false });
 
+let _touchStartY = 0;
+let _touchLastY  = 0;
+
 canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
   const t = e.touches[0];
   const rect = canvas.getBoundingClientRect();
+  const cy = (t.clientY - rect.top) / SCALE;
   GS.mouse.x = (t.clientX - rect.left) / SCALE;
-  GS.mouse.y = (t.clientY - rect.top)  / SCALE;
+  GS.mouse.y = cy;
+  // Drag scrolling for menu screens
+  if (GS.screen === 'exploreSelect') {
+    esScrollY = Math.max(0, esScrollY - (cy - _touchLastY));
+  } else if (GS.screen === 'shelter' && shelterUI &&
+      (shelterUI.activeMenu === 'journal' || shelterUI.activeMenu === 'storage')) {
+    shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) - (cy - _touchLastY));
+  }
+  _touchLastY = cy;
 }, { passive: false });
 
 canvas.addEventListener('touchend', (e) => {
@@ -130,6 +145,22 @@ canvas.addEventListener('touchend', (e) => {
   if (!_mobileHeld.left && !_mobileHeld.right && !_mobileHeld.action) {
     GS.mouse.down    = false;
     GS.mouse.clicked = true;
+  }
+}, { passive: false });
+
+// ── Mouse wheel scrolling ─────────────────────────────────────────────────────
+
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 1 : -1;
+  const scrollAmt = 60;
+  if (GS.screen === 'exploreSelect') {
+    esScrollY = Math.max(0, esScrollY + delta * scrollAmt);
+  } else if (GS.screen === 'shelter') {
+    // Scroll journal or storage
+    if (shelterUI && (shelterUI.activeMenu === 'journal' || shelterUI.activeMenu === 'storage')) {
+      shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
+    }
   }
 }, { passive: false });
 

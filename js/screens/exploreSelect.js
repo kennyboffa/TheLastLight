@@ -16,7 +16,19 @@ function renderExploreSelect(ctx, gs) {
   const cardH = 68;
   const cardW = W - 80;
   const cardX = 40;
-  let cy = 55;
+  const listY = 55;
+  const listH = H - 50 - listY;
+  const totalH = LOCATIONS_DB.length * (cardH + 6);
+  const maxScroll = Math.max(0, totalH - listH);
+  esScrollY = Math.min(Math.max(esScrollY, 0), maxScroll);
+
+  // Clip list area
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, listY, W, listH);
+  ctx.clip();
+
+  let cy = listY - esScrollY;
 
   const unlocked = gs.unlockedLocations || ['forest', 'church'];
 
@@ -71,6 +83,17 @@ function renderExploreSelect(ctx, gs) {
     cy += cardH + 6;
   }
 
+  ctx.restore();
+
+  // Scroll indicator
+  if (maxScroll > 0) {
+    const trackH = listH - 4;
+    const thumbH = Math.max(20, trackH * (listH / totalH));
+    const thumbY = listY + 2 + (esScrollY / maxScroll) * (trackH - thumbH);
+    fillRect(ctx, W - 10, listY + 2, 5, trackH, '#1a1a28');
+    fillRect(ctx, W - 10, thumbY, 5, thumbH, '#3a3a5a');
+  }
+
   // Back button
   const bx = 40, by = H - 36;
   drawButton(ctx, bx, by, 70, 22, '< Back', hitTest(mx, my, bx, by, 70, 22));
@@ -99,7 +122,7 @@ function exploreSelectClick(mx, my, gs) {
   const cardH = 68;
   const cardW = CFG.W - 80;
   const cardX = 40;
-  let cy = 55;
+  let cy = 55 - esScrollY;
 
   const unlocked = gs.unlockedLocations || ['forest', 'church'];
   for (const loc of LOCATIONS_DB) {

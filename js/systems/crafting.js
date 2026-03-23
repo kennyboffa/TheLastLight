@@ -94,8 +94,8 @@ function buildUpgrade(gs, upgradeId) {
   return { ok: true, msg: `Building ${upg.name}...` };
 }
 
-// Craft an item from RECIPES_DB
-function craftItem(gs, recipeId) {
+// Craft an item from RECIPES_DB (timed task — output given on completion)
+function craftItem(gs, recipeId, qty) {
   const recipe = RECIPES_DB.find(r => r.id === recipeId);
   if (!recipe) return { ok: false, msg: 'Unknown recipe.' };
   if (recipe.needsWorkshop && !getRoomUnlocked('workshop')) {
@@ -104,19 +104,27 @@ function craftItem(gs, recipeId) {
   if (recipe.requiresUpgrade && !gs.shelter[UPGRADES_DB[recipe.requiresUpgrade]?.key]) {
     return { ok: false, msg: `Requires ${UPGRADES_DB[recipe.requiresUpgrade]?.name || recipe.requiresUpgrade}.` };
   }
-  if (recipe.needsTools && countInInventory(gs.shelter.storage,'tools') < 1) {
+  if (recipe.needsTools && countInInventory(gs.shelter.storage,'tools') < 1
+                        && countInInventory(gs.parent.inventory,'tools') < 1) {
     return { ok: false, msg: 'Requires Tools.' };
   }
-  if (!canAfford(recipe.cost, gs, true)) {
+  const outQty = qty || recipe.qty || 1;
+  // Scale cost by quantity batches
+  const batches = Math.ceil(outQty / (recipe.qty || 1));
+  const scaledCost = {};
+  for (const [id, amt] of Object.entries(recipe.cost)) scaledCost[id] = amt * batches;
+  if (!canAfford(scaledCost, gs, true)) {
     return { ok: false, msg: 'Not enough materials.' };
   }
 
-  deductCost(recipe.cost, gs, true);
+  deductCost(scaledCost, gs, true);
   if (recipe.needsTools) useToolCharge(gs);
 
-  addToInventory(gs.shelter.storage, recipe.output, recipe.qty || 1);
-  gs.parent.tiredness = clamp(gs.parent.tiredness + 6, 0, 100);
-  addLog(`Crafted ${recipe.qty || 1}x ${getItemDef(recipe.output)?.name || recipe.output}.`, 'good');
+  const p = gs.parent;
+  p.task         = { type: 'craft', recipeId, qty: outQty };
+  p.taskDuration = (recipe.craftTime || 0.5) * batches;
+  p.taskProgress = 0;
+  p.isWorking    = true;
   return { ok: true };
 }
 
@@ -144,9 +152,10 @@ function cookFood(gs, srcId, qty) {
   const outId = COOK_MAP[srcId];
   if (!outId) return { ok: false, msg: 'Cannot cook that.' };
 
+  const COOK_TIMES = { raw_meat: 1.0, canned_soup: 0.5, canned_beans: 0.5 };
   const p = gs.parent;
   p.task = { type:'cook', inputId: srcId, outputId: outId, qty };
-  p.taskDuration = 1.5; // 1.5 game hours
+  p.taskDuration = COOK_TIMES[srcId] || 0.75;
   p.taskProgress = 0;
   p.isWorking    = true;
   return { ok: true };

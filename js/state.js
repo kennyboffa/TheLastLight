@@ -98,6 +98,7 @@ const GS = {
 
   // ── Zoom ──────────────────────────────────────────────────────────────────
   zoom: 1.0,
+  userScale: 1.0,   // user-adjustable display scale (set via Settings menu)
 
   // ── Dog ───────────────────────────────────────────────────────────────────
   dog: null,     // null | { name:'Rex', health:100, hunger:20, alive:true }
@@ -151,6 +152,9 @@ const GS = {
     lineIdx: 0, charIdx: 0, timer: 0,
     done: false, waitForInput: false,
   },
+
+  // ── Exploration companion ─────────────────────────────────────────────────
+  exploreCompanionId: null,  // survivor id of companion on current exploration
 
   // ── Location persistence ──────────────────────────────────────────────────
   locationStates: {},   // { [locId]: saved container/loot/encounter state }

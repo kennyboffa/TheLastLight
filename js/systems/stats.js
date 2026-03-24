@@ -391,7 +391,7 @@ function advanceDay(gs) {
 
   gs.shelter.noiseToday = 0;
 
-  // Child rests at night
+  // Child rests at night (overridden below if parent didn't come home)
   gs.child.isSleeping = false;
   gs.child.tiredness  = 0;
   if (gs.child.task && gs.child.task.type === 'sleep') {
@@ -405,8 +405,12 @@ function advanceDay(gs) {
     gs.parent.tiredness = clamp(gs.parent.tiredness + 50, 0, 100);
     gs.parent.health    = Math.max(1, Math.floor(gs.parent.health * 0.65));
     gs.time             = CFG.DAY_START + randInt(120, 300); // returns 8–11 AM
+    // Lily didn't sleep — override the normal night rest that already ran above
+    gs.child.tiredness  = 55;  // exhausted from staying up all night
+    gs.child.health     = Math.max(1, gs.child.health - 8); // stress/fear toll
     gs.child.depression = clamp(gs.child.depression + 10, 0, 100);
     addLog(`${gs.parent.name} returned wounded and exhausted after a night outside.`, 'danger');
+    addLog(`${gs.child.name} didn't sleep. She was awake the whole night waiting.`, 'warn');
     // Story: the morning after not coming home
     if (!gs.flags.storyLateReturn) {
       gs.flags.storyLateReturn = true;

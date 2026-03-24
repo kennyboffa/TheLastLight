@@ -1811,16 +1811,25 @@ function endExploration(gs) {
     gs._pendingStoryFirstOut = false;
     gs.storyQueue.push('story_first_out');
   }
-  // Story: first time returning wounded
-  if (gs.parent.wounded && !gs.flags.storyWounded) {
+  // Story: first time returning wounded (voluntary return only — late return sets this later)
+  if (gs.parent.wounded && !gs.flags.storyWounded && !gs.lateReturn) {
     gs.flags.storyWounded = true;
     gs.storyQueue.push('story_wounded');
   }
 
-  gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: 'Bunker', pendingFn: () => {
+  if (gs.lateReturn) {
+    // Forced night-out: dayFade handles the transition — no "Bunker" title
+    // Player is placed back in shelter immediately; dayFade black screen covers the swap.
     exploreState = null;
     gs.keys      = {};
     gs.screen    = 'shelter';
     gs.zoomAnim  = { scale: 0.55, target: 1.0 };
-  }};
+  } else {
+    gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: 'Bunker', pendingFn: () => {
+      exploreState = null;
+      gs.keys      = {};
+      gs.screen    = 'shelter';
+      gs.zoomAnim  = { scale: 0.55, target: 1.0 };
+    }};
+  }
 }

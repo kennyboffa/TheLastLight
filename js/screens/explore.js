@@ -340,6 +340,11 @@ function startExploration(gs, loc) {
   if (!gs.flags.firstExplore) {
     gs.flags.firstExplore = true;
     notify('A/D to move. [E] to interact. Enter buildings for better loot.', 'info');
+    // Story: queued for when parent returns — first time leaving Lily
+    if (!gs.flags.storyFirstOut) {
+      gs.flags.storyFirstOut = true;
+      gs._pendingStoryFirstOut = true; // fire on return, not on departure
+    }
   }
 }
 
@@ -1800,6 +1805,18 @@ function endExploration(gs) {
   }
   gs.suspicion = clamp(gs.suspicion + randInt(2, 5), 0, CFG.SUSPICION_MAX);
   addLog(`Returned from ${es.location?.name || 'exploration'}.`, 'info');
+
+  // Story: first return from exploration (reflection on leaving Lily)
+  if (gs._pendingStoryFirstOut) {
+    gs._pendingStoryFirstOut = false;
+    gs.storyQueue.push('story_first_out');
+  }
+  // Story: first time returning wounded
+  if (gs.parent.wounded && !gs.flags.storyWounded) {
+    gs.flags.storyWounded = true;
+    gs.storyQueue.push('story_wounded');
+  }
+
   gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: 'Bunker', pendingFn: () => {
     exploreState = null;
     gs.keys      = {};

@@ -996,6 +996,126 @@ function pickDialogue(gs) {
   return { ...ev };
 }
 
+// ── Story DB — cinematic one-shot narrative moments ───────────────────────────
+// These are queued explicitly (gs.storyQueue) and fired with priority.
+// type:'story' gives them a distinct visual treatment in renderEvent.
+const STORY_DB = [
+  {
+    id: 'story_opening',
+    title: 'Day One',
+    type: 'story',
+    text:
+`Three weeks since the AI sealed the district. I don't know how many people made it out. I stopped counting the sirens after the first week.
+
+Lily is asleep below. She trusts me completely — she always has — and some nights that's the most terrifying thing in the world.
+
+We have food for a few days. After that, I'll have to go up.
+
+I found this bunker months ago and told nobody. I still don't know if that was right.
+
+One day at a time.`,
+  },
+  {
+    id: 'story_first_out',
+    title: 'First Time Out',
+    type: 'story',
+    text:
+`I left Lily at the hatch. Told her two hours, maybe three. She nodded like she understood — which was somehow worse.
+
+She's been underground long enough that the idea of me going up fills her with a dread she tries not to show. She's getting better at hiding it. I'm not sure that's a good thing.
+
+I moved fast. Kept low. The streets felt different. Emptier, or maybe I was just more afraid.
+
+I need to be better at this. I don't have the option of learning slowly.`,
+  },
+  {
+    id: 'story_first_room',
+    title: 'Something New',
+    type: 'story',
+    text:
+`It's finished. My hands are wrecked and it took longer than it should have, but it's built.
+
+Lily walked through it twice, running her fingers along the new walls. Then she turned to me and said: "It's starting to feel like somewhere real."
+
+I hadn't thought of it that way. We've been surviving. But maybe that's the difference — between surviving in a place and actually living in one.
+
+We're still a long way from safe. But tonight it felt, just for a moment, like we might get there.`,
+  },
+  {
+    id: 'story_wounded',
+    title: 'She Saw',
+    type: 'story',
+    text:
+`I tried to clean up before she noticed. I didn't manage it.
+
+Lily saw the blood the moment I came through the hatch. She didn't scream or ask what happened. She just went and got the cloth and held the bandage steady while I worked, her hands completely still.
+
+That stillness is what stays with me. She already knew not to ask.
+
+She slept in the room with me last night without saying a word about why. Just stayed close.
+
+She's carrying this kind of quiet that children shouldn't have to carry.`,
+  },
+  {
+    id: 'story_late_return',
+    title: 'She Waited',
+    type: 'story',
+    text:
+`I came through the hatch at first light and she was sitting at the bottom of the ladder, knees pulled to her chest, watching the door.
+
+The moment she saw me — just alive, just me — something in her face that had been held in all night finally broke. Not the careful quiet kind of crying. The kind that had been building for hours.
+
+I sat down on the floor and held her until it stopped. It took a long time. Neither of us spoke.
+
+I can't do that to her again. Whatever it costs, I come home before dark.`,
+  },
+  {
+    id: 'story_suspicion',
+    title: 'Something Has Changed',
+    type: 'story',
+    text:
+`Lily asked me last night why the drone routes have shifted. She'd been tracking them — sketched the patterns in the margins of her notebook.
+
+I told her it was probably routine recalibration. She looked at me the way she does when she knows I'm softening the truth, and then went back to her book without another word.
+
+I double-checked every seal, every sound source. I haven't been careless. But something has changed out there. The patterns are tighter. More deliberate.
+
+We need to be quieter. We need to be invisible. We cannot afford to be noticed.`,
+  },
+  {
+    id: 'story_children',
+    title: 'Are There Others?',
+    type: 'story',
+    text:
+`While I was sorting supplies, Lily asked without looking up: "Do you think there are other children? Hiding somewhere, like us?"
+
+I didn't answer right away. She filled the silence herself.
+
+"I know the honest answer," she said quietly. "I'm not little anymore. I just... think about them sometimes. Hope they found somewhere safe." She paused. "Is that stupid?"
+
+I told her it wasn't. I told her hope is one of the few things that costs nothing.
+
+She smiled at that. Small, but real.
+
+I hope she never stops.`,
+  },
+  {
+    id: 'story_week_one',
+    title: 'Seven Days',
+    type: 'story',
+    text:
+`Seven days. I didn't let myself think past today until after Lily fell asleep.
+
+Seven days of keeping her fed, keeping her warm, keeping her steady when the drones passed close. Seven days of going up and coming back.
+
+It's more than I expected when we started. I'm not sure that's something to be proud of, but it's something.
+
+I don't know what the end looks like. I'm not sure I'm allowed to think about that yet. But one week is real.
+
+We're still here.`,
+  },
+];
+
 // Pick a valid event for current state
 function pickEvent(gs, context) {
   if (!gs.eventLastFired) gs.eventLastFired = {};

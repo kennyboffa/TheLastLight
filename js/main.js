@@ -128,9 +128,12 @@ canvas.addEventListener('touchmove', (e) => {
   // Drag scrolling for menu screens
   if (GS.screen === 'exploreSelect') {
     esScrollY = Math.max(0, esScrollY - (cy - _touchLastY));
-  } else if (GS.screen === 'shelter' && shelterUI &&
-      (shelterUI.activeMenu === 'journal' || shelterUI.activeMenu === 'storage')) {
-    shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) - (cy - _touchLastY));
+  } else if (GS.screen === 'shelter' && shelterUI) {
+    if (shelterUI.activeMenu === 'journal' || shelterUI.activeMenu === 'storage') {
+      shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) - (cy - _touchLastY));
+    } else if (shelterUI.activeMenu === 'crafting') {
+      shelterUI.craftingScroll = Math.max(0, (shelterUI.craftingScroll || 0) - (cy - _touchLastY));
+    }
   }
   _touchLastY = cy;
 }, { passive: false });
@@ -185,8 +188,14 @@ canvas.addEventListener('wheel', (e) => {
         }
       } else if (shelterUI.activeMenu === 'storage') {
         shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
+      } else if (shelterUI.activeMenu === 'crafting') {
+        shelterUI.craftingScroll = Math.max(0, (shelterUI.craftingScroll || 0) + delta * 20);
       }
     }
+  } else if (GS.screen === 'packScreen') {
+    packScreenScroll(delta, GS);
+  } else if (GS.screen === 'explore' && typeof exploreScroll === 'function') {
+    exploreScroll(delta, GS);
   }
 }, { passive: false });
 

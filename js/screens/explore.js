@@ -182,19 +182,48 @@ function startExploration(gs, loc) {
     }
   }
 
-  // Pre-generate decorative elements (bushes, grass, bones)
+  // Pre-generate decorative elements (bushes, grass, bones, wrecks, debris)
   const foliage = [];
   const bonesPiles = [];
+  const isForestLoc = loc.bgTheme === 'forest';
   for (const zone of loc.zones) {
     const isNature = zone.lootTable && zone.lootTable.startsWith('nature');
-    const bushCount = isNature ? 6 + randInt(0, 6) : randInt(0, 2);
+    const isUrban  = !isNature && !isForestLoc;
+    const bushCount = isNature ? 6 + randInt(0, 6) : randInt(0, 3);
     const grassCount = isNature ? 8 + randInt(0, 8) : randInt(0, 3);
+
     for (let i = 0; i < bushCount; i++) {
-      foliage.push({ type: 'bush', wx: zone.x + 20 + randInt(0, zone.w - 40) });
+      const wx = zone.x + 20 + randInt(0, zone.w - 40);
+      const type = chance(35) ? 'wide_bush' : 'bush';
+      foliage.push({ type, wx });
     }
     for (let i = 0; i < grassCount; i++) {
       foliage.push({ type: 'grass', wx: zone.x + 10 + randInt(0, zone.w - 20) });
     }
+
+    // Tall trees / dead trees in nature / forest zones
+    if (isNature || isForestLoc) {
+      const tallCount = randInt(1, 4);
+      for (let i = 0; i < tallCount; i++) {
+        foliage.push({ type: 'tall_tree', wx: zone.x + 30 + randInt(0, zone.w - 60) });
+      }
+      if (chance(40)) {
+        foliage.push({ type: 'dead_tree', wx: zone.x + 40 + randInt(0, zone.w - 80) });
+      }
+    }
+
+    // Car wrecks and debris in urban / industrial zones
+    if (isUrban) {
+      const wreckCount = randInt(0, 2);
+      for (let i = 0; i < wreckCount; i++) {
+        foliage.push({ type: 'car_wreck', wx: zone.x + 60 + randInt(0, zone.w - 120) });
+      }
+      const debrisCount = randInt(1, 4);
+      for (let i = 0; i < debrisCount; i++) {
+        foliage.push({ type: 'debris', wx: zone.x + 20 + randInt(0, zone.w - 40) });
+      }
+    }
+
     // Bones: small chance in each zone, higher in dangerous zones
     const boneChance = isNature ? 8 : (zone.enemyChance || 0) > 25 ? 35 : 15;
     if (chance(boneChance)) {
@@ -221,8 +250,11 @@ function startExploration(gs, loc) {
     invOpen: false, invScroll: 0, invSelected: null,
   };
 
-  // Restore persistent loot/encounter state from previous visit
-  const saved = gs.locationStates && gs.locationStates[loc.id];
+  // Random areas always regenerate — never restore persistent state
+  const RANDOM_AREAS = ['forest', 'factory', 'village'];
+
+  // Restore persistent loot/encounter state from previous visit (not for random areas)
+  const saved = (!RANDOM_AREAS.includes(loc.id)) && gs.locationStates && gs.locationStates[loc.id];
   if (saved) {
     saved.containers.forEach((sc, i) => {
       if (exploreState.containers[i]) exploreState.containers[i].searched = sc.searched;
@@ -271,6 +303,8 @@ function startExploration(gs, loc) {
 
   gs.parent.isExploring = true;
   gs.child.isAlone      = true;
+  Audio.resume();
+  Audio.startMusic();
 
   // Travel time: harder locations take longer to reach (diff 1-2: +1h, diff 3-4: +2h)
   const travelMins = loc.difficulty >= 3 ? 120 : 60;
@@ -414,7 +448,29 @@ function updateExplore(gs, dt) {
   }
 
   es.showReturnPrompt = es.px < 80 || es.px > CFG.WORLD_W - 120;
-  if (p.tiredness >= 92) { endExploration(gs); notify('Too exhausted. Returned home.', 'warn'); }
+  if (p.tiredness >= 92) { endExploration(gs); notify('Too exhausted. Returned home.', 'warn'); return; }
+
+  // Creepy ambient FX — triggers randomly, roughly every 2-5 minutes
+  es._creepyTimer = (es._creepyTimer || 0) + 1;
+  if (es._creepyTimer > 7200 && Math.random() < 0.002) {
+    Audio.creepyAmbient();
+    es._creepyTimer = Math.floor(Math.random() * 3600); // reset with variance
+  }
+
+  // Zone title card — trigger when entering a new zone
+  const loc = es.location;
+  const curZone = loc.zones.find(z => es.px >= z.x && es.px < z.x + z.w);
+  if (curZone && curZone.id !== es._lastZoneId) {
+    es._lastZoneId = curZone.id;
+    if (es._zoneTitleCard) {
+      // If a card is already showing, replace it only if we've passed linger phase
+      if (es._zoneTitleCard.timer > 60) {
+        es._zoneTitleCard = { text: curZone.name, timer: 0 };
+      }
+    } else {
+      es._zoneTitleCard = { text: curZone.name, timer: 0 };
+    }
+  }
 }
 
 function updateBuildingInterior(gs, dt) {
@@ -763,6 +819,8 @@ function renderExplore(ctx, gs) {
   if (es.building) renderBuildingInterior(ctx, gs, es);
   else             renderOutdoor(ctx, gs, es);
 
+  drawGrainFilter(ctx);
+  drawZoneTitleCard(ctx, es);
   drawExploreHUD(ctx, gs, es);
   if (es.invOpen) drawExploreInventory(ctx, gs, es);
   drawNotifications(ctx, gs);
@@ -794,11 +852,18 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
-  // Foliage: bushes and grass patches (pre-generated positions)
+  // Foliage / environment dressing (pre-generated positions)
   if (es.foliage) {
     for (const f of es.foliage) {
-      if (f.type === 'bush')  drawExploreBush(ctx, f.wx, GROUND_Y);
-      else                    drawExploreGrass(ctx, f.wx, GROUND_Y);
+      switch (f.type) {
+        case 'bush':       drawExploreBush(ctx, f.wx, GROUND_Y);      break;
+        case 'wide_bush':  drawExploreWideBush(ctx, f.wx, GROUND_Y);  break;
+        case 'grass':      drawExploreGrass(ctx, f.wx, GROUND_Y);     break;
+        case 'tall_tree':  drawExploreTallTree(ctx, f.wx, GROUND_Y);  break;
+        case 'dead_tree':  drawExploreDeadTree(ctx, f.wx, GROUND_Y);  break;
+        case 'car_wreck':  drawExploreCarWreck(ctx, f.wx, GROUND_Y);  break;
+        case 'debris':     drawExploreDebrisPile(ctx, f.wx, GROUND_Y); break;
+      }
     }
   }
 
@@ -821,7 +886,11 @@ function renderOutdoor(ctx, gs, es) {
         }
       }
     } else {
-      drawExploreBuilding(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
+      if (bld.theme === 'cabin') {
+        drawExploreCabin(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
+      } else {
+        drawExploreBuilding(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
+      }
       if (Math.abs(es.px - (bld.doorX + 8)) < 24) {
         drawText(ctx, '[E] Enter', bld.doorX + 8, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
       }
@@ -1007,26 +1076,36 @@ function drawExploreHUD(ctx, gs, es) {
     if (curZone) drawText(ctx, curZone.name, 12, 30, C.textDim, 7);
   }
 
-  // Player HP / status bar below location panel
+  // Player full status bars below location panel
   const p = gs.parent;
   const hpPct = p.health / p.maxHealth;
   const hpColor = hpPct > 0.6 ? '#3a8a3a' : hpPct > 0.3 ? '#aa6020' : '#cc2020';
-  drawPanel(ctx, 6, 39, 240, 22, C.panelBg);
-  drawText(ctx, 'HP', 11, 51, C.textDim, 7);
-  drawStatBar(ctx, 24, 42, 100, 7, p.health, p.maxHealth, hpColor, null, false);
-  drawText(ctx, `${Math.round(p.health)}/${p.maxHealth}`, 128, 51, C.textDim, 7);
-  if (p.hungry)    drawText(ctx, 'HUNGRY',    176, 51, C.hunger,    7);
-  else if (p.thirsty) drawText(ctx, 'THIRSTY', 176, 51, C.thirst,   7);
-  else if (p.wounded) drawText(ctx, 'WOUNDED', 176, 51, '#cc3030',  7);
+  const dColor  = p.depression > 70 ? '#9944dd' : C.depression;
+  drawPanel(ctx, 6, 39, 180, 68, C.panelBg);
+  // Five compact stat bars
+  const STATS = [
+    { label:'HP',    val: p.health,    max: p.maxHealth, color: hpColor },
+    { label:'Food',  val: 100 - p.hunger,  max: 100, color: C.hunger },
+    { label:'Water', val: 100 - p.thirst,  max: 100, color: C.thirst },
+    { label:'Rest',  val: 100 - p.tiredness, max: 100, color: C.tiredness },
+    { label:'Mood',  val: 100 - p.depression, max: 100, color: dColor },
+  ];
+  let sy = 43;
+  for (const st of STATS) {
+    drawText(ctx, st.label, 10, sy + 6, C.textDim, 6, 'left');
+    drawStatBar(ctx, 36, sy, 100, 5, st.val, st.max, st.color, null, false);
+    sy += 12;
+  }
+  if (p.wounded) drawText(ctx, 'WOUNDED', 148, 96, '#cc3030', 6, 'right');
 
-  // Mini log strip — last 3 messages below the status bar
+  // Mini log strip — last 2 messages below the status bars
   if (gs.log && gs.log.length > 0) {
-    const logEntries = gs.log.slice(0, 3);
+    const logEntries = gs.log.slice(0, 2);
     const LOG_COLS = { danger:'#cc4444', good:'#44aa55', warn:'#cc8830', info:'#7090c0' };
-    drawPanel(ctx, 6, 64, 240, 4 + logEntries.length * 10, C.panelBg);
-    let ly = 73;
+    drawPanel(ctx, 6, 110, 180, 4 + logEntries.length * 10, C.panelBg);
+    let ly = 119;
     for (const entry of logEntries) {
-      drawText(ctx, entry.text, 11, ly, LOG_COLS[entry.type] || C.textDim, 7);
+      drawText(ctx, entry.text, 11, ly, LOG_COLS[entry.type] || C.textDim, 6);
       ly += 10;
     }
   }
@@ -1185,6 +1264,159 @@ function drawExploreBones(ctx, x, groundY) {
   }
   fillRect(ctx, x + 6, groundY - 2, 18, 2, '#9a8868');
   ctx.restore();
+}
+
+function drawExploreTallTree(ctx, x, groundY) {
+  // Tall conifer / dark pine
+  fillRect(ctx, x - 3, groundY - 50, 6, 50, '#221508');
+  fillRect(ctx, x - 2, groundY - 50, 3, 50, '#2e1c0a', 0.5); // bark highlight
+  ctx.fillStyle = '#0a1e06';
+  ctx.beginPath(); ctx.moveTo(x, groundY-128); ctx.lineTo(x-10, groundY-96); ctx.lineTo(x+10, groundY-96); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#0e2608';
+  ctx.beginPath(); ctx.moveTo(x, groundY-106); ctx.lineTo(x-14, groundY-70); ctx.lineTo(x+14, groundY-70); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#122e0a';
+  ctx.beginPath(); ctx.moveTo(x, groundY-86); ctx.lineTo(x-18, groundY-46); ctx.lineTo(x+18, groundY-46); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#16320e';
+  ctx.beginPath(); ctx.moveTo(x, groundY-64); ctx.lineTo(x-22, groundY-28); ctx.lineTo(x+22, groundY-28); ctx.closePath(); ctx.fill();
+  // snow/highlight on top branch tips
+  ctx.fillStyle = '#1e4816';
+  ctx.beginPath(); ctx.moveTo(x, groundY-130); ctx.lineTo(x-4, groundY-122); ctx.lineTo(x+4, groundY-122); ctx.closePath(); ctx.fill();
+}
+
+function drawExploreDeadTree(ctx, x, groundY) {
+  // Bare dead tree — dark twisted silhouette
+  fillRect(ctx, x - 3, groundY - 55, 6, 55, '#1e1208');
+  fillRect(ctx, x - 2, groundY - 55, 2, 55, '#2a1a0a', 0.4);
+  ctx.save();
+  ctx.strokeStyle = '#221408';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x - 1, groundY - 40); ctx.lineTo(x - 24, groundY - 68); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 1, groundY - 36); ctx.lineTo(x + 20, groundY - 60); ctx.stroke();
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x - 24, groundY - 68); ctx.lineTo(x - 34, groundY - 58); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 24, groundY - 68); ctx.lineTo(x - 20, groundY - 80); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 20, groundY - 60); ctx.lineTo(x + 28, groundY - 50); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + 20, groundY - 60); ctx.lineTo(x + 16, groundY - 72); ctx.stroke();
+  ctx.restore();
+}
+
+function drawExploreWideBush(ctx, x, groundY) {
+  // Wider, more spreading dark bush
+  ctx.save();
+  ctx.fillStyle = '#0e2008';
+  ctx.beginPath();
+  ctx.arc(x,      groundY - 12, 18, Math.PI, 0);
+  ctx.arc(x - 16, groundY - 8,  12, Math.PI, 0);
+  ctx.arc(x + 16, groundY - 8,  12, Math.PI, 0);
+  ctx.fill();
+  ctx.fillStyle = '#162e0e';
+  ctx.beginPath();
+  ctx.arc(x - 6, groundY - 18, 9, Math.PI, 0);
+  ctx.arc(x + 6, groundY - 18, 9, Math.PI, 0);
+  ctx.fill();
+  ctx.fillStyle = '#1e3a14';
+  ctx.beginPath();
+  ctx.arc(x, groundY - 20, 6, Math.PI, 0);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawExploreCarWreck(ctx, x, groundY) {
+  ctx.save();
+  ctx.globalAlpha = 0.88;
+  const carW = 52, carH = 18;
+  const bx = x - carW / 2;
+  // Body
+  fillRect(ctx, bx,     groundY - carH,      carW,     carH,     '#2a1808');
+  strokeRect(ctx, bx,   groundY - carH,      carW,     carH,     '#4a2a14');
+  // Roof
+  fillRect(ctx, bx + 9, groundY - carH - 14, carW - 18, 14,     '#1e1008');
+  strokeRect(ctx, bx + 9, groundY - carH - 14, carW - 18, 14,   '#3a1e10');
+  // Broken windshields (dark with crack lines)
+  fillRect(ctx, bx + 11, groundY - carH - 12, 12, 10, '#080c10');
+  fillRect(ctx, bx + 28, groundY - carH - 12, 12, 10, '#080c10');
+  strokeRect(ctx, bx + 11, groundY - carH - 12, 12, 10, '#141c24', 0.7);
+  strokeRect(ctx, bx + 28, groundY - carH - 12, 12, 10, '#141c24', 0.7);
+  // Crack lines on windows
+  ctx.strokeStyle = '#303848'; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(bx+14, groundY-carH-12); ctx.lineTo(bx+18, groundY-carH-4); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx+30, groundY-carH-12); ctx.lineTo(bx+35, groundY-carH-3); ctx.stroke();
+  // Wheels (flat)
+  fillRect(ctx, bx + 4,        groundY - 7, 9, 7, '#141414');
+  fillRect(ctx, bx + carW - 13, groundY - 7, 9, 7, '#141414');
+  // Rust streaks
+  fillRect(ctx, bx + 2,  groundY - carH + 5, 3, 8, '#5a2808', 0.55);
+  fillRect(ctx, bx + carW - 5, groundY - carH + 4, 3, 10, '#5a2808', 0.55);
+  ctx.restore();
+}
+
+function drawExploreDebrisPile(ctx, x, groundY) {
+  // Rubble, broken concrete, trash scatter
+  ctx.save();
+  ctx.globalAlpha = 0.75;
+  const pieces = [
+    { ox: -10, h: 7, w: 14, col: '#201c14' },
+    { ox:  2,  h: 5, w: 10, col: '#181410' },
+    { ox:  8,  h: 8, w: 12, col: '#1c1810' },
+    { ox: -4,  h: 4, w:  8, col: '#242018' },
+  ];
+  for (const p of pieces) {
+    fillRect(ctx, x + p.ox - p.w/2, groundY - p.h, p.w, p.h, p.col);
+    strokeRect(ctx, x + p.ox - p.w/2, groundY - p.h, p.w, p.h, '#302c20');
+  }
+  ctx.restore();
+}
+
+function drawExploreCabin(ctx, bx, by, bw, bh, label) {
+  // Log cabin exterior — darker, more rustic look with wood texture hints
+  // Foundation / base
+  fillRect(ctx, bx - 4, by + bh - 6, bw + 8, 10, '#1e1208');
+  // Walls — log cabin warm brown
+  fillRect(ctx, bx, by + 10, bw, bh - 10, '#2a1808');
+  fillRect(ctx, bx, by + 10, bw, bh - 10, '#261406', 0.5);
+  // Horizontal log lines
+  for (let ly = by + 14; ly < by + bh; ly += 8) {
+    fillRect(ctx, bx, ly, bw, 1, '#1a1006', 0.6);
+    fillRect(ctx, bx, ly + 1, bw, 1, '#3a2010', 0.3);
+  }
+  // Gabled roof
+  ctx.save();
+  ctx.fillStyle = '#181008';
+  ctx.beginPath();
+  ctx.moveTo(bx - 8, by + 10);
+  ctx.lineTo(bx + bw / 2, by - 18);
+  ctx.lineTo(bx + bw + 8, by + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#2a1a0c'; ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  // Roof shingles
+  for (let rl = 0; rl < 5; rl++) {
+    const rfrac = rl / 5;
+    const rx = bx - 8 + rfrac * (bw / 2 + 8);
+    const ry = by + 10 - rfrac * 28;
+    const rw = (bw + 16) * (1 - rfrac);
+    fillRect(ctx, rx, ry, rw, 1, '#3a2810', 0.4);
+  }
+  // Chimney
+  fillRect(ctx, bx + bw * 0.7, by - 26, 14, 22, '#2a1a10');
+  strokeRect(ctx, bx + bw * 0.7, by - 26, 14, 22, '#3a2416');
+  // Windows with warm glow
+  const ww = 18, wh = 14;
+  fillRect(ctx, bx + 14, by + 18, ww, wh, '#0a0c06');
+  fillRect(ctx, bx + 14, by + 18, ww, wh, '#302810', 0.3); // faint warm light
+  strokeRect(ctx, bx + 14, by + 18, ww, wh, '#3a2418');
+  if (bw > 80) {
+    fillRect(ctx, bx + bw - 32, by + 18, ww, wh, '#0a0c06');
+    strokeRect(ctx, bx + bw - 32, by + 18, ww, wh, '#3a2418');
+  }
+  // Door
+  const doorX = bx + Math.floor(bw / 2) - 8;
+  fillRect(ctx, doorX, by + bh - 26, 16, 26, '#0a0806');
+  strokeRect(ctx, doorX, by + bh - 26, 16, 26, '#2a1810');
+  fillRect(ctx, doorX + 11, by + bh - 16, 3, 3, '#4a3010', 0.7); // door handle
+  if (label) drawText(ctx, label, bx + bw / 2, by - 22, '#a08060', 7, 'center');
 }
 
 function drawExploreContainer(ctx, wx, groundY, type, highlighted) {
@@ -1400,6 +1632,52 @@ function drawExploreInventory(ctx, gs, es) {
   gs._exploreInvClose = { x: closeX, y: closeY, w: 50, h: 16 };
 }
 
+// ── Grain filter ─────────────────────────────────────────────────────────────
+
+function drawGrainFilter(ctx) {
+  ctx.save();
+  ctx.globalAlpha = 0.045;
+  for (let i = 0; i < 700; i++) {
+    const gx = (Math.random() * CFG.W) | 0;
+    const gy = (Math.random() * CFG.H) | 0;
+    ctx.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#000000';
+    ctx.fillRect(gx, gy, 1, 1);
+  }
+  ctx.restore();
+}
+
+// ── Zone title card (fade in 2s → linger 2s → fade out 2s) ──────────────────
+
+function drawZoneTitleCard(ctx, es) {
+  const tc = es._zoneTitleCard;
+  if (!tc) return;
+
+  tc.timer++;
+  // At 60fps: 120 frames = 2s
+  let alpha;
+  if      (tc.timer < 120)  alpha = tc.timer / 120;              // fade in
+  else if (tc.timer < 240)  alpha = 1;                           // linger
+  else if (tc.timer < 360)  alpha = 1 - (tc.timer - 240) / 120; // fade out
+  else { es._zoneTitleCard = null; return; }
+
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.92;
+
+  // Background strip
+  const tw = ctx.measureText ? 200 : 200;
+  fillRect(ctx, 0, CFG.H / 2 - 44, CFG.W, 30, '#000000', 0.55);
+
+  // Location name in smaller text above zone name
+  if (es.location) {
+    ctx.globalAlpha = alpha * 0.5;
+    drawText(ctx, es.location.name.toUpperCase(), CFG.W / 2, CFG.H / 2 - 36, '#a09878', 7, 'center', false);
+  }
+  ctx.globalAlpha = alpha * 0.92;
+  drawText(ctx, tc.text.toUpperCase(), CFG.W / 2, CFG.H / 2 - 22, '#d4c89a', 12, 'center', true);
+
+  ctx.restore();
+}
+
 // ── Weather overlay in explore ────────────────────────────────────────────────
 
 function drawExploreWeather(ctx, gs) {
@@ -1453,7 +1731,7 @@ function handleMapPickup(mapId, gs) {
     notify('NEW AREAS UNLOCKED: Suburbs + Pharmacy!', 'good');
   } else if (mapId === 'area_map_2') {
     if (!gs.unlockedLocations) gs.unlockedLocations = ['forest', 'church'];
-    ['mall', 'hospital', 'factory', 'police', 'bunker', 'rooftop'].forEach(id => {
+    ['mall', 'hospital', 'factory', 'police', 'bunker', 'rooftop', 'village'].forEach(id => {
       if (!gs.unlockedLocations.includes(id)) gs.unlockedLocations.push(id);
     });
     addLog('Found a detailed map — all remaining areas are now accessible!', 'good');
@@ -1467,20 +1745,24 @@ function endExploration(gs) {
   const es = exploreState;
   if (!es) return;
 
-  // Save location state for persistence
-  gs.locationStates[es.location.id] = {
-    containers: es.containers.map(c => ({ searched: c.searched })),
-    loot:       es.loot.map(l => ({ taken: l.taken })),
-    encounters: es.encounters.map(e => ({ triggered: e.triggered, killed: e.killed })),
-    buildings:  es.buildings.map(b => ({
-      floors: b.floors.map(f => ({
-        containers: f.containers.map(c => ({ searched: c.searched })),
+  // Save location state for persistence (random areas never persist)
+  const _RANDOM_AREAS = ['forest', 'factory', 'village'];
+  if (!_RANDOM_AREAS.includes(es.location.id)) {
+    gs.locationStates[es.location.id] = {
+      containers: es.containers.map(c => ({ searched: c.searched })),
+      loot:       es.loot.map(l => ({ taken: l.taken })),
+      encounters: es.encounters.map(e => ({ triggered: e.triggered, killed: e.killed })),
+      buildings:  es.buildings.map(b => ({
+        floors: b.floors.map(f => ({
+          containers: f.containers.map(c => ({ searched: c.searched })),
+        })),
       })),
-    })),
-  };
+    };
+  }
 
   gs.parent.isExploring = false;
   gs.child.isAlone      = false;
+  Audio.stopMusic();
   // Return companion
   if (gs.exploreCompanionId) {
     const comp = (gs.survivors || []).find(s => s.id === gs.exploreCompanionId);

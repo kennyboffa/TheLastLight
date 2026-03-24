@@ -7,10 +7,11 @@ const LOCATIONS_DB = [
   {
     id: 'forest',
     name: 'Outer Forest',
-    desc: 'Dense woodland beyond the city. The AI rarely patrols here. Good for hunting, foraging, and finding abandoned structures.',
+    desc: 'Dense woodland beyond the city. The AI rarely patrols here. Good for hunting, foraging, and finding abandoned structures. The forest is vast — new paths and resources emerge on every visit.',
     difficulty: 1,
     bgTheme: 'forest',
     canHunt: true,
+    randomLayout: true,
     ambientDesc: 'Birdsong. The smell of damp earth. Almost peaceful.',
     zones: [
       { id:'edge',    name:'Forest Edge',  x:0,    w:550, bgColor:'#090e07', lootTable:'nature_light', enemyChance:8,  huntChance:15 },
@@ -27,11 +28,39 @@ const LOCATIONS_DB = [
     ],
   },
   {
+    id: 'village',
+    name: 'Abandoned Village',
+    desc: 'A cluster of old houses and shops on the edge of the region. Ransacked long ago, but hidden caches still surface. Hostile scavengers have claimed parts of it. Layouts shift as new survivors move through — each visit reveals something different.',
+    difficulty: 3,
+    bgTheme: 'suburb',
+    randomLayout: true,
+    ambientDesc: 'Broken fences. A dog barking somewhere distant. A curtain moving in a window with no one behind it.',
+    zones: [
+      { id:'gate',    name:'Village Gate',   x:0,    w:450, bgColor:'#0d0c09', lootTable:'home_light',   enemyChance:18 },
+      { id:'square',  name:'Town Square',    x:450,  w:600, bgColor:'#0c0b08', lootTable:'mixed_medium', enemyChance:28,
+        buildings:[
+          { relX:150, label:'Old Shop',      numFloors:2, theme:'house',  lootQuality:'home',   enemyChance:25 },
+          { relX:380, label:'Village Hall',  numFloors:2, theme:'office', lootQuality:'medium', enemyChance:30 },
+        ]},
+      { id:'homes',   name:'Residential Row',x:1050, w:650, bgColor:'#0b0a07', lootTable:'home_medium',  enemyChance:32,
+        buildings:[
+          { relX:120, label:'House A',       numFloors:2, theme:'house',  lootQuality:'home',   enemyChance:22 },
+          { relX:400, label:'House B',       numFloors:2, theme:'house',  lootQuality:'home',   enemyChance:22 },
+        ]},
+      { id:'church2', name:'Village Church', x:1700, w:450, bgColor:'#0c0b09', lootTable:'church_main',  enemyChance:20,
+        buildings:[
+          { relX:160, label:'Church',        numFloors:1, theme:'house',  lootQuality:'home',   enemyChance:15 },
+        ]},
+      { id:'outskirts',name:'Outskirts',     x:2150, w:550, bgColor:'#0a0c08', lootTable:'nature_light', enemyChance:25, huntChance:20 },
+    ],
+  },
+  {
     id: 'factory',
     name: 'Industrial Complex',
-    desc: 'Heavy materials and salvageable machinery. The AI uses this plant for manufacturing — patrols are frequent and dangerous.',
+    desc: 'Heavy materials and salvageable machinery. The AI uses this plant for manufacturing — patrols are frequent and dangerous. The layout shifts between visits as the AI reconfigures the facility.',
     difficulty: 3,
     bgTheme: 'industrial',
+    randomLayout: true,
     ambientDesc: 'The hiss of automated systems. Metal on metal. The AI is active here.',
     zones: [
       { id:'yard',    name:'Outer Yard',    x:0,    w:500, bgColor:'#0c0d0f', lootTable:'materials',    enemyChance:25 },
@@ -251,6 +280,7 @@ const LOOT_TABLES = {
   police_main:     [['cloth',1,1],['metal',1,2],['pistol_ammo',3,7],['bandage',0,1]],
   police_rare:     [['pistol_ammo',6,11],['rifle_ammo',3,6],['medkit',0,1],['shotgun_ammo',1,4],['pistol',0,1]],
   church_main:     [['cloth',1,3],['book',1,1],['canned_beans',0,2],['bandage',1,2],['matches',1,1]],
+  village_market:  [['cloth',1,3],['canned_beans',1,2],['matches',1,1],['rope',0,1],['energy_bar',0,1]],
   bunker_main:     [['electronics',1,3],['metal',1,2],['fuel',1,1],['batteries',1,3]],
   bunker_rare:     [['medkit',1,1],['antibiotics',1,1],['pistol_ammo',6,11],['rifle_ammo',3,6],['electronics',1,3]],
   rooftop_main:    [['canned_fruit',1,2],['mushroom',1,3],['dirty_water',1,2],['rope',0,1],['dried_berries',0,2]],

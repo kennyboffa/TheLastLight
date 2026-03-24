@@ -164,8 +164,15 @@ function tickStats(gs, dt) {
   const suspRise = 0.15 * diffSuspMult(gs) * hrs;
   const suspReduce = gs.shelter.hasRadioDampener ? 0.12 * hrs : 0;
   const roomBonus  = getRoomUnlocked('security') ? 0.08 * hrs : 0;
+  const prevSusp = gs.suspicion;
   gs.suspicion = clamp(gs.suspicion + suspRise - suspReduce - roomBonus, 0, CFG.SUSPICION_MAX);
   if (gs.shelter.hasGenerator) gs.suspicion = clamp(gs.suspicion + 0.2 * hrs, 0, CFG.SUSPICION_MAX);
+
+  // Story: suspicion crosses 50 for the first time
+  if (!gs.flags.storySuspicion && prevSusp < CFG.SUSPICION_MAX * 0.5 && gs.suspicion >= CFG.SUSPICION_MAX * 0.5) {
+    gs.flags.storySuspicion = true;
+    gs.storyQueue.push('story_suspicion');
+  }
 
   // ── Autonomous character AI ────────────────────────────────────────────────
   tickCharacterAI(gs);
@@ -296,6 +303,11 @@ function completeBuildTask(gs, task) {
       if (def && def.effect === 'moreStorage') notify('Storage room built. +40kg capacity.', 'good');
       else notify(`${def ? def.name : 'Room'} constructed.`, 'good');
       gs.suspicion = clamp(gs.suspicion + (def ? def.buildNoise * 0.3 : 5), 0, CFG.SUSPICION_MAX);
+      // Story: first new room completed
+      if (!gs.flags.storyFirstRoom) {
+        gs.flags.storyFirstRoom = true;
+        gs.storyQueue.push('story_first_room');
+      }
     }
   } else if (task.upgradeId) {
     const upg = UPGRADES_DB[task.upgradeId];
@@ -395,6 +407,29 @@ function advanceDay(gs) {
     gs.time             = CFG.DAY_START + randInt(120, 300); // returns 8–11 AM
     gs.child.depression = clamp(gs.child.depression + 10, 0, 100);
     addLog(`${gs.parent.name} returned wounded and exhausted after a night outside.`, 'danger');
+    // Story: the morning after not coming home
+    if (!gs.flags.storyLateReturn) {
+      gs.flags.storyLateReturn = true;
+      gs.storyQueue.push('story_late_return');
+    }
+  }
+
+  // Opening story fires on the very first day
+  if (gs.day === 1 && !gs.flags.storyOpening) {
+    gs.flags.storyOpening = true;
+    gs.storyQueue.push('story_opening');
+  }
+
+  // Week-one milestone
+  if (gs.day === 7 && !gs.flags.storyWeekOne) {
+    gs.flags.storyWeekOne = true;
+    gs.storyQueue.push('story_week_one');
+  }
+
+  // Lily wonders about other children — triggers on day 6 if not yet seen
+  if (gs.day >= 6 && !gs.flags.storyChildren) {
+    gs.flags.storyChildren = true;
+    gs.storyQueue.push('story_children');
   }
 
   // Dog availability

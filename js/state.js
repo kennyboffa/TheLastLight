@@ -122,11 +122,23 @@ const GS = {
 
   // ── Flags ─────────────────────────────────────────────────────────────────
   flags: {
-    dogEncountered: false,
-    dogRescued:     false,
-    firstExplore:   false,
-    traderMet:      false,
+    dogEncountered:  false,
+    dogRescued:      false,
+    firstExplore:    false,
+    traderMet:       false,
+    // Story flags — each fires exactly once
+    storyOpening:    false,  // day 1 opening
+    storyFirstOut:   false,  // first time parent leaves to explore
+    storyFirstRoom:  false,  // first new room built
+    storyWounded:    false,  // returned wounded from exploration
+    storyLateReturn: false,  // didn't come home before night
+    storySuspicion:  false,  // suspicion crossed 50%
+    storyChildren:   false,  // Lily wonders about other children
+    storyWeekOne:    false,  // survived 7 days
   },
+
+  // ── Pending story queue (IDs from STORY_DB, fire next shelter opportunity) ──
+  storyQueue: [],
 
   // ── Location unlock system ────────────────────────────────────────────────
   unlockedLocations: ['forest', 'church'],

@@ -24,25 +24,36 @@ function renderEvent(ctx, gs) {
   ctx.globalAlpha = 1;
 
   const isDialogue = ev.type === 'dialogue';
-  const panW = CFG.W - 100;
-  const panX = 50;
-  const panY = 25;
-  const panH = CFG.H - 50;
+  const isStory    = ev.type === 'story';
+  const panW = CFG.W - 80;
+  const panX = 40;
+  const panY = isStory ? 18 : 25;
+  const panH = CFG.H - (isStory ? 36 : 50);
 
-  // Slightly warmer tint for dialogue events
-  drawPanel(ctx, panX, panY, panW, panH, isDialogue ? '#0d0d0e' : C.panelBg, isDialogue ? '#3a2a1a' : C.border2);
+  // Story: deep warm sepia; Dialogue: warm amber; Event: cold blue-grey
+  const panBg  = isStory ? '#0b0906' : isDialogue ? '#0d0d0e' : C.panelBg;
+  const panBdr = isStory ? '#4a3218' : isDialogue ? '#3a2a1a' : C.border2;
+  drawPanel(ctx, panX, panY, panW, panH, panBg, panBdr);
 
   // Title bar
-  const titleBg = isDialogue ? '#0e0a08' : '#0a0a18';
-  const titleColor = isDialogue ? '#c4a070' : C.textBright;
-  fillRect(ctx, panX, panY, panW, 20, titleBg);
-  drawText(ctx, ev.title, panX + panW / 2, panY + 14, titleColor, 11, 'center', true);
-  drawDivider(ctx, panX + 4, panY + 20, panW - 8, isDialogue ? '#3a2a1a' : C.border2);
+  const titleBg    = isStory ? '#110c06' : isDialogue ? '#0e0a08' : '#0a0a18';
+  const titleColor = isStory ? '#d4a860' : isDialogue ? '#c4a070' : C.textBright;
+  fillRect(ctx, panX, panY, panW, 22, titleBg);
+  drawText(ctx, ev.title.toUpperCase(), panX + panW / 2, panY + 15, titleColor, isStory ? 10 : 11, 'center', true);
+  if (isStory) {
+    // Decorative dividers for story panels
+    drawDivider(ctx, panX + 4, panY + 22, panW - 8, '#4a3218');
+    drawText(ctx, '— — —', panX + panW / 2, panY + 32, '#5a3e1a', 8, 'center');
+    drawDivider(ctx, panX + 4, panY + 36, panW - 8, '#4a3218');
+  } else {
+    drawDivider(ctx, panX + 4, panY + 22, panW - 8, isDialogue ? '#3a2a1a' : C.border2);
+  }
 
   // Event body text
-  let textY = panY + 36;
-  const textColor = isDialogue ? '#c8b898' : C.text;
-  textY = drawWrapped(ctx, ev.text, panX + 14, textY, panW - 28, 9, textColor, 14);
+  let textY = isStory ? panY + 50 : panY + 36;
+  const textColor = isStory ? '#d0bfa0' : isDialogue ? '#c8b898' : C.text;
+  const lineH     = isStory ? 16 : 14;
+  textY = drawWrapped(ctx, ev.text, panX + 18, textY, panW - 36, isStory ? 9 : 9, textColor, lineH);
 
   textY += 10;
   drawDivider(ctx, panX + 4, textY, panW - 8, C.border);
@@ -50,8 +61,8 @@ function renderEvent(ctx, gs) {
 
   const mx = gs.mouse.x, my = gs.mouse.y;
 
-  if (isDialogue) {
-    // Dialogue events: just a Continue button, no choices
+  if (isDialogue || isStory) {
+    // Dialogue / story events: just a Continue button, no choices
     const btnX = panX + (panW / 2) - 50;
     const hov = hitTest(mx, my, btnX, textY, 100, 22);
     drawButton(ctx, btnX, textY, 100, 22, 'Continue', hov);
@@ -92,8 +103,9 @@ function eventClick(mx, my, gs) {
   if (eventUI.openLockFrames > 0) return;
 
   const isDialogue = gs.event.type === 'dialogue';
+  const isStory    = gs.event.type === 'story';
 
-  if (isDialogue || eventUI.resultText) {
+  if (isDialogue || isStory || eventUI.resultText) {
     closeEvent(gs);
     return;
   }
@@ -153,8 +165,27 @@ function maybeFireShelterEvent(gs) {
 let _dialogueCooldown = 0;
 
 function maybeFireDialogueEvent(gs) {
-  if (_dialogueCooldown > 0) { _dialogueCooldown--; return; }
   if (gs.screen !== 'shelter') return;
+
+  // Priority: queued story events fire within a short delay, bypassing random roll
+  if (gs.storyQueue && gs.storyQueue.length > 0) {
+    // Cap cooldown so stories aren't blocked for too long after other events
+    if (_dialogueCooldown > 60 * 8) _dialogueCooldown = 60 * 8;
+    if (_dialogueCooldown > 0) { _dialogueCooldown--; return; }
+    const storyId = gs.storyQueue.shift();
+    const ev = (typeof STORY_DB !== 'undefined') && STORY_DB.find(s => s.id === storyId);
+    if (ev) {
+      gs.event     = { ...ev };
+      gs.screen    = 'event';
+      gs._returnTo = 'shelter';
+      eventUI.openLockFrames = 4;
+      _dialogueCooldown = 60 * 40;
+      Audio.dialogue();
+      return;
+    }
+  }
+
+  if (_dialogueCooldown > 0) { _dialogueCooldown--; return; }
   if (!chance(0.08)) return;
 
   const ev = pickDialogue(gs);
@@ -164,6 +195,6 @@ function maybeFireDialogueEvent(gs) {
   gs.screen    = 'event';
   gs._returnTo = 'shelter';
   eventUI.openLockFrames = 3;
-  _dialogueCooldown = 60 * 70; // ~70 second cooldown — less frequent than events
+  _dialogueCooldown = 60 * 70;
   Audio.dialogue();
 }

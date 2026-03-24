@@ -717,6 +717,15 @@ function exploreClick(mx, my, gs) {
         const def = getItemDef(slot.id);
         if (!def) { es.invSelected = null; return; }
 
+        if (btn.action === 'read') {
+          gs._returnTo = 'explore';
+          gs.event = { id: slot.id, type: 'note', title: def.name, text: def.noteText || '...', choices: [] };
+          gs.screen = 'event';
+          es.invOpen = false;
+          es.invSelected = null;
+          return;
+        }
+
         if (btn.action === 'use') {
           const used = useItem(gs.parent, gs.parent.inventory, slot.id, gs);
           if (used) {
@@ -855,7 +864,8 @@ function renderExplore(ctx, gs) {
   drawZoneTitleCard(ctx, es);
   drawExploreHUD(ctx, gs, es);
   if (es.invOpen) drawExploreInventory(ctx, gs, es);
-  drawNotifications(ctx, gs);
+  // Notifications centered between left HUD panels and right clock to avoid overlap
+  drawNotifications(ctx, gs, CFG.W / 2, 14, true);
   drawDayTransition(ctx, gs);
 }
 
@@ -1638,6 +1648,13 @@ function drawExploreInventory(ctx, gs, es) {
     const bh = 14;
     const isEquippable = def => def.type === 'weapon' || def.type === 'backpack' || def.type === 'armor';
     const isConsumable = def => def.type === 'food' || def.type === 'drink' || def.type === 'medicine' || def.type === 'water';
+    if (selDef.type === 'note') {
+      const bw = 36;
+      const hov = hitTest(mx, my, bx, by, bw, bh);
+      drawButton(ctx, bx, by, bw, bh, 'Read', hov);
+      gs._exploreInvActionBtns.push({ action: 'read', x: bx, y: by, w: bw, h: bh });
+      bx += bw + 5;
+    }
     if (isConsumable(selDef)) {
       const bw = 36;
       const hov = hitTest(mx, my, bx, by, bw, bh);

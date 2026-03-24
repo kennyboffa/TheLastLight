@@ -194,11 +194,11 @@ canvas.addEventListener('wheel', (e) => {
   } else if (GS.screen === 'shelter') {
     if (shelterUI) {
       if (shelterUI.activeMenu === 'journal') {
-        if (shelterUI.journalTab === 'help') {
-          shelterUI.helpScroll = Math.max(0, (shelterUI.helpScroll || 0) + delta * scrollAmt);
-        } else {
-          shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
-        }
+        const jt = shelterUI.journalTab;
+        if      (jt === 'help')  shelterUI.helpScroll  = Math.max(0, (shelterUI.helpScroll  || 0) + delta * scrollAmt);
+        else if (jt === 'diary') shelterUI.diaryScroll = Math.max(0, (shelterUI.diaryScroll || 0) + delta * scrollAmt);
+        else if (jt === 'other') shelterUI.otherScroll = Math.max(0, (shelterUI.otherScroll || 0) + delta * scrollAmt);
+        else                     shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
       } else if (shelterUI.activeMenu === 'storage') {
         shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) + delta * scrollAmt);
       } else if (shelterUI.activeMenu === 'crafting') {

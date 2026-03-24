@@ -24,7 +24,7 @@ function renderEvent(ctx, gs) {
   ctx.globalAlpha = 1;
 
   const isDialogue = ev.type === 'dialogue';
-  const isStory    = ev.type === 'story';
+  const isStory    = ev.type === 'story' || ev.type === 'note';
   const panW = CFG.W - 80;
   const panX = 40;
   const panY = isStory ? 18 : 25;
@@ -103,7 +103,7 @@ function eventClick(mx, my, gs) {
   if (eventUI.openLockFrames > 0) return;
 
   const isDialogue = gs.event.type === 'dialogue';
-  const isStory    = gs.event.type === 'story';
+  const isStory    = gs.event.type === 'story' || gs.event.type === 'note';
 
   if (isDialogue || isStory || eventUI.resultText) {
     closeEvent(gs);
@@ -128,6 +128,19 @@ function eventClick(mx, my, gs) {
 }
 
 function closeEvent(gs) {
+  // Archive to journal
+  if (gs.event) {
+    if (gs.event.type === 'story' && gs.event.id) {
+      if (!gs.seenStories) gs.seenStories = [];
+      if (!gs.seenStories.includes(gs.event.id)) gs.seenStories.push(gs.event.id);
+    }
+    if (gs.event.type === 'note' && gs.event.id) {
+      if (!gs.readNotes) gs.readNotes = [];
+      if (!gs.readNotes.some(n => n.id === gs.event.id)) {
+        gs.readNotes.push({ id: gs.event.id, title: gs.event.title, text: gs.event.text });
+      }
+    }
+  }
   gs.event = null;
   eventUI.resultText  = null;
   eventUI.resultTimer = 0;

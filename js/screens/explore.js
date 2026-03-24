@@ -1800,7 +1800,7 @@ function endExploration(gs) {
   }
   gs.suspicion = clamp(gs.suspicion + randInt(2, 5), 0, CFG.SUSPICION_MAX);
   addLog(`Returned from ${es.location?.name || 'exploration'}.`, 'info');
-  gs.screenFade = { active: true, alpha: 0, phase: 'out', pendingFn: () => {
+  gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: 'Bunker', pendingFn: () => {
     exploreState = null;
     gs.keys      = {};
     gs.screen    = 'shelter';

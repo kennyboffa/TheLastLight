@@ -329,8 +329,13 @@ function update(dt) {
       sf.alpha = Math.min(1, sf.alpha + 0.04);
       if (sf.alpha >= 1) {
         if (sf.pendingFn) { sf.pendingFn(); sf.pendingFn = null; }
-        sf.phase = 'in';
+        // Hold on the title card if one is shown; otherwise go straight to fade-in
+        sf.phase    = sf.titleText ? 'hold' : 'in';
+        sf.holdTimer = sf.titleText ? 210 : 0; // ~3.5s at 60fps
       }
+    } else if (sf.phase === 'hold') {
+      sf.holdTimer = (sf.holdTimer || 0) - 1;
+      if (sf.holdTimer <= 0) sf.phase = 'in';
     } else if (sf.phase === 'in') {
       sf.alpha = Math.max(0, sf.alpha - 0.025);
       if (sf.alpha <= 0) { sf.active = false; sf.phase = 'idle'; }

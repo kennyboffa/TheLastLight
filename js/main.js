@@ -64,20 +64,25 @@ canvas.addEventListener('mousemove', (e) => {
   GS.mouse.y = y;
 });
 
+let _mouseDownX = 0, _mouseDownY = 0;
+
 canvas.addEventListener('mousedown', (e) => {
   const { x, y } = canvasCoords(e);
   GS.mouse.down   = true;
   GS.mouse.clickX = x;
   GS.mouse.clickY = y;
+  _mouseDownX = x; _mouseDownY = y;
 });
 
 canvas.addEventListener('mouseup', (e) => {
   Audio.init();   // initialise audio context on first user gesture
   const { x, y } = canvasCoords(e);
-  GS.mouse.down    = false;
-  GS.mouse.clicked = true;
-  GS.mouse.clickX  = x;
-  GS.mouse.clickY  = y;
+  GS.mouse.down   = false;
+  GS.mouse.clickX = x;
+  GS.mouse.clickY = y;
+  // Suppress click if mouse was dragged (scrolling menus)
+  const dragDist = Math.abs(x - _mouseDownX) + Math.abs(y - _mouseDownY);
+  if (dragDist <= 6) GS.mouse.clicked = true;
 });
 
 // ── Touch support (mobile) ────────────────────────────────────────────────────
@@ -93,11 +98,15 @@ function _isMobileBtn(x, y) {
       || hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h);
 }
 
+let _touchStartX = 0, _touchStartY = 0;
+
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   const firstT = e.changedTouches[0];
-  _touchLastY = (firstT.clientY - rect.top) / SCALE;
+  _touchLastY  = (firstT.clientY - rect.top)  / SCALE;
+  _touchStartX = (firstT.clientX - rect.left) / SCALE;
+  _touchStartY = _touchLastY;
   // Handle all active touches (multi-touch for e.g. left + action simultaneously)
   for (const t of e.changedTouches) {
     const x = (t.clientX - rect.left) / SCALE;
@@ -115,7 +124,6 @@ canvas.addEventListener('touchstart', (e) => {
   }
 }, { passive: false });
 
-let _touchStartY = 0;
 let _touchLastY  = 0;
 
 canvas.addEventListener('touchmove', (e) => {
@@ -163,10 +171,15 @@ canvas.addEventListener('touchend', (e) => {
       if (hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h)) { _mobileHeld.action = false; continue; }
     }
   }
-  // Only fire click if no mobile button is still held
+  // Only fire click if no mobile button is still held and touch didn't drag
   if (!_mobileHeld.left && !_mobileHeld.right && !_mobileHeld.action) {
-    GS.mouse.down    = false;
-    GS.mouse.clicked = true;
+    const t0 = e.changedTouches[0];
+    const rect2 = canvas.getBoundingClientRect();
+    const ex = (t0.clientX - rect2.left) / SCALE;
+    const ey2 = (t0.clientY - rect2.top)  / SCALE;
+    const touchDrag = Math.abs(ex - _touchStartX) + Math.abs(ey2 - _touchStartY);
+    GS.mouse.down = false;
+    if (touchDrag <= 8) GS.mouse.clicked = true;
   }
 }, { passive: false });
 
@@ -328,8 +341,10 @@ function update(dt) {
   if (gs.dayFade.active) return;
 
   // Stats tick (only in shelter/explore — not during events or combat transitions)
+  // timeScale only applies in shelter (not during exploration)
   if (!gs.paused && (gs.screen === 'shelter' || gs.screen === 'explore')) {
-    tickStats(gs, dt);
+    const scaledDt = (gs.screen === 'shelter') ? dt * (gs.timeScale || 1) : dt;
+    tickStats(gs, scaledDt);
     tickMissions(gs);
   }
 
@@ -640,6 +655,7 @@ function resetGame() {
     dayFade:{active:false,alpha:0,phase:'out',timer:0},
     weather:{ type:'clear', timer:0, nextChange:240, rainAccum:0 },
     zoom:1.0,
+    timeScale: 1,
     mouse:{x:0,y:0,down:false,clicked:false,clickX:0,clickY:0},
     keys:{},
     gameOverReason: '',

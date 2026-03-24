@@ -308,8 +308,9 @@ function startExploration(gs, loc) {
     }
   }
 
-  gs.parent.isExploring = true;
-  gs.child.isAlone      = true;
+  gs.parent.isExploring    = true;
+  gs.parent.hasExploredToday = true; // one run per day
+  gs.child.isAlone         = true;
   gs.timeScale = 1; // always reset speed on exploration start
   Audio.resume();
   Audio.startMusic();
@@ -340,10 +341,15 @@ function startExploration(gs, loc) {
   if (!gs.flags.firstExplore) {
     gs.flags.firstExplore = true;
     notify('A/D to move. [E] to interact. Enter buildings for better loot.', 'info');
-    // Story: queued for when parent returns — first time leaving Lily
+    // Opening story: show on return from first ever exploration
+    if (!gs.flags.storyOpening) {
+      gs.flags.storyOpening = true;
+      gs._pendingStoryOpening = true;
+    }
+    // Reflection on leaving Lily: also fires on return
     if (!gs.flags.storyFirstOut) {
       gs.flags.storyFirstOut = true;
-      gs._pendingStoryFirstOut = true; // fire on return, not on departure
+      gs._pendingStoryFirstOut = true;
     }
   }
 }
@@ -1631,7 +1637,7 @@ function drawExploreInventory(ctx, gs, es) {
     const by = ay + 16;
     const bh = 14;
     const isEquippable = def => def.type === 'weapon' || def.type === 'backpack' || def.type === 'armor';
-    const isConsumable = def => def.type === 'food' || def.type === 'drink' || def.type === 'medicine';
+    const isConsumable = def => def.type === 'food' || def.type === 'drink' || def.type === 'medicine' || def.type === 'water';
     if (isConsumable(selDef)) {
       const bw = 36;
       const hov = hitTest(mx, my, bx, by, bw, bh);
@@ -1806,7 +1812,11 @@ function endExploration(gs) {
   gs.suspicion = clamp(gs.suspicion + randInt(2, 5), 0, CFG.SUSPICION_MAX);
   addLog(`Returned from ${es.location?.name || 'exploration'}.`, 'info');
 
-  // Story: first return from exploration (reflection on leaving Lily)
+  // Stories queued on first-ever return
+  if (gs._pendingStoryOpening) {
+    gs._pendingStoryOpening = false;
+    gs.storyQueue.push('story_opening');
+  }
   if (gs._pendingStoryFirstOut) {
     gs._pendingStoryFirstOut = false;
     gs.storyQueue.push('story_first_out');

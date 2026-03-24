@@ -24,6 +24,7 @@ let shelterUI = {
   selectedRoom: null,
   contextItem: null,
   storageScroll: 0,
+  storageSelected: null,  // index into gs.shelter.storage of selected item
   craftingScroll: 0,
   menuX: 0, menuY: 0,
   tooltip: null,
@@ -576,6 +577,7 @@ function handleCharTask(taskId, gs) {
     case 'explore':
       if (sel === 'parent') {
         if (gs.parent.task || gs.parent.isSleeping) { notify('Finish current task first.', 'warn'); break; }
+        if (gs.parent.hasExploredToday) { notify('Already explored today. Rest — go again tomorrow.', 'warn'); break; }
         shelterUI.activeMenu   = null;
         shelterUI.selectedChar = null;
         gs.screen = 'exploreSelect';
@@ -651,7 +653,7 @@ function drawShelterControls(ctx, gs, mx, my) {
   let bx = 6;
   for (const btn of CTRL_BUTTONS) {
     const disabled = (btn.needsCampfire && !gs.shelter.campfire)
-                  || (btn.id === 'explore' && (gs.parent.isExploring || !!gs.parent.task || gs.parent.isSleeping))
+                  || (btn.id === 'explore' && (gs.parent.isExploring || !!gs.parent.task || gs.parent.isSleeping || gs.parent.hasExploredToday))
                   || (btn.id === 'sleep'   && gs.parent.isSleeping);
     const active = (btn.id === 'craft'   && shelterUI.activeMenu === 'crafting')
                 || (btn.id === 'storage' && shelterUI.activeMenu === 'storage')
@@ -863,21 +865,60 @@ function drawCraftingMenu(ctx, gs, mx, my) {
 }
 
 function drawStorageMenu(ctx, gs, mx, my) {
-  const W2 = 280, H2 = 240;
-  const px = 60, py = 40;
+  const W2 = 280, H2 = 270;
+  const px = 60, py = 22;
 
   const storage = gs.shelter.storage;
   const wt = shelterStorageWeight().toFixed(1);
-  const title = `STORAGE  ${wt}/${gs.shelter.storageMax}kg`;
-  drawModal(ctx, px, py, W2, H2, title);
+  drawModal(ctx, px, py, W2, H2, `STORAGE  ${wt}/${gs.shelter.storageMax}kg`);
 
-  const clicks = drawInventoryList(ctx, storage, px + 2, py + 17, W2 - 4, H2 - 40, null,
-    shelterUI.storageScroll, mx, my);
+  const listH = H2 - 68;
+  const sel   = shelterUI.storageSelected ?? null;
+  const rows  = drawInventoryList(ctx, storage, px + 2, py + 17, W2 - 4, listH, null,
+    shelterUI.storageScroll, mx, my, sel);
+  shelterUI._storageRows = rows;
 
-  shelterUI._storageClicks = clicks;
+  // ── Action row — shown when a consumable is selected ──────────────────────
+  const ay = py + listH + 19;
+  if (sel !== null && storage[sel]) {
+    const slotDef = getItemDef(storage[sel].id);
+    const isConsumable = slotDef && (
+      slotDef.type === 'food' || slotDef.type === 'water' ||
+      slotDef.type === 'drink' || slotDef.type === 'medicine');
+    if (isConsumable) {
+      drawText(ctx, `Give ${slotDef.name} to:`, px + 10, ay + 2, C.textDim, 7);
+      let bx = px + 8;
+      const bh = 16, bw = 66;
+      // Parent
+      drawButton(ctx, bx, ay + 8, bw, bh, gs.parent.name,
+        hitTest(mx, my, bx, ay + 8, bw, bh));
+      shelterUI._stGiveParent = { x: bx, y: ay + 8, w: bw, h: bh };
+      bx += bw + 4;
+      // Lily
+      drawButton(ctx, bx, ay + 8, bw, bh, gs.child.name,
+        hitTest(mx, my, bx, ay + 8, bw, bh));
+      shelterUI._stGiveLily = { x: bx, y: ay + 8, w: bw, h: bh };
+      bx += bw + 4;
+      // Survivors in bunker
+      const inBunker = (gs.survivors || []).filter(s => !s.onMission && !s.isExploring);
+      for (const s of inBunker.slice(0, 1)) { // max 1 extra to fit panel
+        drawButton(ctx, bx, ay + 8, bw, bh, s.name,
+          hitTest(mx, my, bx, ay + 8, bw, bh));
+        shelterUI._stGiveSurv = { x: bx, y: ay + 8, w: bw, h: bh, id: s.id };
+        bx += bw + 4;
+      }
+    } else {
+      shelterUI._stGiveParent = null; shelterUI._stGiveLily = null; shelterUI._stGiveSurv = null;
+      drawText(ctx, 'Not consumable.', px + 10, ay + 10, C.textDim, 7);
+    }
+  } else {
+    shelterUI._stGiveParent = null; shelterUI._stGiveLily = null; shelterUI._stGiveSurv = null;
+    drawText(ctx, 'Select an item to use or give.', px + W2/2, ay + 10, C.textDim, 7, 'center');
+  }
 
-  const closeX = px + 8, closeY = py + H2 - 22;
-  drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
+  const closeX = px + 8, closeY = py + H2 - 18;
+  drawButton(ctx, closeX, closeY, 50, 14, 'Close', hitTest(mx, my, closeX, closeY, 50, 14));
+  shelterUI._stClose = { x: closeX, y: closeY, w: 50, h: 14 };
 }
 
 function drawCookingMenu(ctx, gs, mx, my) {
@@ -1178,6 +1219,7 @@ function handleControlBtn(id, gs, mx, my) {
   switch (id) {
     case 'explore':
       if (gs.parent.task || gs.parent.isSleeping) { notify('Finish current task first.', 'warn'); break; }
+      if (gs.parent.hasExploredToday) { notify('Already explored today. Rest — go again tomorrow.', 'warn'); break; }
       gs.screen = 'exploreSelect';
       break;
     case 'craft':
@@ -1347,9 +1389,47 @@ function handleMenuClick(mx, my, gs) {
   }
 
   if (M.activeMenu === 'storage') {
-    const W2 = 280, H2 = 240;
-    const px = 60, py = 40;
-    if (hitTest(mx, my, px+8, py + H2 - 22, 50, 16)) { M.activeMenu = null; return; }
+    // Close button
+    if (M._stClose && hitTest(mx, my, M._stClose.x, M._stClose.y, M._stClose.w, M._stClose.h)) {
+      M.activeMenu = null; M.storageSelected = null; return;
+    }
+    // Give-to buttons (only when a consumable is selected)
+    const doGive = (who) => {
+      const slot = gs.shelter.storage[M.storageSelected];
+      if (!slot) return;
+      const used = useItem(who, gs.shelter.storage, slot.id, gs);
+      if (used) {
+        const def = getItemDef(slot.id);
+        notify(`${who.name} used ${def?.name || slot.id}.`, 'good');
+        if (gs.shelter.storage[M.storageSelected] === undefined) M.storageSelected = null;
+      }
+    };
+    if (M._stGiveParent && hitTest(mx, my, M._stGiveParent.x, M._stGiveParent.y, M._stGiveParent.w, M._stGiveParent.h)) {
+      doGive(gs.parent); return;
+    }
+    if (M._stGiveLily && hitTest(mx, my, M._stGiveLily.x, M._stGiveLily.y, M._stGiveLily.w, M._stGiveLily.h)) {
+      doGive(gs.child); return;
+    }
+    if (M._stGiveSurv) {
+      const tb = M._stGiveSurv;
+      if (hitTest(mx, my, tb.x, tb.y, tb.w, tb.h)) {
+        const surv = (gs.survivors || []).find(s => s.id === tb.id);
+        if (surv) doGive(surv);
+        return;
+      }
+    }
+    // Item row click — select / deselect
+    if (M._storageRows) {
+      for (const row of M._storageRows) {
+        if (my >= row.y1 && my < row.y2) {
+          M.storageSelected = (M.storageSelected === row.idx) ? null : row.idx;
+          return;
+        }
+      }
+    }
+    // Click outside modal
+    const W2 = 280, H2 = 270, px = 60, py = 22;
+    if (!hitTest(mx, my, px, py, W2, H2)) { M.activeMenu = null; M.storageSelected = null; }
     return;
   }
 

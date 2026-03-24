@@ -464,8 +464,8 @@ function updateExplore(gs, dt) {
   if (curZone && curZone.id !== es._lastZoneId) {
     es._lastZoneId = curZone.id;
     if (es._zoneTitleCard) {
-      // If a card is already showing, replace it only if we've passed linger phase
-      if (es._zoneTitleCard.timer > 60) {
+      // Replace only if we've passed into the linger phase (360 frames in)
+      if (es._zoneTitleCard.timer > 360) {
         es._zoneTitleCard = { text: curZone.name, timer: 0 };
       }
     } else {
@@ -1668,18 +1668,18 @@ function drawGrainFilter(ctx) {
   ctx.restore();
 }
 
-// ── Zone title card (fade in 2s → linger 2s → fade out 2s) ──────────────────
+// ── Zone title card (fade in 6s → linger 6s → fade out 6s) ──────────────────
 
 function drawZoneTitleCard(ctx, es) {
   const tc = es._zoneTitleCard;
   if (!tc) return;
 
   tc.timer++;
-  // At 60fps: 120 frames = 2s
+  // At 60fps: 360 frames = 6s per phase (3× original)
   let alpha;
-  if      (tc.timer < 120)  alpha = tc.timer / 120;              // fade in
-  else if (tc.timer < 240)  alpha = 1;                           // linger
-  else if (tc.timer < 360)  alpha = 1 - (tc.timer - 240) / 120; // fade out
+  if      (tc.timer < 360)  alpha = tc.timer / 360;              // fade in  (6s)
+  else if (tc.timer < 720)  alpha = 1;                           // linger   (6s)
+  else if (tc.timer < 1080) alpha = 1 - (tc.timer - 720) / 360; // fade out (6s)
   else { es._zoneTitleCard = null; return; }
 
   ctx.save();

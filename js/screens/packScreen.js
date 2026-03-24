@@ -1,7 +1,7 @@
 // packScreen.js — Pre-exploration inventory packing and equipment screen
 'use strict';
 
-let packUI = { invScroll: 0, storScroll: 0, selected: null, selectedSide: null };
+let packUI = { invScroll: 0, storScroll: 0, selected: null, selectedSide: null, confirmExplore: false };
 
 function renderPackScreen(ctx, gs) {
   const loc = gs._pendingLoc;
@@ -115,23 +115,52 @@ function renderPackScreen(ctx, gs) {
 
   // Carry weight bar at bottom
   drawStatBar(ctx, 10, btnY - 10, CFG.W - 20, 5, parseFloat(wt), parseFloat(maxWt), parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : '#2a6a4a');
+
+  // ── Confirm exploration dialog ────────────────────────────────────────────
+  if (packUI.confirmExplore) {
+    const dw = 260, dh = 88;
+    const dx = Math.round((CFG.W - dw) / 2), dy = Math.round((CFG.H - dh) / 2);
+    drawModal(ctx, dx, dy, dw, dh, 'Confirm Departure');
+    drawText(ctx, `Head to ${loc.name}?`, dx + dw/2, dy + 34, C.textBright, 9, 'center');
+    drawText(ctx, 'You cannot return until the expedition ends.', dx + dw/2, dy + 47, C.textDim, 7, 'center');
+    const yBtnY = dy + dh - 22;
+    drawButton(ctx, dx + 10,        yBtnY, 108, 16, 'Yes — Let\'s go', hitTest(mx, my, dx + 10,       yBtnY, 108, 16));
+    drawButton(ctx, dx + dw - 118,  yBtnY, 108, 16, 'No — Stay',       hitTest(mx, my, dx + dw - 118, yBtnY, 108, 16));
+    gs._packConfirmBtns = {
+      yes: { x: dx + 10,       y: yBtnY, w: 108, h: 16 },
+      no:  { x: dx + dw - 118, y: yBtnY, w: 108, h: 16 },
+    };
+  }
 }
 
 function packScreenClick(mx, my, gs) {
   const btnY = CFG.H - 28;
 
+  // Confirm dialog takes priority
+  if (packUI.confirmExplore && gs._packConfirmBtns) {
+    const cb = gs._packConfirmBtns;
+    if (hitTest(mx, my, cb.yes.x, cb.yes.y, cb.yes.w, cb.yes.h)) {
+      packUI.confirmExplore = false;
+      packUI.selected = null; packUI.selectedSide = null;
+      const loc = gs._pendingLoc;
+      gs._pendingLoc = null;
+      startExploration(gs, loc);
+      return;
+    }
+    if (hitTest(mx, my, cb.no.x, cb.no.y, cb.no.w, cb.no.h)) {
+      packUI.confirmExplore = false; return;
+    }
+    return; // click outside dialog — keep it open
+  }
+
   // Cancel
   if (hitTest(mx, my, 10, btnY, 80, 22)) {
-    packUI.selected = null; packUI.selectedSide = null;
+    packUI.selected = null; packUI.selectedSide = null; packUI.confirmExplore = false;
     gs._pendingLoc = null; gs.screen = 'shelter'; return;
   }
-  // Go Explore
+  // Go Explore — show confirm dialog first
   if (hitTest(mx, my, CFG.W - 120, btnY, 110, 22)) {
-    packUI.selected = null; packUI.selectedSide = null;
-    const loc = gs._pendingLoc;
-    gs._pendingLoc = null;
-    startExploration(gs, loc);
-    return;
+    packUI.confirmExplore = true; return;
   }
 
   // Action buttons (equip / move)

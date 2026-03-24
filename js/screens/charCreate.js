@@ -93,7 +93,7 @@ function renderStepDifficulty(ctx, gs, cx) {
   y += 18;
 
   const keys = ['easy','normal','hard'];
-  const btnW = 150, btnH = 36;
+  const btnW = 150, btnH = 28;
   for (const key of keys) {
     const def = DIFFICULTIES[key];
     const bx = cx - btnW / 2;
@@ -101,9 +101,9 @@ function renderStepDifficulty(ctx, gs, cx) {
     const hov = hitTest(mx, my, bx, y, btnW, btnH);
     fillRect(ctx, bx, y, btnW, btnH, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
     strokeRect(ctx, bx, y, btnW, btnH, sel ? def.color : (hov ? C.border2 : C.border));
-    drawText(ctx, def.label, cx, y + 14, sel ? def.color : C.textBright, 11, 'center', true);
-    drawText(ctx, def.desc, cx, y + 26, C.textDim, 7, 'center');
-    y += btnH + 10;
+    drawText(ctx, def.label, cx, y + btnH / 2 + 3, sel ? def.color : C.textBright, 11, 'center', true);
+    drawText(ctx, def.desc, cx, y + btnH + 8, C.textDim, 7, 'center');
+    y += btnH + 22;
   }
 
   // Show selected difficulty summary

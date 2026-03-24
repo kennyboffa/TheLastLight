@@ -20,6 +20,7 @@ const GS = {
     tiredness: 20,
     depression: 15,
     infected: false,
+    hasExploredToday: false,   // reset each morning; prevents multiple runs per day
     // Attributes
     strength: 5, agility: 5, perception: 5, intelligence: 5, charisma: 5,
     // Skills

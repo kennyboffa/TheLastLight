@@ -76,9 +76,9 @@ function tickStats(gs, dt) {
   if (p.hunger  >= CFG.HUNGER_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
   if (p.thirst  >= CFG.THIRST_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
 
-  // Infection: slow health drain (3 HP/hour), notify once per hour
+  // Infection: slow health drain (1.5 HP/hour), notify once per hour
   if (p.infected) {
-    p.health = Math.max(1, p.health - 3 * hrs);
+    p.health = Math.max(1, p.health - 1.5 * hrs);
     // Periodic reminder (roughly once per game hour)
     if (!p._infNotifyTimer) p._infNotifyTimer = 0;
     p._infNotifyTimer -= hrs;
@@ -112,7 +112,7 @@ function tickStats(gs, dt) {
   if (ch.hunger  >= CFG.HUNGER_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
   if (ch.thirst  >= CFG.THIRST_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
   if (ch.infected) {
-    ch.health = Math.max(1, ch.health - 3 * hrs);
+    ch.health = Math.max(1, ch.health - 1.5 * hrs);
     if (!ch._infNotifyTimer) ch._infNotifyTimer = 0;
     ch._infNotifyTimer -= hrs;
     if (ch._infNotifyTimer <= 0) {
@@ -390,6 +390,7 @@ function advanceDay(gs) {
   // isWorking stays true if a non-sleep task is ongoing.
 
   gs.shelter.noiseToday = 0;
+  gs.parent.hasExploredToday = false; // new day — can explore once more
 
   // Child rests at night (overridden below if parent didn't come home)
   gs.child.isSleeping = false;
@@ -416,12 +417,6 @@ function advanceDay(gs) {
       gs.flags.storyLateReturn = true;
       gs.storyQueue.push('story_late_return');
     }
-  }
-
-  // Opening story fires on the very first day
-  if (gs.day === 1 && !gs.flags.storyOpening) {
-    gs.flags.storyOpening = true;
-    gs.storyQueue.push('story_opening');
   }
 
   // Week-one milestone

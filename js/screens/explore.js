@@ -72,8 +72,15 @@ function startExploration(gs, loc) {
   // Pre-generate buildings (MUST be done here — never call randInt in render)
   const buildings = [];
   for (const zone of loc.zones) {
-    for (const bdef of (zone.buildings || [])) {
-      const bx     = zone.x + bdef.relX;
+    const zoneBdefs = zone.buildings || [];
+    for (const bdef of zoneBdefs) {
+      // Random-layout areas: skip some optional buildings (~30% chance of absence per visit)
+      // and randomise positions so the area looks genuinely different each time
+      if (loc.randomLayout && !bdef.required && chance(30)) continue;
+      const baseRelX = loc.randomLayout
+        ? Math.floor(zone.w * 0.1) + randInt(0, Math.floor(zone.w * 0.65))
+        : bdef.relX;
+      const bx = zone.x + baseRelX;
       // Tents are much smaller than proper buildings
       const bw     = bdef.isTent ? 55 + randInt(0, 20) : 130 + randInt(0, 80);
       const bh     = bdef.isTent ? 40 + randInt(0, 10) : 85 + randInt(20, 55);
@@ -464,8 +471,8 @@ function updateExplore(gs, dt) {
   if (curZone && curZone.id !== es._lastZoneId) {
     es._lastZoneId = curZone.id;
     if (es._zoneTitleCard) {
-      // If a card is already showing, replace it only if we've passed linger phase
-      if (es._zoneTitleCard.timer > 60) {
+      // Replace only if we've passed into the linger phase (360 frames in)
+      if (es._zoneTitleCard.timer > 360) {
         es._zoneTitleCard = { text: curZone.name, timer: 0 };
       }
     } else {
@@ -1668,18 +1675,18 @@ function drawGrainFilter(ctx) {
   ctx.restore();
 }
 
-// ── Zone title card (fade in 2s → linger 2s → fade out 2s) ──────────────────
+// ── Zone title card (fade in 6s → linger 6s → fade out 6s) ──────────────────
 
 function drawZoneTitleCard(ctx, es) {
   const tc = es._zoneTitleCard;
   if (!tc) return;
 
   tc.timer++;
-  // At 60fps: 120 frames = 2s
+  // At 60fps: 360 frames = 6s per phase (3× original)
   let alpha;
-  if      (tc.timer < 120)  alpha = tc.timer / 120;              // fade in
-  else if (tc.timer < 240)  alpha = 1;                           // linger
-  else if (tc.timer < 360)  alpha = 1 - (tc.timer - 240) / 120; // fade out
+  if      (tc.timer < 360)  alpha = tc.timer / 360;              // fade in  (6s)
+  else if (tc.timer < 720)  alpha = 1;                           // linger   (6s)
+  else if (tc.timer < 1080) alpha = 1 - (tc.timer - 720) / 360; // fade out (6s)
   else { es._zoneTitleCard = null; return; }
 
   ctx.save();

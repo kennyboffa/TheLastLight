@@ -152,16 +152,17 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
 
 // ── Notification popups (floating messages) ───────────────────────────────────
 
-function drawNotifications(ctx, gs) {
+function drawNotifications(ctx, gs, startX, startY, centered) {
   const notifs = gs.notifications.filter(n => n.ttl > 0);
-  let ny = 20;
+  const nx     = startX  !== undefined ? startX  : 10;
+  let   ny     = startY  !== undefined ? startY  : 20;
+  const align  = centered ? 'center' : 'left';
   for (const n of notifs) {
-    const alpha = Math.min(1, n.ttl / 30);
     const typeColor = n.type === 'danger' ? C.textDanger
                     : n.type === 'warn'   ? C.textWarn
                     : n.type === 'good'   ? C.textGood
                     : C.text;
-    drawTextShadow(ctx, n.text, 10, ny, typeColor, '#000000aa', 9);
+    drawTextShadow(ctx, n.text, nx, ny, typeColor, '#000000aa', 9, align);
     ny += 13;
     n.ttl--;
   }

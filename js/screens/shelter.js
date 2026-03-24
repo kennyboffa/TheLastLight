@@ -34,8 +34,10 @@ let shelterUI = {
   craftConfirm: null,  // null | { recipeId, maxQty }
   craftQty: 1,         // chosen quantity in craft confirm dialog
   statsPanelScroll: 0, // scroll offset for survivors in stats panel
-  journalTab: 'log',   // 'log' | 'help'
+  journalTab: 'log',   // 'log' | 'diary' | 'other' | 'help'
   helpScroll: 0,
+  diaryScroll: 0,
+  otherScroll: 0,
 };
 
 // ── Room furniture drawing ─────────────────────────────────────────────────────
@@ -1014,83 +1016,121 @@ function drawJournalPanel(ctx, gs, mx, my) {
   const px = Math.floor((MAIN_W - W2) / 2), py = 26;
   drawModal(ctx, px, py, W2, H2, 'JOURNAL');
 
-  // ── Tabs ─────────────────────────────────────────────────────────────────
-  const tabY = py + 16;
-  const logActive  = shelterUI.journalTab === 'log';
-  const helpActive = shelterUI.journalTab === 'help';
-  const tabW = 70;
-  drawButton(ctx, px + 8,        tabY, tabW, 15, 'Log',  hitTest(mx, my, px + 8,        tabY, tabW, 15), logActive);
-  drawButton(ctx, px + 8 + tabW + 4, tabY, tabW, 15, 'Help', hitTest(mx, my, px + 8 + tabW + 4, tabY, tabW, 15), helpActive);
-  gs._journalTabs = {
-    log:  { x: px + 8,             y: tabY, w: tabW, h: 15 },
-    help: { x: px + 8 + tabW + 4,  y: tabY, w: tabW, h: 15 },
+  // ── Tabs (Log | Bunker Diary | Other | Help) ──────────────────────────────
+  const tabY  = py + 16;
+  const tabW  = 68, tabGap = 3;
+  const tab0  = px + 6;
+  const tabs  = [
+    { id: 'log',   label: 'Log'          },
+    { id: 'diary', label: 'Bunker Diary' },
+    { id: 'other', label: 'Other'        },
+    { id: 'help',  label: 'Help'         },
+  ];
+  gs._journalTabs = {};
+  tabs.forEach((tab, i) => {
+    const tx = tab0 + i * (tabW + tabGap);
+    const active = shelterUI.journalTab === tab.id;
+    drawButton(ctx, tx, tabY, tabW, 15, tab.label, hitTest(mx, my, tx, tabY, tabW, 15), active);
+    gs._journalTabs[tab.id] = { x: tx, y: tabY, w: tabW, h: 15 };
+  });
+
+  const bodyY = tabY + 18;
+  const bodyH = H2 - (bodyY - py) - 26;
+
+  const drawScrollBody = (lines, scrollKey, lineH, headerColor) => {
+    // lines: [{text, color?, bold?}] or [{heading, lines[]}]
+    let totalH = lines.reduce((s, l) => s + (l.heading ? 14 + l.lines.length * lineH + 6 : lineH), 0);
+    const maxScroll = Math.max(0, totalH - bodyH);
+    shelterUI[scrollKey] = clamp(shelterUI[scrollKey] || 0, 0, maxScroll);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(px + 4, bodyY, W2 - 12, bodyH); ctx.clip();
+    let y = bodyY + 2 - shelterUI[scrollKey];
+    for (const l of lines) {
+      if (l.heading) {
+        drawText(ctx, l.heading, px + 8, y + 9, headerColor || '#c8a050', 8, 'left', true); y += 14;
+        for (const line of l.lines) { drawText(ctx, line, px + 12, y + 9, C.textDim, 7); y += lineH; }
+        y += 6;
+      } else {
+        drawText(ctx, l.text, px + 8, y + lineH - 2, l.color || C.textDim, l.size || 7);
+        y += lineH;
+      }
+    }
+    ctx.restore();
+    if (maxScroll > 0) {
+      const trackH = bodyH - 4;
+      const thumbH = Math.max(16, trackH * (bodyH / totalH));
+      const thumbY = bodyY + 2 + (shelterUI[scrollKey] / maxScroll) * (trackH - thumbH);
+      fillRect(ctx, px + W2 - 8, bodyY + 2, 4, trackH, '#1a1a28');
+      fillRect(ctx, px + W2 - 8, thumbY,    4, thumbH, '#3a3a5a');
+    }
   };
 
-  const bodyY  = tabY + 18;
-  const bodyH  = H2 - (bodyY - py) - 26;
+  const tab = shelterUI.journalTab;
 
-  if (logActive) {
-    // ── Log tab ─────────────────────────────────────────────────────────────
+  if (tab === 'log') {
+    // ── Log tab ───────────────────────────────────────────────────────────────
     const LOG_COLORS = {
       normal:'#a0a090', info:'#7090b0', good:'#3aaa50',
       warn:'#cc8830', danger:'#cc3030', combat:'#aa4040',
     };
     const entries = gs.log.slice(0, 40);
     const lineH   = 14;
-    const maxScroll = Math.max(0, entries.length * lineH - bodyH);
-    const scroll    = clamp(shelterUI.storageScroll || 0, 0, maxScroll);
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(px + 4, bodyY, W2 - 12, bodyH);
-    ctx.clip();
-    let y = bodyY + 2 - scroll;
-    for (const entry of entries) {
-      drawText(ctx, `Day ${entry.day}: ${entry.text}`, px + 8, y + 10, LOG_COLORS[entry.type] || LOG_COLORS.normal, 7);
-      y += lineH;
+    const lines = entries.map(e => ({ text: `Day ${e.day}: ${e.text}`, color: LOG_COLORS[e.type] || LOG_COLORS.normal }));
+    if (lines.length === 0) {
+      drawText(ctx, 'No entries yet.', px + W2 / 2, bodyY + bodyH / 2, C.textDim, 8, 'center');
+    } else {
+      drawScrollBody(lines, 'storageScroll', lineH);
     }
-    if (entries.length === 0) drawText(ctx, 'No entries yet.', px + W2 / 2, bodyY + bodyH / 2, C.textDim, 8, 'center');
-    ctx.restore();
 
-    if (maxScroll > 0) {
-      const trackH = bodyH - 4;
-      const thumbH = Math.max(16, trackH * (bodyH / (entries.length * lineH)));
-      const thumbY = bodyY + 2 + (scroll / maxScroll) * (trackH - thumbH);
-      fillRect(ctx, px + W2 - 8, bodyY + 2, 4, trackH, '#1a1a28');
-      fillRect(ctx, px + W2 - 8, thumbY,    4, thumbH, '#3a3a5a');
+  } else if (tab === 'diary') {
+    // ── Bunker Diary tab — seen story events, newest first ────────────────────
+    const seen = (gs.seenStories || []).slice().reverse();
+    if (seen.length === 0) {
+      drawText(ctx, 'No diary entries yet.', px + W2 / 2, bodyY + bodyH / 2, C.textDim, 8, 'center');
+    } else {
+      const storyDB = (typeof STORY_DB !== 'undefined') ? STORY_DB : [];
+      const sections = seen.map(id => {
+        const s = storyDB.find(x => x.id === id);
+        if (!s) return null;
+        // Word-wrap text into ~44-char lines
+        const words = s.text.split(' ');
+        const wrapped = [];
+        let line = '';
+        for (const w of words) {
+          if ((line + ' ' + w).length > 44) { if (line) wrapped.push(line); line = w; }
+          else line = line ? line + ' ' + w : w;
+        }
+        if (line) wrapped.push(line);
+        return { heading: s.title, lines: wrapped };
+      }).filter(Boolean);
+      drawScrollBody(sections, 'diaryScroll', 12, '#d4a860');
+    }
+
+  } else if (tab === 'other') {
+    // ── Other tab — world notes/diaries found, newest first ──────────────────
+    const notes = (gs.readNotes || []).slice().reverse();
+    if (notes.length === 0) {
+      drawText(ctx, 'No notes found yet.', px + W2 / 2, bodyY + bodyH / 2, C.textDim, 8, 'center');
+      drawText(ctx, 'Search buildings while exploring.', px + W2 / 2, bodyY + bodyH / 2 + 14, C.textDim, 7, 'center');
+    } else {
+      const sections = notes.map(n => {
+        const words = n.text.split(' ');
+        const wrapped = [];
+        let line = '';
+        for (const w of words) {
+          if ((line + ' ' + w).length > 44) { if (line) wrapped.push(line); line = w; }
+          else line = line ? line + ' ' + w : w;
+        }
+        if (line) wrapped.push(line);
+        return { heading: n.title, lines: wrapped };
+      });
+      drawScrollBody(sections, 'otherScroll', 12, '#8ab0d0');
     }
 
   } else {
-    // ── Help tab ─────────────────────────────────────────────────────────────
-    const lineH   = 12;
-    let totalH = 0;
-    for (const sec of HELP_SECTIONS) totalH += 14 + sec.lines.length * lineH + 6;
-    const maxScroll = Math.max(0, totalH - bodyH);
-    shelterUI.helpScroll = clamp(shelterUI.helpScroll || 0, 0, maxScroll);
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(px + 4, bodyY, W2 - 12, bodyH);
-    ctx.clip();
-    let y = bodyY + 2 - shelterUI.helpScroll;
-    for (const sec of HELP_SECTIONS) {
-      drawText(ctx, sec.heading, px + 8, y + 9, '#c8a050', 8, 'left', true);
-      y += 14;
-      for (const line of sec.lines) {
-        drawText(ctx, line, px + 12, y + 9, C.textDim, 7);
-        y += lineH;
-      }
-      y += 6;
-    }
-    ctx.restore();
-
-    if (maxScroll > 0) {
-      const trackH = bodyH - 4;
-      const thumbH = Math.max(16, trackH * (bodyH / totalH));
-      const thumbY = bodyY + 2 + (shelterUI.helpScroll / maxScroll) * (trackH - thumbH);
-      fillRect(ctx, px + W2 - 8, bodyY + 2, 4, trackH, '#1a1a28');
-      fillRect(ctx, px + W2 - 8, thumbY,    4, thumbH, '#3a3a5a');
-    }
+    // ── Help tab ──────────────────────────────────────────────────────────────
+    const lineH = 12;
+    drawScrollBody(HELP_SECTIONS, 'helpScroll', lineH, '#c8a050');
   }
 
   const closeX = px + W2 - 58, closeY = py + H2 - 22;
@@ -1518,8 +1558,10 @@ function handleMenuClick(mx, my, gs) {
     // Tab buttons
     if (GS._journalTabs) {
       const t = GS._journalTabs;
-      if (hitTest(mx, my, t.log.x,  t.log.y,  t.log.w,  t.log.h))  { M.journalTab = 'log';  M.storageScroll = 0; return; }
-      if (hitTest(mx, my, t.help.x, t.help.y, t.help.w, t.help.h)) { M.journalTab = 'help'; M.helpScroll = 0;    return; }
+      if (t.log   && hitTest(mx, my, t.log.x,   t.log.y,   t.log.w,   t.log.h))   { M.journalTab = 'log';   M.storageScroll = 0; return; }
+      if (t.diary && hitTest(mx, my, t.diary.x,  t.diary.y,  t.diary.w,  t.diary.h))  { M.journalTab = 'diary';  M.diaryScroll = 0;   return; }
+      if (t.other && hitTest(mx, my, t.other.x,  t.other.y,  t.other.w,  t.other.h))  { M.journalTab = 'other';  M.otherScroll = 0;   return; }
+      if (t.help  && hitTest(mx, my, t.help.x,  t.help.y,  t.help.w,  t.help.h))  { M.journalTab = 'help';  M.helpScroll = 0;    return; }
     }
     // Click outside closes
     const W2 = 320, H2 = 268;

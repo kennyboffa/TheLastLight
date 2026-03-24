@@ -141,6 +141,10 @@ const GS = {
   // ── Pending story queue (IDs from STORY_DB, fire next shelter opportunity) ──
   storyQueue: [],
 
+  // ── Journal archives ──────────────────────────────────────────────────────
+  seenStories: [],   // story IDs seen, in order (oldest first)
+  readNotes:   [],   // { id, title, text } for world notes found and read
+
   // ── Location unlock system ────────────────────────────────────────────────
   unlockedLocations: ['forest', 'church'],
   foundMaps: { area_map_1: false, area_map_2: false },

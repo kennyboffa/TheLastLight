@@ -94,6 +94,33 @@ function buildUpgrade(gs, upgradeId) {
   return { ok: true, msg: `Building ${upg.name}...` };
 }
 
+// Upgrade a built room to the next level
+function upgradeRoom(gs, roomId) {
+  const room = getRoom(roomId);
+  if (!room || !room.unlocked) return { ok: false, msg: 'Room not built.' };
+  const def  = ROOM_DEFS[roomId];
+  if (!def || !def.upgradeCost) return { ok: false, msg: 'No upgrade data.' };
+  const curLevel = room.level || 1;
+  const maxLevel = def.maxLevel || 1;
+  if (curLevel >= maxLevel) return { ok: false, msg: 'Already at max level.' };
+  const cost = def.upgradeCost[curLevel];
+  if (!cost) return { ok: false, msg: 'No upgrade available.' };
+  if (!canAfford(cost, gs, true)) return { ok: false, msg: 'Not enough materials.' };
+  if (gs.parent.task !== null) return { ok: false, msg: 'Already working.' };
+
+  deductCost(cost, gs, true);
+  const p = gs.parent;
+  p.task = { type:'build', roomId, upgradeLevel: curLevel + 1 };
+  p.taskDuration = (def.upgradeTime && def.upgradeTime[curLevel]) || 6;
+  p.taskProgress = 0;
+  p.isWorking    = true;
+  const noise = Math.round((def.buildNoise || 10) * 0.5);
+  gs.shelter.noiseToday = clamp(gs.shelter.noiseToday + noise, 0, 999);
+  gs.suspicion = clamp(gs.suspicion + noise * 0.4, 0, CFG.SUSPICION_MAX);
+  addLog(`Upgrading ${def.name} to level ${curLevel + 1}...`, 'warn');
+  return { ok: true };
+}
+
 // Craft an item from RECIPES_DB (timed task — output given on completion)
 function craftItem(gs, recipeId, qty) {
   const recipe = RECIPES_DB.find(r => r.id === recipeId);

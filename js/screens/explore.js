@@ -303,6 +303,7 @@ function startExploration(gs, loc) {
 
   gs.parent.isExploring = true;
   gs.child.isAlone      = true;
+  gs.timeScale = 1; // always reset speed on exploration start
   Audio.resume();
   Audio.startMusic();
 
@@ -697,6 +698,19 @@ function exploreClick(mx, my, gs) {
         if (!slot) { es.invSelected = null; return; }
         const def = getItemDef(slot.id);
         if (!def) { es.invSelected = null; return; }
+
+        if (btn.action === 'use') {
+          const used = useItem(gs.parent, gs.parent.inventory, slot.id, gs);
+          if (used) {
+            const effects = [];
+            if (def.hunger  && def.hunger  < 0) effects.push(`hunger ${def.hunger}`);
+            if (def.thirst  && def.thirst  < 0) effects.push(`thirst ${def.thirst}`);
+            if (def.health  && def.health  > 0) effects.push(`+${def.health} HP`);
+            notify(`Used ${def.name}${effects.length ? ' ('+effects.join(', ')+')' : ''}.`, 'good');
+          } else { notify(`Can't use ${def.name}.`, 'warn'); }
+          es.invSelected = null;
+          return;
+        }
 
         if (btn.action === 'equip') {
           if (def.type === 'weapon') {
@@ -1605,6 +1619,14 @@ function drawExploreInventory(ctx, gs, es) {
     const by = ay + 16;
     const bh = 14;
     const isEquippable = def => def.type === 'weapon' || def.type === 'backpack' || def.type === 'armor';
+    const isConsumable = def => def.type === 'food' || def.type === 'drink' || def.type === 'medicine';
+    if (isConsumable(selDef)) {
+      const bw = 36;
+      const hov = hitTest(mx, my, bx, by, bw, bh);
+      drawButton(ctx, bx, by, bw, bh, 'Use', hov);
+      gs._exploreInvActionBtns.push({ action: 'use', x: bx, y: by, w: bw, h: bh });
+      bx += bw + 5;
+    }
     if (isEquippable(selDef)) {
       const bw = 44;
       const hov = hitTest(mx, my, bx, by, bw, bh);

@@ -26,13 +26,12 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
 
   const sk        = gender === 'mother' ? '#c49878' : C.skin;
   const skDark    = gender === 'mother' ? '#a07848' : '#a07848';
-  const clothes   = gender === 'mother' ? '#3a2a44' : '#1a1e3a'; // dark navy jacket
-  const clothesHi = gender === 'mother' ? '#4a3858' : '#262c52'; // lighter navy highlight
-  const shirt     = gender === 'mother' ? '#8a2a3a' : '#7a1818'; // red undershirt
+  const clothes   = gender === 'mother' ? '#3a3a50' : '#2e3828';
+  const clothesHi = gender === 'mother' ? '#4a4a64' : '#3d4e35';
   const hair      = C.hair;
   const hairHi    = '#504040';
-  const pants     = gender === 'mother' ? '#1a1428' : '#141428'; // dark charcoal
-  const pantsHi   = gender === 'mother' ? '#24183a' : '#1c1e38';
+  const pants     = gender === 'mother' ? '#1e1e30' : '#1e2218';
+  const pantsHi   = gender === 'mother' ? '#2a2a42' : '#283020';
   const legSwing  = (animFrame % 2 === 0) ? 0 : 1;
 
   if (pose === 'front') {
@@ -49,14 +48,11 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     // Eyebrows
     fillRect(ctx, -3*s, -15*s, 2*s, 1*s, hair, 0.85);
     fillRect(ctx,  1*s, -15*s, 2*s, 1*s, hair, 0.85);
-    // Sunglasses (dark rectangular lenses over eyes)
-    fillRect(ctx, -4*s, -15*s, 3*s, 3*s, '#080810');       // left lens
-    fillRect(ctx,  1*s, -15*s, 3*s, 3*s, '#080810');       // right lens
-    fillRect(ctx,  0,   -15*s, 1*s, 1*s, '#18182c');       // nose bridge
-    fillRect(ctx, -4*s, -15*s, 3*s, 1*s, '#2a3060', 0.45); // left lens shine
-    fillRect(ctx,  1*s, -15*s, 3*s, 1*s, '#2a3060', 0.45); // right lens shine
-    fillRect(ctx, -4*s, -15*s, 8*s, 1*s, '#303050', 0.7);  // top frame
-    fillRect(ctx, -4*s, -13*s, 8*s, 1*s, '#202040', 0.7);  // bottom frame
+    // Eyes (whites + iris)
+    fillRect(ctx, -3*s, -14*s, 2*s, 2*s, '#e8e4dc', 0.9);
+    fillRect(ctx,  1*s, -14*s, 2*s, 2*s, '#e8e4dc', 0.9);
+    fillRect(ctx, -2*s, -13*s, 1*s, 1*s, '#1a1828');
+    fillRect(ctx,  2*s, -13*s, 1*s, 1*s, '#1a1828');
     // Nose shadow + cheek highlight
     fillRect(ctx, -1*s, -12*s, 1*s, 1*s, skDark, 0.5);
     fillRect(ctx, -3*s, -13*s, 1*s, 2*s, '#ffffff', 0.08);
@@ -71,15 +67,9 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     fillRect(ctx, -4*s, -2*s, 8*s, 1*s, '#000', 0.15);
     fillRect(ctx,  3*s, -7*s, 1*s, 5*s, '#000', 0.12);
     fillRect(ctx, -3*s, -7*s, 2*s, 4*s, clothesHi, 0.18); // chest light
-    // Red undershirt + jacket lapels
-    fillRect(ctx, -1*s, -8*s, 3*s, 6*s, shirt, 0.75);     // red shirt center
-    fillRect(ctx, -4*s, -8*s, 3*s, 4*s, clothes);          // left lapel (overrides red)
-    fillRect(ctx,  2*s, -8*s, 2*s, 4*s, clothes);          // right lapel
-    fillRect(ctx, -4*s, -8*s, 3*s, 1*s, clothesHi, 0.3);  // lapel edge highlight
-    fillRect(ctx,  2*s, -8*s, 2*s, 1*s, clothesHi, 0.3);
-    // Collar / neck opening
-    fillRect(ctx, -1*s, -8*s, 1*s, 2*s, sk, 0.4);
-    fillRect(ctx,  0,   -8*s, 1*s, 2*s, sk, 0.2);
+    // V-neck opening
+    fillRect(ctx, -1*s, -8*s, 1*s, 3*s, sk, 0.5);
+    fillRect(ctx,  0,   -8*s, 1*s, 3*s, sk, 0.3);
     // Belt
     fillRect(ctx, -4*s, -1*s, 8*s, 1*s, '#3a2a10');
     fillRect(ctx,  0,   -1*s, 1*s, 1*s, '#8a7a50', 0.6); // buckle
@@ -116,11 +106,9 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     fillRect(ctx, -1*s, -14*s, 1*s, 2*s, skDark, 0.7);
     // Eyebrow
     fillRect(ctx,  2*s, -15*s, 2*s, 1*s, hair, 0.85);
-    // Sunglasses (side profile — rectangular dark lens)
-    fillRect(ctx,  1*s, -15*s, 4*s, 3*s, '#080810');       // dark lens
-    fillRect(ctx,  1*s, -15*s, 4*s, 1*s, '#2a3060', 0.45); // lens shine
-    fillRect(ctx,  1*s, -15*s, 1*s, 3*s, '#282848', 0.8);  // front frame
-    fillRect(ctx,  4*s, -15*s, 1*s, 3*s, '#1a1830', 0.8);  // rear frame
+    // Eye (side view)
+    fillRect(ctx,  2*s, -14*s, 2*s, 2*s, '#e8e4dc', 0.85);
+    fillRect(ctx,  3*s, -13*s, 1*s, 1*s, '#1a1828');
     // Nose bump
     fillRect(ctx,  4*s, -12*s, 1*s, 2*s, sk);
     fillRect(ctx,  5*s, -11*s, 1*s, 1*s, skDark, 0.6);
@@ -128,12 +116,10 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     fillRect(ctx,  3*s, -10*s, 2*s, 1*s, skDark, 0.5);
     // Neck
     fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
-    // Torso (dark navy jacket)
+    // Torso
     fillRect(ctx, -2*s, -9*s, 5*s, 7*s, clothes);
     fillRect(ctx, -2*s, -9*s, 5*s, 1*s, clothesHi, 0.3);  // shoulder highlight
     fillRect(ctx,  2*s, -8*s, 1*s, 5*s, '#000', 0.14);
-    // Red undershirt visible at front opening
-    fillRect(ctx, -2*s, -8*s, 1*s, 5*s, shirt, 0.7);
     // Jacket edge detail
     fillRect(ctx, -2*s, -9*s, 1*s, 7*s, clothesHi, 0.15);
     // Belt
@@ -889,43 +875,64 @@ function drawSurface(ctx, scrollOffset, time) {
     ctx.restore();
   }
 
-  // Distant building silhouettes
-  const winBright = isNight ? 0.55 : 0.12;
-  ctx.globalAlpha = 0.35;
+  // Distant ruined building silhouettes (no lit windows — city is dead)
+  ctx.globalAlpha = 0.38;
+  // buildings: x, w, h, and optional crumble offsets for jagged rooftops
   const buildings = [
-    { x: 20, w: 40, h: 55 }, { x: 70, w: 30, h: 45 }, { x: 105, w: 50, h: 65 },
-    { x: 160, w: 35, h: 40 }, { x: 200, w: 60, h: 70 }, { x: 265, w: 25, h: 35 },
-    { x: 295, w: 45, h: 55 }, { x: 345, w: 20, h: 30 }, { x: 370, w: 55, h: 60 },
-    { x: 430, w: 30, h: 42 },
+    { x: 20,  w: 40, h: 55, notches: [6, 18, 30] },
+    { x: 70,  w: 30, h: 45, notches: [8, 22] },
+    { x: 105, w: 50, h: 65, notches: [5, 20, 38] },
+    { x: 160, w: 35, h: 40, notches: [10, 26] },
+    { x: 200, w: 60, h: 70, notches: [4, 18, 36, 52] },
+    { x: 265, w: 25, h: 35, notches: [7, 18] },
+    { x: 295, w: 45, h: 55, notches: [12, 28, 40] },
+    { x: 345, w: 20, h: 30, notches: [6] },
+    { x: 370, w: 55, h: 60, notches: [8, 24, 44] },
+    { x: 430, w: 30, h: 42, notches: [9, 20] },
   ];
   ctx.fillStyle = '#14141a';
   const so = (scrollOffset * 0.05) % W;
   for (const b of buildings) {
     const bx = ((b.x - so) % (W + 100) + W + 100) % (W + 100) - 50;
-    ctx.fillRect(Math.round(bx), Math.round(H - b.h), Math.round(b.w), Math.round(b.h));
-    // Windows
-    ctx.fillStyle = `rgba(200,200,140,${winBright})`;
-    for (let wi = 4; wi < b.w - 4; wi += 8) {
-      for (let wj = 8; wj < b.h - 6; wj += 10) {
-        if ((b.x + wi + wj) % 3 !== 0) // some windows dark
-          ctx.fillRect(Math.round(bx + wi), Math.round(H - b.h + wj), 4, 5);
+    const bxr = Math.round(bx);
+    // Main building body
+    ctx.fillRect(bxr, Math.round(H - b.h), Math.round(b.w), Math.round(b.h));
+    // Crumble notches along rooftop edge (jagged broken silhouette)
+    ctx.fillStyle = skyTop; // cut out the sky colour to create gaps
+    for (const nx of b.notches) {
+      const nh = 3 + ((b.x + nx) % 5);  // 3-7px deep notch
+      const nw = 2 + ((b.x + nx * 2) % 4); // 2-5px wide
+      if (nx + nw <= b.w)
+        ctx.fillRect(bxr + nx, Math.round(H - b.h), nw, nh);
+    }
+    ctx.fillStyle = '#14141a';
+    // Broken/dark windows — only a few, very dim, representing holes not light
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#0a0a10';
+    for (let wi = 5; wi < b.w - 5; wi += 9) {
+      for (let wj = 10; wj < b.h - 8; wj += 12) {
+        if ((b.x + wi + wj) % 4 !== 0) continue; // most "windows" absent/fallen
+        ctx.fillRect(bxr + wi, Math.round(H - b.h + wj), 3, 4);
       }
     }
+    ctx.globalAlpha = 0.38;
     ctx.fillStyle = '#14141a';
   }
   ctx.globalAlpha = 1;
 
-  // Ground line / dirt
+  // Ground line / dirt with rubble at building bases
   fillRect(ctx, 0, H - 4, W, 4, C.dirt);
   fillRect(ctx, 0, H - 2, W, 2, C.dirt2);
 
-  // Debris / rocks
+  // Rubble / debris (more prominent than before for ruined look)
+  ctx.globalAlpha = 0.55;
   ctx.fillStyle = C.concrete;
-  ctx.globalAlpha = 0.4;
-  const debris = [15, 80, 150, 230, 310, 390, 460];
+  const debris = [10, 55, 120, 185, 240, 295, 355, 415, 460];
   for (const dx of debris) {
     const px = ((dx - so * 0.2) % (W + 60) + W + 60) % (W + 60) - 30;
-    ctx.fillRect(Math.round(px), H - 5, 6, 3);
+    ctx.fillRect(Math.round(px),     H - 5, 8, 3);
+    ctx.fillRect(Math.round(px) + 4, H - 4, 4, 2);
+    ctx.fillRect(Math.round(px) - 3, H - 4, 3, 2);
   }
   ctx.globalAlpha = 1;
 }

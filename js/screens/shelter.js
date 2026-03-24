@@ -650,6 +650,14 @@ function drawShelterControls(ctx, gs, mx, my) {
       hitTest(mx, my, bx, barY + 5, btn.w, 20), active, disabled);
     bx += btn.w + 4;
   }
+
+  // Time speed buttons (far right of bar)
+  const ts = gs.timeScale || 1;
+  const sp2x = MAIN_W - 60, sp4x = MAIN_W - 28;
+  const spy = barY + 5, sph = 20, spw = 26;
+  drawButton(ctx, sp2x, spy, spw, sph, '2x', hitTest(mx, my, sp2x, spy, spw, sph), ts === 2);
+  drawButton(ctx, sp4x, spy, spw, sph, '4x', hitTest(mx, my, sp4x, spy, spw, sph), ts === 4);
+  gs._timeSpeedBtns = { x2: { x: sp2x, y: spy, w: spw, h: sph }, x4: { x: sp4x, y: spy, w: spw, h: sph } };
 }
 
 // ── Context menus ─────────────────────────────────────────────────────────────
@@ -1093,6 +1101,17 @@ function shelterClick(mx, my, gs) {
     return;
   }
 
+  // Time speed buttons (check before CTRL_BUTTONS)
+  if (gs._timeSpeedBtns) {
+    const tb = gs._timeSpeedBtns;
+    if (hitTest(mx, my, tb.x2.x, tb.x2.y, tb.x2.w, tb.x2.h)) {
+      gs.timeScale = (gs.timeScale === 2) ? 1 : 2; return;
+    }
+    if (hitTest(mx, my, tb.x4.x, tb.x4.y, tb.x4.w, tb.x4.h)) {
+      gs.timeScale = (gs.timeScale === 4) ? 1 : 4; return;
+    }
+  }
+
   // Bottom control bar
   for (const btn of CTRL_BUTTONS) {
     let bx = 6;
@@ -1372,7 +1391,8 @@ function handleMenuClick(mx, my, gs) {
       }
       y += 24;
     }
-    if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16)) M.activeMenu = null;
+    if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16) || !hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
+    return;
   }
 
   if (M.activeMenu === 'charSheet') {
@@ -1399,6 +1419,7 @@ function handleMenuClick(mx, my, gs) {
         GS._charSheetClose.w, GS._charSheetClose.h)) {
       M.activeMenu = 'char'; return;
     }
+    return;
   }
 
   if (M.activeMenu === 'journal') {
@@ -1418,6 +1439,7 @@ function handleMenuClick(mx, my, gs) {
     const W2 = 320, H2 = 268;
     const jx = Math.floor((MAIN_W - W2) / 2), jy = 26;
     if (!hitTest(mx, my, jx, jy, W2, H2)) M.activeMenu = null;
+    return;
   }
 
   if (M.activeMenu === 'settings') {
@@ -1443,6 +1465,7 @@ function handleMenuClick(mx, my, gs) {
     const W2 = 240, H2 = 160;
     const px = Math.floor((MAIN_W - W2) / 2), py = 80;
     if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
+    return;
   }
 }
 

@@ -800,29 +800,48 @@ function drawCraftingMenu(ctx, gs, mx, my) {
     return;
   }
 
-  let y = py + 24;
-  const visRecipes = RECIPES_DB.concat(Object.values(UPGRADES_DB));
+  // List area with scroll
+  const listY  = py + 18;
+  const listH  = H2 - 18 - 30; // leave room for close button
+  const rowH   = 20;
+  const visRecipes = RECIPES_DB.concat(Object.values(UPGRADES_DB)).filter(r => !(r.key && gs.shelter[r.key]));
+  const totalListH = visRecipes.length * rowH;
+  const maxScroll  = Math.max(0, totalListH - listH);
+  shelterUI.craftingScroll = Math.min(Math.max(shelterUI.craftingScroll || 0, 0), maxScroll);
+  const scroll = shelterUI.craftingScroll;
 
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(px + 2, listY, W2 - 4, listH);
+  ctx.clip();
+
+  // Store row bounds for click detection
+  gs._craftingRows = [];
+  let y = listY - scroll;
   for (const recipe of visRecipes) {
-    if (y > py + H2 - 40) break;
+    const rowBottom = y + rowH;
+    if (rowBottom > listY && y < listY + listH) {
+      const canMake = recipe.buildCost
+        ? canAfford(recipe.buildCost, gs, true)
+        : canAfford(recipe.cost || {}, gs, true);
+      const hov = hitTest(mx, my, px+4, y, W2-8, rowH);
+      if (hov) fillRect(ctx, px+4, y, W2-8, rowH, C.highlight);
+      const col = canMake ? C.text : C.textDim;
+      drawText(ctx, recipe.name, px + 10, y + 13, col, 8);
+      if (canMake) drawText(ctx, '✓', px + W2 - 18, y + 13, C.textGood, 8);
+    }
+    gs._craftingRows.push({ recipeId: recipe.id, y1: y, y2: y + rowH });
+    y += rowH;
+  }
+  ctx.restore();
 
-    // Check if already built (for upgrades)
-    if (recipe.key && gs.shelter[recipe.key]) continue;
-
-    const name = recipe.name;
-    const sel  = shelterUI.craftConfirm && shelterUI.craftConfirm.recipeId === recipe.id;
-    const canMake = recipe.buildCost
-      ? canAfford(recipe.buildCost, gs, true)
-      : canAfford(recipe.cost || {}, gs, true);
-
-    const hov = hitTest(mx, my, px+4, y, W2-8, 18);
-    if (hov || sel) fillRect(ctx, px+4, y, W2-8, 18, C.highlight);
-
-    const col = canMake ? C.text : C.textDim;
-    drawText(ctx, name, px + 10, y + 11, col, 8);
-    if (canMake) drawText(ctx, '✓', px + W2 - 18, y + 11, C.textGood, 8);
-
-    y += 20;
+  // Scroll indicator
+  if (maxScroll > 0) {
+    const trackH = listH - 4;
+    const thumbH = Math.max(14, trackH * (listH / totalListH));
+    const thumbY = listY + 2 + (scroll / maxScroll) * (trackH - thumbH);
+    fillRect(ctx, px + W2 - 7, listY + 2, 4, trackH, '#1a1a28');
+    fillRect(ctx, px + W2 - 7, thumbY,    4, thumbH, '#3a3a5a');
   }
 
   const closeX = px+8, closeY = py + H2 - 24;
@@ -1268,30 +1287,33 @@ function handleMenuClick(mx, my, gs) {
       return;
     }
 
-    // First click: select recipe → open confirmation
-    const allRecipes = RECIPES_DB.concat(Object.values(UPGRADES_DB));
-    let y = py + 24;
-    for (const recipe of allRecipes) {
-      if (recipe.key && gs.shelter[recipe.key]) continue;
-      if (hitTest(mx, my, px+4, y, W2-8, 18)) {
-        // Check parent is free
-        if (gs.parent.task) { notify('Already busy.', 'warn'); return; }
-        // Compute max craftable qty (upgrades always qty 1)
-        let maxQty = 1;
-        if (!UPGRADES_DB[recipe.id] && recipe.cost) {
-          const costPerBatch = recipe.cost;
-          let canBatch = 999;
-          for (const [id, amt] of Object.entries(costPerBatch)) {
-            const have = countInInventory(gs.shelter.storage, id) + countInInventory(gs.parent.inventory, id);
-            canBatch = Math.min(canBatch, Math.floor(have / amt));
+    // Click in recipe list using stored row bounds
+    if (GS._craftingRows) {
+      const listY = py + 18;
+      const listH = H2 - 18 - 30;
+      // Only process if click is within the list area
+      if (hitTest(mx, my, px + 4, listY, W2 - 8, listH)) {
+        for (const row of GS._craftingRows) {
+          if (my >= row.y1 && my < row.y2) {
+            const recipe = RECIPES_DB.find(r => r.id === row.recipeId) || UPGRADES_DB[row.recipeId];
+            if (!recipe) return;
+            if (gs.parent.task) { notify('Already busy.', 'warn'); return; }
+            let maxQty = 1;
+            if (!UPGRADES_DB[recipe.id] && recipe.cost) {
+              const costPerBatch = recipe.cost;
+              let canBatch = 999;
+              for (const [id, amt] of Object.entries(costPerBatch)) {
+                const have = countInInventory(gs.shelter.storage, id) + countInInventory(gs.parent.inventory, id);
+                canBatch = Math.min(canBatch, Math.floor(have / amt));
+              }
+              maxQty = Math.max(1, canBatch * (recipe.qty || 1));
+            }
+            M.craftConfirm = { recipeId: recipe.id, maxQty };
+            M.craftQty = 1;
+            return;
           }
-          maxQty = Math.max(1, canBatch * (recipe.qty || 1));
         }
-        M.craftConfirm = { recipeId: recipe.id, maxQty };
-        M.craftQty = 1;
-        return;
       }
-      y += 20;
     }
     if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16) || !hitTest(mx, my, px, py, W2, H2)) {
       M.activeMenu = null; M.craftConfirm = null;

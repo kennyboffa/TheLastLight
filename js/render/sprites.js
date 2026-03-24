@@ -26,12 +26,13 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
 
   const sk        = gender === 'mother' ? '#c49878' : C.skin;
   const skDark    = gender === 'mother' ? '#a07848' : '#a07848';
-  const clothes   = gender === 'mother' ? '#3a3a50' : '#2e3828';
-  const clothesHi = gender === 'mother' ? '#4a4a64' : '#3d4e35';
+  const clothes   = gender === 'mother' ? '#3a2a44' : '#1a1e3a'; // dark navy jacket
+  const clothesHi = gender === 'mother' ? '#4a3858' : '#262c52'; // lighter navy highlight
+  const shirt     = gender === 'mother' ? '#8a2a3a' : '#7a1818'; // red undershirt
   const hair      = C.hair;
   const hairHi    = '#504040';
-  const pants     = gender === 'mother' ? '#1e1e30' : '#1e2218';
-  const pantsHi   = gender === 'mother' ? '#2a2a42' : '#283020';
+  const pants     = gender === 'mother' ? '#1a1428' : '#141428'; // dark charcoal
+  const pantsHi   = gender === 'mother' ? '#24183a' : '#1c1e38';
   const legSwing  = (animFrame % 2 === 0) ? 0 : 1;
 
   if (pose === 'front') {
@@ -48,13 +49,14 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     // Eyebrows
     fillRect(ctx, -3*s, -15*s, 2*s, 1*s, hair, 0.85);
     fillRect(ctx,  1*s, -15*s, 2*s, 1*s, hair, 0.85);
-    // Eyes (whites + iris + shadow corner)
-    fillRect(ctx, -3*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.85);
-    fillRect(ctx,  1*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.85);
-    fillRect(ctx, -2*s, -14*s, 1*s, 2*s, '#2a2840'); // iris L
-    fillRect(ctx,  2*s, -14*s, 1*s, 2*s, '#2a2840'); // iris R
-    fillRect(ctx, -3*s, -14*s, 1*s, 1*s, '#000', 0.35); // corner shadow
-    fillRect(ctx,  1*s, -14*s, 1*s, 1*s, '#000', 0.35);
+    // Sunglasses (dark rectangular lenses over eyes)
+    fillRect(ctx, -4*s, -15*s, 3*s, 3*s, '#080810');       // left lens
+    fillRect(ctx,  1*s, -15*s, 3*s, 3*s, '#080810');       // right lens
+    fillRect(ctx,  0,   -15*s, 1*s, 1*s, '#18182c');       // nose bridge
+    fillRect(ctx, -4*s, -15*s, 3*s, 1*s, '#2a3060', 0.45); // left lens shine
+    fillRect(ctx,  1*s, -15*s, 3*s, 1*s, '#2a3060', 0.45); // right lens shine
+    fillRect(ctx, -4*s, -15*s, 8*s, 1*s, '#303050', 0.7);  // top frame
+    fillRect(ctx, -4*s, -13*s, 8*s, 1*s, '#202040', 0.7);  // bottom frame
     // Nose shadow + cheek highlight
     fillRect(ctx, -1*s, -12*s, 1*s, 1*s, skDark, 0.5);
     fillRect(ctx, -3*s, -13*s, 1*s, 2*s, '#ffffff', 0.08);
@@ -69,9 +71,15 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     fillRect(ctx, -4*s, -2*s, 8*s, 1*s, '#000', 0.15);
     fillRect(ctx,  3*s, -7*s, 1*s, 5*s, '#000', 0.12);
     fillRect(ctx, -3*s, -7*s, 2*s, 4*s, clothesHi, 0.18); // chest light
-    // Collar V-neck
-    fillRect(ctx, -2*s, -8*s, 2*s, 2*s, sk, 0.5);
-    fillRect(ctx,  1*s, -8*s, 2*s, 2*s, sk, 0.25);
+    // Red undershirt + jacket lapels
+    fillRect(ctx, -1*s, -8*s, 3*s, 6*s, shirt, 0.75);     // red shirt center
+    fillRect(ctx, -4*s, -8*s, 3*s, 4*s, clothes);          // left lapel (overrides red)
+    fillRect(ctx,  2*s, -8*s, 2*s, 4*s, clothes);          // right lapel
+    fillRect(ctx, -4*s, -8*s, 3*s, 1*s, clothesHi, 0.3);  // lapel edge highlight
+    fillRect(ctx,  2*s, -8*s, 2*s, 1*s, clothesHi, 0.3);
+    // Collar / neck opening
+    fillRect(ctx, -1*s, -8*s, 1*s, 2*s, sk, 0.4);
+    fillRect(ctx,  0,   -8*s, 1*s, 2*s, sk, 0.2);
     // Belt
     fillRect(ctx, -4*s, -1*s, 8*s, 1*s, '#3a2a10');
     fillRect(ctx,  0,   -1*s, 1*s, 1*s, '#8a7a50', 0.6); // buckle
@@ -106,21 +114,28 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     fillRect(ctx, -1*s, -18*s, 4*s, 1*s, hairHi, 0.4);
     // Ear
     fillRect(ctx, -1*s, -14*s, 1*s, 2*s, skDark, 0.7);
-    // Eye (profile)
-    fillRect(ctx,  2*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.8);
-    fillRect(ctx,  3*s, -14*s, 1*s, 2*s, '#2a2840');
-    fillRect(ctx,  2*s, -15*s, 2*s, 1*s, hair, 0.85); // eyebrow
+    // Eyebrow
+    fillRect(ctx,  2*s, -15*s, 2*s, 1*s, hair, 0.85);
+    // Sunglasses (side profile — rectangular dark lens)
+    fillRect(ctx,  1*s, -15*s, 4*s, 3*s, '#080810');       // dark lens
+    fillRect(ctx,  1*s, -15*s, 4*s, 1*s, '#2a3060', 0.45); // lens shine
+    fillRect(ctx,  1*s, -15*s, 1*s, 3*s, '#282848', 0.8);  // front frame
+    fillRect(ctx,  4*s, -15*s, 1*s, 3*s, '#1a1830', 0.8);  // rear frame
     // Nose bump
-    fillRect(ctx,  4*s, -13*s, 1*s, 2*s, sk);
-    fillRect(ctx,  5*s, -12*s, 1*s, 1*s, skDark, 0.6);
+    fillRect(ctx,  4*s, -12*s, 1*s, 2*s, sk);
+    fillRect(ctx,  5*s, -11*s, 1*s, 1*s, skDark, 0.6);
     // Mouth
-    fillRect(ctx,  3*s, -11*s, 2*s, 1*s, skDark, 0.5);
+    fillRect(ctx,  3*s, -10*s, 2*s, 1*s, skDark, 0.5);
     // Neck
-    fillRect(ctx, -1*s, -11*s, 2*s, 2*s, sk);
-    // Torso
+    fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
+    // Torso (dark navy jacket)
     fillRect(ctx, -2*s, -9*s, 5*s, 7*s, clothes);
-    fillRect(ctx, -2*s, -9*s, 5*s, 1*s, '#fff', 0.09);
-    fillRect(ctx,  2*s, -8*s, 1*s, 5*s, '#000', 0.12);
+    fillRect(ctx, -2*s, -9*s, 5*s, 1*s, clothesHi, 0.3);  // shoulder highlight
+    fillRect(ctx,  2*s, -8*s, 1*s, 5*s, '#000', 0.14);
+    // Red undershirt visible at front opening
+    fillRect(ctx, -2*s, -8*s, 1*s, 5*s, shirt, 0.7);
+    // Jacket edge detail
+    fillRect(ctx, -2*s, -9*s, 1*s, 7*s, clothesHi, 0.15);
     // Belt
     fillRect(ctx, -2*s, -2*s, 5*s, 1*s, '#3a2a10');
     // Front arm

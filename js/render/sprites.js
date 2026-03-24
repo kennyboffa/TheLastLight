@@ -32,7 +32,10 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   const hairHi    = '#504040';
   const pants     = gender === 'mother' ? '#1e1e30' : '#1e2218';
   const pantsHi   = gender === 'mother' ? '#2a2a42' : '#283020';
-  const legSwing  = (animFrame % 2 === 0) ? 0 : 1;
+  // 4-frame walk cycle: 0=stride-A, 1=pass, 2=stride-B, 3=pass
+  const frame4   = animFrame % 4;
+  const legSwing = (frame4 === 0 || frame4 === 2) ? 1 : 0; // 1 on stride frames
+  const legFlip  = frame4 >= 2; // second half — legs/arms swap sides
 
   if (pose === 'front') {
     _shadowOval(ctx, 7*s, 2*s);
@@ -73,25 +76,29 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     // Belt
     fillRect(ctx, -4*s, -1*s, 8*s, 1*s, '#3a2a10');
     fillRect(ctx,  0,   -1*s, 1*s, 1*s, '#8a7a50', 0.6); // buckle
-    // Arms with highlight/shadow
-    fillRect(ctx, -6*s, -8*s, 2*s, 5*s, clothes);
-    fillRect(ctx,  4*s, -8*s, 2*s, 5*s, clothes);
-    fillRect(ctx, -6*s, -7*s, 1*s, 4*s, '#fff', 0.07);
-    fillRect(ctx,  5*s, -7*s, 1*s, 4*s, '#000', 0.12);
+    // Arms — opposite arm swings forward when that leg is back
+    const lArmOff = (legSwing && !legFlip) ? -s : 0; // left arm up when left leg forward
+    const rArmOff = (legSwing &&  legFlip) ? -s : 0; // right arm up when right leg forward
+    fillRect(ctx, -6*s, -8*s + lArmOff, 2*s, 5*s, clothes);
+    fillRect(ctx,  4*s, -8*s + rArmOff, 2*s, 5*s, clothes);
+    fillRect(ctx, -6*s, -7*s + lArmOff, 1*s, 4*s, '#fff', 0.07);
+    fillRect(ctx,  5*s, -7*s + rArmOff, 1*s, 4*s, '#000', 0.12);
     // Hands
-    fillRect(ctx, -6*s, -3*s, 2*s, 2*s, sk);
-    fillRect(ctx,  4*s, -3*s, 2*s, 2*s, sk);
-    // Legs with highlight/shadow
-    fillRect(ctx, -4*s, -1*s, 3*s, 6*s + legSwing*s, pants);
-    fillRect(ctx,  1*s, -1*s, 3*s, 6*s - legSwing*s, pants);
-    fillRect(ctx, -4*s, -1*s, 1*s, 6*s + legSwing*s, '#fff', 0.07);
-    fillRect(ctx,  3*s, -1*s, 1*s, 6*s - legSwing*s, '#000', 0.1);
-    fillRect(ctx, -4*s, 1*s + legSwing*s, 3*s, 2*s, pantsHi, 0.3); // knee
+    fillRect(ctx, -6*s, -3*s + lArmOff, 2*s, 2*s, sk);
+    fillRect(ctx,  4*s, -3*s + rArmOff, 2*s, 2*s, sk);
+    // Legs — legFlip swaps which side is extended
+    const lLeg = legFlip ? 6 - legSwing : 6 + legSwing;
+    const rLeg = legFlip ? 6 + legSwing : 6 - legSwing;
+    fillRect(ctx, -4*s, -1*s, 3*s, lLeg*s, pants);
+    fillRect(ctx,  1*s, -1*s, 3*s, rLeg*s, pants);
+    fillRect(ctx, -4*s, -1*s, 1*s, lLeg*s, '#fff', 0.07);
+    fillRect(ctx,  3*s, -1*s, 1*s, rLeg*s, '#000', 0.1);
+    fillRect(ctx, -4*s, (lLeg - 5)*s, 3*s, 2*s, pantsHi, 0.3); // knee
     // Boots
-    fillRect(ctx, -5*s, 5*s + legSwing*s, 4*s, 2*s, '#282828');
-    fillRect(ctx,  1*s, 5*s - legSwing*s, 4*s, 2*s, '#282828');
-    fillRect(ctx, -5*s, 5*s + legSwing*s, 4*s, 1*s, '#444', 0.3); // boot top shine
-    fillRect(ctx, -5*s, 6*s + legSwing*s, 1*s, 1*s, '#333'); // heel
+    fillRect(ctx, -5*s, (lLeg - 1)*s, 4*s, 2*s, '#282828');
+    fillRect(ctx,  1*s, (rLeg - 1)*s, 4*s, 2*s, '#282828');
+    fillRect(ctx, -5*s, (lLeg - 1)*s, 4*s, 1*s, '#444', 0.3);
+    fillRect(ctx, -5*s,  lLeg*s,      1*s, 1*s, '#333'); // heel
 
   } else if (pose === 'side') {
     _shadowOval(ctx, 6*s, 2*s);
@@ -124,20 +131,24 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
     fillRect(ctx, -2*s, -9*s, 1*s, 7*s, clothesHi, 0.15);
     // Belt
     fillRect(ctx, -2*s, -2*s, 5*s, 1*s, '#3a2a10');
-    // Front arm
-    fillRect(ctx,  2*s, -9*s + legSwing*s, 2*s, 5*s, clothes);
-    fillRect(ctx,  2*s, -9*s + legSwing*s, 1*s, 5*s, '#fff', 0.08);
-    fillRect(ctx,  2*s, -4*s + legSwing*s, 2*s, 2*s, sk);
+    // Front arm — swings forward on legFlip stride, back on normal stride
+    const frontArmOff = legFlip ?  legSwing*s : -legSwing*s;
+    const backArmOff  = legFlip ? -legSwing*s :  legSwing*s;
+    fillRect(ctx,  2*s, -9*s + frontArmOff, 2*s, 5*s, clothes);
+    fillRect(ctx,  2*s, -9*s + frontArmOff, 1*s, 5*s, '#fff', 0.08);
+    fillRect(ctx,  2*s, -4*s + frontArmOff, 2*s, 2*s, sk);
     // Back arm (darker)
-    fillRect(ctx, -4*s, -9*s - legSwing*s, 2*s, 4*s, '#1e2a1e');
-    // Front leg
-    fillRect(ctx,  0,   -2*s, 3*s, 5*s + legSwing*s, pants);
-    fillRect(ctx,  0,   -2*s, 1*s, 5*s + legSwing*s, '#fff', 0.07);
-    fillRect(ctx, -1*s, 3*s + legSwing*s, 5*s, 2*s, '#282828'); // boot
-    fillRect(ctx, -1*s, 3*s + legSwing*s, 5*s, 1*s, '#444', 0.3);
+    fillRect(ctx, -4*s, -9*s + backArmOff,  2*s, 4*s, '#1e2a1e');
+    // Front / back leg — legFlip swaps which is extended
+    const fLeg = legFlip ? 5 - legSwing : 5 + legSwing;
+    const bLeg = legFlip ? 5 + legSwing : 5 - legSwing;
+    fillRect(ctx,  0,   -2*s, 3*s, fLeg*s, pants);
+    fillRect(ctx,  0,   -2*s, 1*s, fLeg*s, '#fff', 0.07);
+    fillRect(ctx, -1*s, (fLeg - 2)*s, 5*s, 2*s, '#282828'); // front boot
+    fillRect(ctx, -1*s, (fLeg - 2)*s, 5*s, 1*s, '#444', 0.3);
     // Back leg (darker)
-    fillRect(ctx, -2*s, -2*s, 3*s, 5*s - legSwing*s, '#181820');
-    fillRect(ctx, -2*s,  3*s - legSwing*s, 3*s, 2*s, '#1a1a1a');
+    fillRect(ctx, -2*s, -2*s, 3*s, bLeg*s, '#181820');
+    fillRect(ctx, -2*s, (bLeg - 2)*s, 3*s, 2*s, '#1a1a1a');
 
   } else if (pose === 'back') {
     _shadowOval(ctx, 7*s, 2*s);

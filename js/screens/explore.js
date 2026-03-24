@@ -72,8 +72,15 @@ function startExploration(gs, loc) {
   // Pre-generate buildings (MUST be done here — never call randInt in render)
   const buildings = [];
   for (const zone of loc.zones) {
-    for (const bdef of (zone.buildings || [])) {
-      const bx     = zone.x + bdef.relX;
+    const zoneBdefs = zone.buildings || [];
+    for (const bdef of zoneBdefs) {
+      // Random-layout areas: skip some optional buildings (~30% chance of absence per visit)
+      // and randomise positions so the area looks genuinely different each time
+      if (loc.randomLayout && !bdef.required && chance(30)) continue;
+      const baseRelX = loc.randomLayout
+        ? Math.floor(zone.w * 0.1) + randInt(0, Math.floor(zone.w * 0.65))
+        : bdef.relX;
+      const bx = zone.x + baseRelX;
       // Tents are much smaller than proper buildings
       const bw     = bdef.isTent ? 55 + randInt(0, 20) : 130 + randInt(0, 80);
       const bh     = bdef.isTent ? 40 + randInt(0, 10) : 85 + randInt(20, 55);

@@ -5,6 +5,16 @@
 // All sprites drawn at "natural" 1px = 1 logical px scale.
 // Caller passes ctx with appropriate transform/scale.
 
+function _shadowOval(ctx, rx, ry, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha || 0.28;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   // s = scale factor (e.g. 2 for shelter view)
   // facing: 1=right, -1=left
@@ -14,73 +24,149 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
 
-  const sk      = gender === 'mother' ? '#c49878' : C.skin;
-  const clothes = gender === 'mother' ? '#3a3a50' : '#2e3828';
-  const hair    = C.hair;
-  const pants   = gender === 'mother' ? '#1e1e30' : '#1e2218';
-  const legSwing = (animFrame % 2 === 0) ? 0 : 1;
+  const sk        = gender === 'mother' ? '#c49878' : C.skin;
+  const skDark    = gender === 'mother' ? '#a07848' : '#a07848';
+  const clothes   = gender === 'mother' ? '#3a3a50' : '#2e3828';
+  const clothesHi = gender === 'mother' ? '#4a4a64' : '#3d4e35';
+  const hair      = C.hair;
+  const hairHi    = '#504040';
+  const pants     = gender === 'mother' ? '#1e1e30' : '#1e2218';
+  const pantsHi   = gender === 'mother' ? '#2a2a42' : '#283020';
+  const legSwing  = (animFrame % 2 === 0) ? 0 : 1;
 
   if (pose === 'front') {
+    _shadowOval(ctx, 7*s, 2*s);
     // Head
     fillRect(ctx, -4*s, -18*s, 8*s, 8*s, sk);
-    fillRect(ctx, -4*s, -18*s, 8*s, 2*s, hair);
-    fillRect(ctx, -2*s, -14*s, 1*s, 1*s, '#111');
-    fillRect(ctx,  1*s, -14*s, 1*s, 1*s, '#111');
-    // Neck + torso + arms
+    fillRect(ctx, -4*s, -18*s, 8*s, 1*s, '#ffffff', 0.14); // top highlight
+    fillRect(ctx,  3*s, -17*s, 1*s, 6*s, '#000000', 0.12); // right-edge shadow
+    // Hair (3 tones)
+    fillRect(ctx, -4*s, -18*s, 8*s, 3*s, hair);
+    fillRect(ctx, -4*s, -16*s, 1*s, 2*s, hair);
+    fillRect(ctx,  3*s, -16*s, 1*s, 2*s, hair);
+    fillRect(ctx, -3*s, -18*s, 4*s, 1*s, hairHi, 0.5); // hair highlight
+    // Eyebrows
+    fillRect(ctx, -3*s, -15*s, 2*s, 1*s, hair, 0.85);
+    fillRect(ctx,  1*s, -15*s, 2*s, 1*s, hair, 0.85);
+    // Eyes (whites + iris + shadow corner)
+    fillRect(ctx, -3*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.85);
+    fillRect(ctx,  1*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.85);
+    fillRect(ctx, -2*s, -14*s, 1*s, 2*s, '#2a2840'); // iris L
+    fillRect(ctx,  2*s, -14*s, 1*s, 2*s, '#2a2840'); // iris R
+    fillRect(ctx, -3*s, -14*s, 1*s, 1*s, '#000', 0.35); // corner shadow
+    fillRect(ctx,  1*s, -14*s, 1*s, 1*s, '#000', 0.35);
+    // Nose shadow + cheek highlight
+    fillRect(ctx, -1*s, -12*s, 1*s, 1*s, skDark, 0.5);
+    fillRect(ctx, -3*s, -13*s, 1*s, 2*s, '#ffffff', 0.08);
+    // Mouth
+    fillRect(ctx, -1*s, -11*s, 3*s, 1*s, skDark, 0.5);
+    // Neck
     fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
-    fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, clothes);
-    fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, clothes);
-    fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, clothes);
-    fillRect(ctx, -6*s,  -3*s, 2*s, 2*s, sk);
-    fillRect(ctx,  4*s,  -3*s, 2*s, 2*s, sk);
-    // Legs + feet
+    fillRect(ctx,  0,   -10*s, 1*s, 2*s, '#000', 0.1);
+    // Torso with highlight + shadow
+    fillRect(ctx, -4*s, -8*s, 8*s, 7*s, clothes);
+    fillRect(ctx, -4*s, -8*s, 8*s, 1*s, '#fff', 0.09);
+    fillRect(ctx, -4*s, -2*s, 8*s, 1*s, '#000', 0.15);
+    fillRect(ctx,  3*s, -7*s, 1*s, 5*s, '#000', 0.12);
+    fillRect(ctx, -3*s, -7*s, 2*s, 4*s, clothesHi, 0.18); // chest light
+    // Collar V-neck
+    fillRect(ctx, -2*s, -8*s, 2*s, 2*s, sk, 0.5);
+    fillRect(ctx,  1*s, -8*s, 2*s, 2*s, sk, 0.25);
+    // Belt
+    fillRect(ctx, -4*s, -1*s, 8*s, 1*s, '#3a2a10');
+    fillRect(ctx,  0,   -1*s, 1*s, 1*s, '#8a7a50', 0.6); // buckle
+    // Arms with highlight/shadow
+    fillRect(ctx, -6*s, -8*s, 2*s, 5*s, clothes);
+    fillRect(ctx,  4*s, -8*s, 2*s, 5*s, clothes);
+    fillRect(ctx, -6*s, -7*s, 1*s, 4*s, '#fff', 0.07);
+    fillRect(ctx,  5*s, -7*s, 1*s, 4*s, '#000', 0.12);
+    // Hands
+    fillRect(ctx, -6*s, -3*s, 2*s, 2*s, sk);
+    fillRect(ctx,  4*s, -3*s, 2*s, 2*s, sk);
+    // Legs with highlight/shadow
     fillRect(ctx, -4*s, -1*s, 3*s, 6*s + legSwing*s, pants);
     fillRect(ctx,  1*s, -1*s, 3*s, 6*s - legSwing*s, pants);
-    fillRect(ctx, -4*s,  5*s + legSwing*s, 3*s, 2*s, '#222');
-    fillRect(ctx,  1*s,  5*s - legSwing*s, 3*s, 2*s, '#222');
+    fillRect(ctx, -4*s, -1*s, 1*s, 6*s + legSwing*s, '#fff', 0.07);
+    fillRect(ctx,  3*s, -1*s, 1*s, 6*s - legSwing*s, '#000', 0.1);
+    fillRect(ctx, -4*s, 1*s + legSwing*s, 3*s, 2*s, pantsHi, 0.3); // knee
+    // Boots
+    fillRect(ctx, -5*s, 5*s + legSwing*s, 4*s, 2*s, '#282828');
+    fillRect(ctx,  1*s, 5*s - legSwing*s, 4*s, 2*s, '#282828');
+    fillRect(ctx, -5*s, 5*s + legSwing*s, 4*s, 1*s, '#444', 0.3); // boot top shine
+    fillRect(ctx, -5*s, 6*s + legSwing*s, 1*s, 1*s, '#333'); // heel
 
   } else if (pose === 'side') {
-    // Side profile (facing direction = front of profile)
+    _shadowOval(ctx, 6*s, 2*s);
     fillRect(ctx, -1*s, -18*s, 6*s, 7*s, sk);
+    fillRect(ctx, -1*s, -18*s, 6*s, 1*s, '#fff', 0.14);
+    fillRect(ctx,  4*s, -17*s, 1*s, 5*s, '#000', 0.12);
+    // Hair
     fillRect(ctx, -1*s, -18*s, 6*s, 3*s, hair);
-    fillRect(ctx,  3*s, -13*s, 1*s, 1*s, '#111'); // eye
-    fillRect(ctx, -1*s, -11*s, 2*s, 2*s, sk); // neck
-    fillRect(ctx, -2*s,  -9*s, 5*s, 7*s, clothes); // torso
-    // Front arm (swings with stride)
-    fillRect(ctx,  2*s,  -9*s + legSwing*s, 2*s, 5*s, clothes);
-    fillRect(ctx,  2*s,  -4*s + legSwing*s, 2*s, 2*s, sk);
-    // Back arm (counter-swing, darker)
-    fillRect(ctx, -4*s,  -9*s - legSwing*s, 2*s, 4*s, '#1e2a1e');
+    fillRect(ctx, -2*s, -17*s, 1*s, 3*s, hair);
+    fillRect(ctx, -1*s, -18*s, 4*s, 1*s, hairHi, 0.4);
+    // Ear
+    fillRect(ctx, -1*s, -14*s, 1*s, 2*s, skDark, 0.7);
+    // Eye (profile)
+    fillRect(ctx,  2*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.8);
+    fillRect(ctx,  3*s, -14*s, 1*s, 2*s, '#2a2840');
+    fillRect(ctx,  2*s, -15*s, 2*s, 1*s, hair, 0.85); // eyebrow
+    // Nose bump
+    fillRect(ctx,  4*s, -13*s, 1*s, 2*s, sk);
+    fillRect(ctx,  5*s, -12*s, 1*s, 1*s, skDark, 0.6);
+    // Mouth
+    fillRect(ctx,  3*s, -11*s, 2*s, 1*s, skDark, 0.5);
+    // Neck
+    fillRect(ctx, -1*s, -11*s, 2*s, 2*s, sk);
+    // Torso
+    fillRect(ctx, -2*s, -9*s, 5*s, 7*s, clothes);
+    fillRect(ctx, -2*s, -9*s, 5*s, 1*s, '#fff', 0.09);
+    fillRect(ctx,  2*s, -8*s, 1*s, 5*s, '#000', 0.12);
+    // Belt
+    fillRect(ctx, -2*s, -2*s, 5*s, 1*s, '#3a2a10');
+    // Front arm
+    fillRect(ctx,  2*s, -9*s + legSwing*s, 2*s, 5*s, clothes);
+    fillRect(ctx,  2*s, -9*s + legSwing*s, 1*s, 5*s, '#fff', 0.08);
+    fillRect(ctx,  2*s, -4*s + legSwing*s, 2*s, 2*s, sk);
+    // Back arm (darker)
+    fillRect(ctx, -4*s, -9*s - legSwing*s, 2*s, 4*s, '#1e2a1e');
     // Front leg
-    fillRect(ctx,  0,    -2*s, 3*s, 5*s + legSwing*s, pants);
-    fillRect(ctx,  0,     3*s + legSwing*s, 4*s, 2*s, '#222');
+    fillRect(ctx,  0,   -2*s, 3*s, 5*s + legSwing*s, pants);
+    fillRect(ctx,  0,   -2*s, 1*s, 5*s + legSwing*s, '#fff', 0.07);
+    fillRect(ctx, -1*s, 3*s + legSwing*s, 5*s, 2*s, '#282828'); // boot
+    fillRect(ctx, -1*s, 3*s + legSwing*s, 5*s, 1*s, '#444', 0.3);
     // Back leg (darker)
-    fillRect(ctx, -2*s,  -2*s, 3*s, 5*s - legSwing*s, '#181820');
-    fillRect(ctx, -2*s,   3*s - legSwing*s, 3*s, 2*s, '#1a1a1a');
+    fillRect(ctx, -2*s, -2*s, 3*s, 5*s - legSwing*s, '#181820');
+    fillRect(ctx, -2*s,  3*s - legSwing*s, 3*s, 2*s, '#1a1a1a');
 
   } else if (pose === 'back') {
-    // Back view — hair covers head, no eyes
+    _shadowOval(ctx, 7*s, 2*s);
     fillRect(ctx, -4*s, -18*s, 8*s, 8*s, hair);
-    fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk); // neck
+    fillRect(ctx, -4*s, -18*s, 8*s, 1*s, hairHi, 0.4);
+    fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
     fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, clothes);
+    fillRect(ctx, -4*s,  -8*s, 8*s, 1*s, '#fff', 0.07);
+    fillRect(ctx, -4*s,  -2*s, 8*s, 1*s, '#000', 0.12);
+    fillRect(ctx,  3*s,  -7*s, 1*s, 5*s, '#000', 0.1);
     fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, clothes);
     fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, clothes);
     fillRect(ctx, -6*s,  -3*s, 2*s, 2*s, sk);
     fillRect(ctx,  4*s,  -3*s, 2*s, 2*s, sk);
     fillRect(ctx, -4*s, -1*s, 3*s, 6*s + legSwing*s, pants);
     fillRect(ctx,  1*s, -1*s, 3*s, 6*s - legSwing*s, pants);
-    fillRect(ctx, -4*s,  5*s + legSwing*s, 3*s, 2*s, '#1a1a1a');
-    fillRect(ctx,  1*s,  5*s - legSwing*s, 3*s, 2*s, '#1a1a1a');
+    fillRect(ctx, -4*s, -1*s, 1*s, 6*s + legSwing*s, '#fff', 0.06);
+    fillRect(ctx, -5*s, 5*s + legSwing*s, 4*s, 2*s, '#252525');
+    fillRect(ctx,  1*s, 5*s - legSwing*s, 4*s, 2*s, '#252525');
 
   } else if (pose === 'sleep') {
-    // Lying horizontal — head at +x end (facing direction), body to left
-    fillRect(ctx,  3*s, -8*s, 10*s, 5*s, '#3a2e48'); // pillow
-    fillRect(ctx,  5*s, -7*s,  7*s, 3*s, '#504060'); // pillow highlight
-    fillRect(ctx, -9*s, -6*s, 18*s, 5*s, '#2a1e38'); // blanket
-    fillRect(ctx, -8*s, -5*s, 12*s, 3*s, clothes);   // body lump
-    fillRect(ctx,  5*s,-12*s,  7*s, 7*s, sk);         // head
-    fillRect(ctx,  5*s,-12*s,  7*s, 3*s, hair);       // hair
-    fillRect(ctx,  7*s, -8*s,  2*s, 1*s, '#333');     // closed eye
+    // Lying horizontal
+    fillRect(ctx,  3*s, -8*s, 10*s, 5*s, '#3a2e48');
+    fillRect(ctx,  5*s, -7*s,  7*s, 2*s, '#504060'); // pillow highlight
+    fillRect(ctx, -9*s, -6*s, 18*s, 5*s, '#2a1e38');
+    fillRect(ctx, -9*s, -6*s, 18*s, 1*s, '#3a2e50', 0.5); // blanket top
+    fillRect(ctx, -8*s, -5*s, 12*s, 3*s, clothes);
+    fillRect(ctx,  5*s,-12*s,  7*s, 7*s, sk);
+    fillRect(ctx,  5*s,-12*s,  7*s, 3*s, hair);
+    fillRect(ctx,  7*s, -8*s,  2*s, 1*s, '#333'); // closed eye
   }
 
   ctx.restore();
@@ -92,53 +178,96 @@ function drawChild(ctx, x, y, s, facing, animFrame, pose) {
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
 
-  const sk   = '#d4a070';
-  const dress = '#3a2a40';
-  const hair  = '#301808';
-  const leg   = (animFrame % 2 === 0) ? 0 : 1;
+  const sk     = '#d4a070';
+  const skDark = '#a87850';
+  const dress  = '#3a2a40';
+  const dressHi= '#4e3a56';
+  const hair   = '#301808';
+  const hairHi = '#4a2818';
+  const leg    = (animFrame % 2 === 0) ? 0 : 1;
 
   if (pose === 'front') {
+    _shadowOval(ctx, 5*s, 1.5*s);
+    // Head
     fillRect(ctx, -3*s, -14*s, 7*s, 7*s, sk);
+    fillRect(ctx, -3*s, -14*s, 7*s, 1*s, '#fff', 0.14);
+    fillRect(ctx,  3*s, -13*s, 1*s, 5*s, '#000', 0.1);
+    // Hair with highlight
     fillRect(ctx, -3*s, -14*s, 7*s, 2*s, hair);
     fillRect(ctx,  3*s, -13*s, 1*s, 4*s, hair);
-    fillRect(ctx, -1*s, -10*s, 1*s, 1*s, '#181830');
-    fillRect(ctx,  2*s, -10*s, 1*s, 1*s, '#181830');
+    fillRect(ctx, -2*s, -14*s, 3*s, 1*s, hairHi, 0.45);
+    // Eyebrows
+    fillRect(ctx, -1*s, -11*s, 1*s, 1*s, hair, 0.7);
+    fillRect(ctx,  2*s, -11*s, 1*s, 1*s, hair, 0.7);
+    // Eyes (whites + iris)
+    fillRect(ctx, -2*s, -10*s, 2*s, 2*s, '#ccc8c0', 0.8);
+    fillRect(ctx,  1*s, -10*s, 2*s, 2*s, '#ccc8c0', 0.8);
+    fillRect(ctx, -1*s, -10*s, 1*s, 2*s, '#181830'); // iris L
+    fillRect(ctx,  2*s, -10*s, 1*s, 2*s, '#181830'); // iris R
+    // Nose
+    fillRect(ctx,  0,    -8*s, 1*s, 1*s, skDark, 0.4);
+    // Neck
     fillRect(ctx,  0,    -7*s, 2*s, 2*s, sk);
+    // Dress with highlight
     fillRect(ctx, -3*s,  -5*s, 7*s, 5*s, dress);
+    fillRect(ctx, -3*s,  -5*s, 7*s, 1*s, dressHi, 0.4);
+    fillRect(ctx,  3*s,  -4*s, 1*s, 3*s, '#000', 0.1);
+    fillRect(ctx, -2*s,  -4*s, 2*s, 3*s, dressHi, 0.18);
+    // Arms
     fillRect(ctx, -5*s,  -5*s, 2*s, 4*s, sk);
     fillRect(ctx,  3*s,  -5*s, 2*s, 4*s, sk);
-    fillRect(ctx, -3*s,   0,   3*s, 5*s + leg*s, '#2a1a2e');
-    fillRect(ctx,  1*s,   0,   3*s, 5*s - leg*s, '#2a1a2e');
-    fillRect(ctx, -3*s,  5*s + leg*s, 3*s, 2*s, '#201020');
-    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#201020');
+    fillRect(ctx, -5*s,  -4*s, 1*s, 3*s, '#fff', 0.07);
+    fillRect(ctx,  4*s,  -4*s, 1*s, 3*s, '#000', 0.1);
+    // Legs with highlight
+    fillRect(ctx, -3*s,  0,  3*s, 5*s + leg*s, '#2a1a2e');
+    fillRect(ctx,  1*s,  0,  3*s, 5*s - leg*s, '#2a1a2e');
+    fillRect(ctx, -3*s,  0,  1*s, 5*s + leg*s, '#fff', 0.07);
+    // Shoes
+    fillRect(ctx, -4*s, 5*s + leg*s, 4*s, 2*s, '#201020');
+    fillRect(ctx,  1*s, 5*s - leg*s, 4*s, 2*s, '#201020');
+    fillRect(ctx, -4*s, 5*s + leg*s, 4*s, 1*s, '#3a2a3a', 0.4);
 
   } else if (pose === 'side') {
+    _shadowOval(ctx, 4*s, 1.5*s);
     fillRect(ctx, -1*s, -14*s, 5*s, 6*s, sk);
+    fillRect(ctx, -1*s, -14*s, 5*s, 1*s, '#fff', 0.14);
+    fillRect(ctx,  3*s, -13*s, 1*s, 4*s, '#000', 0.1);
     fillRect(ctx, -1*s, -14*s, 5*s, 2*s, hair);
-    fillRect(ctx,  2*s, -11*s, 1*s, 1*s, '#181830');
+    fillRect(ctx, -2*s, -13*s, 1*s, 2*s, hair);
+    fillRect(ctx,  2*s, -11*s, 2*s, 2*s, '#ccc8c0', 0.8);
+    fillRect(ctx,  3*s, -11*s, 1*s, 2*s, '#181830');
+    fillRect(ctx,  2*s, -12*s, 2*s, 1*s, hair, 0.8); // eyebrow
+    fillRect(ctx,  3*s, -10*s, 1*s, 1*s, skDark, 0.5); // nose
     fillRect(ctx,  0,    -8*s, 2*s, 2*s, sk);
     fillRect(ctx, -2*s,  -6*s, 4*s, 5*s, dress);
+    fillRect(ctx, -2*s,  -6*s, 4*s, 1*s, dressHi, 0.4);
     fillRect(ctx,  1*s,  -6*s + leg*s, 2*s, 3*s, sk);
     fillRect(ctx, -3*s,  -6*s - leg*s, 2*s, 3*s, '#28203a');
-    fillRect(ctx,  0,     0,   2*s, 4*s + leg*s, '#2a1a2e');
-    fillRect(ctx,  0,    4*s + leg*s, 3*s, 2*s, '#201020');
-    fillRect(ctx, -1*s,   0,   2*s, 4*s - leg*s, '#1e1028');
-    fillRect(ctx, -1*s,  4*s - leg*s, 2*s, 2*s, '#181018');
+    fillRect(ctx,  0,    0,   2*s, 4*s + leg*s, '#2a1a2e');
+    fillRect(ctx, -1*s,  4*s + leg*s, 4*s, 2*s, '#201020');
+    fillRect(ctx, -1*s,  0,   2*s, 4*s - leg*s, '#1e1028');
+    fillRect(ctx, -2*s,  4*s - leg*s, 3*s, 2*s, '#181018');
 
   } else if (pose === 'back') {
+    _shadowOval(ctx, 5*s, 1.5*s);
     fillRect(ctx, -3*s, -14*s, 7*s, 7*s, hair);
+    fillRect(ctx, -3*s, -14*s, 7*s, 1*s, hairHi, 0.4);
     fillRect(ctx,  0,    -7*s, 2*s, 2*s, sk);
     fillRect(ctx, -3*s,  -5*s, 7*s, 5*s, dress);
+    fillRect(ctx, -3*s,  -5*s, 7*s, 1*s, dressHi, 0.3);
+    fillRect(ctx,  3*s,  -4*s, 1*s, 3*s, '#000', 0.1);
     fillRect(ctx, -5*s,  -5*s, 2*s, 4*s, sk);
     fillRect(ctx,  3*s,  -5*s, 2*s, 4*s, sk);
-    fillRect(ctx, -3*s,   0,   3*s, 5*s + leg*s, '#2a1a2e');
-    fillRect(ctx,  1*s,   0,   3*s, 5*s - leg*s, '#2a1a2e');
-    fillRect(ctx, -3*s,  5*s + leg*s, 3*s, 2*s, '#181018');
-    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#181018');
+    fillRect(ctx, -3*s,  0,  3*s, 5*s + leg*s, '#2a1a2e');
+    fillRect(ctx,  1*s,  0,  3*s, 5*s - leg*s, '#2a1a2e');
+    fillRect(ctx, -4*s, 5*s + leg*s, 4*s, 2*s, '#181018');
+    fillRect(ctx,  1*s, 5*s - leg*s, 4*s, 2*s, '#181018');
 
   } else if (pose === 'sleep') {
-    fillRect(ctx,  2*s,  -7*s, 8*s, 4*s, '#3a2e48'); // pillow
-    fillRect(ctx, -7*s,  -5*s, 14*s, 4*s, '#2a1e38'); // blanket
+    fillRect(ctx,  2*s,  -7*s, 8*s, 4*s, '#3a2e48');
+    fillRect(ctx,  4*s,  -6*s, 5*s, 2*s, '#504060', 0.5); // pillow highlight
+    fillRect(ctx, -7*s,  -5*s, 14*s, 4*s, '#2a1e38');
+    fillRect(ctx, -7*s,  -5*s, 14*s, 1*s, '#3a2e50', 0.4);
     fillRect(ctx, -6*s,  -4*s,  9*s, 2*s, dress);
     fillRect(ctx,  4*s, -10*s,  6*s, 6*s, sk);
     fillRect(ctx,  4*s, -10*s,  6*s, 2*s, hair);
@@ -150,60 +279,107 @@ function drawChild(ctx, x, y, s, facing, animFrame, pose) {
 
 function drawSurvivor(ctx, x, y, s, facing, animFrame, idx, pose) {
   pose = pose || 'front';
-  const clothColors = ['#2a3828','#282a38','#382820','#283030'];
-  const hairColors  = ['#201808','#101020','#301810','#102018'];
+  const clothColors  = ['#2a3828','#282a38','#382820','#283030'];
+  const clothHiColor = ['#3a4e38','#383a4e','#4e3830','#384040'];
+  const hairColors   = ['#201808','#101020','#301810','#102018'];
+  const hairHiColors = ['#382818','#201828','#482010','#183020'];
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
 
-  const sk  = C.skin;
-  const cl  = clothColors[idx % clothColors.length];
-  const hr  = hairColors[idx % hairColors.length];
-  const leg = (animFrame % 2 === 0) ? 0 : 1;
+  const sk   = C.skin;
+  const skD  = '#a07848';
+  const cl   = clothColors[idx % clothColors.length];
+  const clHi = clothHiColor[idx % clothHiColor.length];
+  const hr   = hairColors[idx % hairColors.length];
+  const hrHi = hairHiColors[idx % hairHiColors.length];
+  const leg  = (animFrame % 2 === 0) ? 0 : 1;
 
   if (pose === 'front') {
+    _shadowOval(ctx, 7*s, 2*s);
     fillRect(ctx, -4*s, -18*s, 8*s, 8*s, sk);
+    fillRect(ctx, -4*s, -18*s, 8*s, 1*s, '#fff', 0.12);
+    fillRect(ctx,  3*s, -17*s, 1*s, 6*s, '#000', 0.1);
     fillRect(ctx, -4*s, -18*s, 8*s, 2*s, hr);
-    fillRect(ctx, -2*s, -14*s, 1*s, 1*s, '#111');
-    fillRect(ctx,  1*s, -14*s, 1*s, 1*s, '#111');
+    fillRect(ctx, -4*s, -16*s, 1*s, 2*s, hr);
+    fillRect(ctx,  3*s, -16*s, 1*s, 2*s, hr);
+    fillRect(ctx, -3*s, -18*s, 3*s, 1*s, hrHi, 0.4);
+    fillRect(ctx, -3*s, -15*s, 2*s, 1*s, hr, 0.8); // eyebrow L
+    fillRect(ctx,  1*s, -15*s, 2*s, 1*s, hr, 0.8); // eyebrow R
+    fillRect(ctx, -3*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.8);
+    fillRect(ctx,  1*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.8);
+    fillRect(ctx, -2*s, -14*s, 1*s, 2*s, '#222'); // iris L
+    fillRect(ctx,  2*s, -14*s, 1*s, 2*s, '#222'); // iris R
+    fillRect(ctx, -1*s, -12*s, 1*s, 1*s, skD, 0.5); // nose
+    fillRect(ctx, -1*s, -11*s, 3*s, 1*s, skD, 0.4); // mouth
     fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
-    fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, cl);
-    fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, cl);
-    fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, cl);
+    // Torso
+    fillRect(ctx, -4*s, -8*s, 8*s, 7*s, cl);
+    fillRect(ctx, -4*s, -8*s, 8*s, 1*s, '#fff', 0.08);
+    fillRect(ctx, -4*s, -2*s, 8*s, 1*s, '#000', 0.13);
+    fillRect(ctx,  3*s, -7*s, 1*s, 5*s, '#000', 0.1);
+    fillRect(ctx, -3*s, -7*s, 2*s, 4*s, clHi, 0.2);
+    // Arms
+    fillRect(ctx, -6*s, -8*s, 2*s, 5*s, cl);
+    fillRect(ctx,  4*s, -8*s, 2*s, 5*s, cl);
+    fillRect(ctx, -6*s, -7*s, 1*s, 4*s, '#fff', 0.07);
+    fillRect(ctx,  5*s, -7*s, 1*s, 4*s, '#000', 0.1);
+    // Legs + boots
     fillRect(ctx, -4*s, -1*s, 3*s, 6*s + leg*s, '#222');
     fillRect(ctx,  1*s, -1*s, 3*s, 6*s - leg*s, '#222');
-    fillRect(ctx, -4*s,  5*s + leg*s, 3*s, 2*s, '#1a1a1a');
-    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#1a1a1a');
+    fillRect(ctx, -4*s, -1*s, 1*s, 6*s + leg*s, '#fff', 0.06);
+    fillRect(ctx, -4*s,  1*s + leg*s, 3*s, 2*s, '#333', 0.3);
+    fillRect(ctx, -5*s, 5*s + leg*s, 4*s, 2*s, '#1a1a1a');
+    fillRect(ctx,  1*s, 5*s - leg*s, 4*s, 2*s, '#1a1a1a');
+    fillRect(ctx, -5*s, 5*s + leg*s, 4*s, 1*s, '#3a3a3a', 0.35);
 
   } else if (pose === 'side') {
+    _shadowOval(ctx, 6*s, 2*s);
     fillRect(ctx, -1*s, -18*s, 6*s, 7*s, sk);
+    fillRect(ctx, -1*s, -18*s, 6*s, 1*s, '#fff', 0.12);
+    fillRect(ctx,  4*s, -17*s, 1*s, 5*s, '#000', 0.1);
     fillRect(ctx, -1*s, -18*s, 6*s, 3*s, hr);
-    fillRect(ctx,  3*s, -13*s, 1*s, 1*s, '#111');
+    fillRect(ctx, -2*s, -17*s, 1*s, 3*s, hr);
+    fillRect(ctx, -1*s, -18*s, 4*s, 1*s, hrHi, 0.4);
+    fillRect(ctx, -1*s, -14*s, 1*s, 2*s, skD, 0.6); // ear
+    fillRect(ctx,  2*s, -14*s, 2*s, 2*s, '#ccc8c0', 0.8);
+    fillRect(ctx,  3*s, -14*s, 1*s, 2*s, '#222');
+    fillRect(ctx,  2*s, -15*s, 2*s, 1*s, hr, 0.8);
+    fillRect(ctx,  4*s, -13*s, 1*s, 2*s, sk); // nose
     fillRect(ctx, -1*s, -11*s, 2*s, 2*s, sk);
     fillRect(ctx, -2*s,  -9*s, 5*s, 7*s, cl);
+    fillRect(ctx, -2*s,  -9*s, 5*s, 1*s, '#fff', 0.08);
+    fillRect(ctx,  2*s,  -8*s, 1*s, 5*s, '#000', 0.1);
     fillRect(ctx,  2*s,  -9*s + leg*s, 2*s, 5*s, cl);
+    fillRect(ctx,  2*s,  -9*s + leg*s, 1*s, 5*s, '#fff', 0.07);
     fillRect(ctx,  2*s,  -4*s + leg*s, 2*s, 2*s, sk);
     fillRect(ctx, -4*s,  -9*s - leg*s, 2*s, 4*s, '#1e2220');
     fillRect(ctx,  0,    -2*s, 3*s, 5*s + leg*s, '#222');
-    fillRect(ctx,  0,     3*s + leg*s, 4*s, 2*s, '#1a1a1a');
+    fillRect(ctx,  0,    -2*s, 1*s, 5*s + leg*s, '#fff', 0.06);
+    fillRect(ctx, -1*s,   3*s + leg*s, 5*s, 2*s, '#1a1a1a');
     fillRect(ctx, -2*s,  -2*s, 3*s, 5*s - leg*s, '#181818');
     fillRect(ctx, -2*s,   3*s - leg*s, 3*s, 2*s, '#141414');
 
   } else if (pose === 'back') {
+    _shadowOval(ctx, 7*s, 2*s);
     fillRect(ctx, -4*s, -18*s, 8*s, 8*s, hr);
+    fillRect(ctx, -4*s, -18*s, 8*s, 1*s, hrHi, 0.4);
     fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
-    fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, cl);
-    fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, cl);
-    fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, cl);
+    fillRect(ctx, -4*s, -8*s, 8*s, 7*s, cl);
+    fillRect(ctx, -4*s, -8*s, 8*s, 1*s, '#fff', 0.07);
+    fillRect(ctx,  3*s, -7*s, 1*s, 5*s, '#000', 0.1);
+    fillRect(ctx, -6*s, -8*s, 2*s, 5*s, cl);
+    fillRect(ctx,  4*s, -8*s, 2*s, 5*s, cl);
     fillRect(ctx, -4*s, -1*s, 3*s, 6*s + leg*s, '#222');
     fillRect(ctx,  1*s, -1*s, 3*s, 6*s - leg*s, '#222');
-    fillRect(ctx, -4*s,  5*s + leg*s, 3*s, 2*s, '#141414');
-    fillRect(ctx,  1*s,  5*s - leg*s, 3*s, 2*s, '#141414');
+    fillRect(ctx, -5*s, 5*s + leg*s, 4*s, 2*s, '#141414');
+    fillRect(ctx,  1*s, 5*s - leg*s, 4*s, 2*s, '#141414');
 
   } else if (pose === 'sleep') {
     fillRect(ctx,  3*s,  -8*s, 10*s, 5*s, '#3a2e48');
-    fillRect(ctx,  5*s,  -7*s,  7*s, 3*s, '#504060');
+    fillRect(ctx,  5*s,  -7*s,  7*s, 2*s, '#504060', 0.5);
     fillRect(ctx, -9*s,  -6*s, 18*s, 5*s, '#201830');
+    fillRect(ctx, -9*s,  -6*s, 18*s, 1*s, '#302040', 0.4);
     fillRect(ctx, -8*s,  -5*s, 12*s, 3*s, cl);
     fillRect(ctx,  5*s, -12*s,  7*s, 7*s, sk);
     fillRect(ctx,  5*s, -12*s,  7*s, 3*s, hr);
@@ -218,25 +394,51 @@ function drawDog(ctx, x, y, s, facing, animFrame) {
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
 
-  const fur = '#6b4a2a';
+  const fur  = '#6b4a2a';
+  const furHi= '#8a6040';
   const dark = '#3a2810';
-  const leg = (animFrame % 2 === 0) ? 0 : 1;
+  const nose = '#1a1010';
+  const leg  = (animFrame % 2 === 0) ? 0 : 1;
 
-  // Body
+  _shadowOval(ctx, 8*s, 2*s);
+
+  // Tail (curved, wagging)
+  const wag = Math.sin(animFrame * 0.2) * 2 * s;
+  fillRect(ctx, -8*s, -8*s + wag, 2*s, 4*s, fur);
+  fillRect(ctx, -9*s, -9*s + wag, 2*s, 2*s, fur); // curl
+  fillRect(ctx, -8*s, -8*s + wag, 1*s, 3*s, '#fff', 0.07); // tail highlight
+
+  // Body with belly shadow
   fillRect(ctx, -6*s, -6*s, 12*s, 5*s, fur);
+  fillRect(ctx, -6*s, -6*s, 12*s, 1*s, furHi, 0.4); // back highlight (top)
+  fillRect(ctx, -5*s, -2*s, 10*s, 1*s, dark, 0.35); // belly shadow
+  fillRect(ctx, -6*s, -5*s, 1*s, 4*s, '#fff', 0.06); // left highlight
+
   // Head
   fillRect(ctx,  4*s, -9*s, 5*s, 5*s, fur);
+  fillRect(ctx,  4*s, -9*s, 5*s, 1*s, furHi, 0.3);
+  fillRect(ctx,  8*s, -8*s, 1*s, 4*s, '#000', 0.1);
+  // Ears (pointed up)
+  fillRect(ctx,  4*s, -12*s, 2*s, 4*s, dark);
+  fillRect(ctx,  6*s, -11*s, 1*s, 2*s, '#5a3818', 0.4); // inner ear
+  // Eye
+  fillRect(ctx,  7*s, -8*s, 2*s, 2*s, '#c8b090', 0.7);
+  fillRect(ctx,  8*s, -8*s, 1*s, 2*s, dark);
+  fillRect(ctx,  7*s, -8*s, 1*s, 1*s, '#fff', 0.25); // eye shine
   // Snout
-  fillRect(ctx,  8*s, -7*s, 3*s, 2*s, dark);
-  // Ears
-  fillRect(ctx,  4*s, -11*s, 2*s, 3*s, dark);
-  // Tail
-  fillRect(ctx, -8*s, -8*s, 2*s, 4*s, fur);
-  // Legs (4)
-  fillRect(ctx, -4*s, -1*s, 2*s, 3*s + leg*s, dark);
-  fillRect(ctx, -1*s, -1*s, 2*s, 3*s - leg*s, dark);
-  fillRect(ctx,  2*s, -1*s, 2*s, 3*s + leg*s, dark);
-  fillRect(ctx,  5*s, -1*s, 2*s, 3*s - leg*s, dark);
+  fillRect(ctx,  8*s, -7*s, 3*s, 3*s, dark);
+  fillRect(ctx,  9*s, -6*s, 1*s, 1*s, '#000'); // nostril
+  fillRect(ctx,  8*s, -7*s, 3*s, 1*s, '#5a3a20', 0.3); // snout top
+
+  // Legs (front pair brighter, rear pair darker)
+  fillRect(ctx,  2*s, -1*s, 2*s, 3*s + leg*s, fur);   // front-right
+  fillRect(ctx, -1*s, -1*s, 2*s, 3*s - leg*s, fur);   // front-left
+  fillRect(ctx, -4*s, -1*s, 2*s, 3*s + leg*s, dark);  // rear-right
+  fillRect(ctx, -1*s + leg*s*2, -1*s, 2*s, 3*s - leg*s, dark); // rear-left
+  // Paw tips
+  fillRect(ctx,  2*s, 2*s + leg*s, 2*s, 1*s, dark);
+  fillRect(ctx, -1*s, 2*s - leg*s, 2*s, 1*s, dark);
+  fillRect(ctx, -4*s, 2*s + leg*s, 2*s, 1*s, nose);
   ctx.restore();
 }
 
@@ -246,24 +448,64 @@ function drawDroneSprite(ctx, x, y, s, animFrame) {
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
 
-  const body = '#2a2e36';
-  const glow = '#60a0cc';
-  const dark = '#181c22';
-  // Hover animation
+  const body  = '#2a2e36';
+  const bodyHi= '#3a4050';
+  const glow  = '#60a0cc';
+  const dark  = '#181c22';
+  const arm   = '#202430';
   const hover = Math.sin(animFrame * 0.15) * 2 * s;
 
   ctx.translate(0, hover);
-  // Main body (hexagonal-ish)
+
+  // Fading shadow on ground (moves opposite hover)
+  ctx.save();
+  ctx.translate(0, -hover + 30*s);
+  ctx.globalAlpha = 0.12 + Math.cos(animFrame * 0.15) * 0.06;
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.ellipse(0, 0, 9*s, 2*s, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Rotor arms (4 directions)
+  fillRect(ctx, -14*s, -1*s, 6*s, 2*s, arm);
+  fillRect(ctx,  8*s,  -1*s, 6*s, 2*s, arm);
+  fillRect(ctx,  -1*s, -12*s, 2*s, 6*s, arm);
+  fillRect(ctx,  -1*s,  6*s,  2*s, 6*s, arm);
+
+  // Rotor discs (blurred circles at tips)
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#8ab8d0';
+  ctx.beginPath(); ctx.arc(-11*s, 0, 4*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc( 11*s, 0, 4*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -9*s, 3*s, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,  9*s, 3*s, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Antenna
+  fillRect(ctx, 0, -10*s, 1*s, 4*s, bodyHi);
+  fillRect(ctx, -1*s, -11*s, 3*s, 1*s, glow, 0.5);
+
+  // Main body (hexagonal cross)
   fillRect(ctx, -6*s, -4*s, 12*s, 8*s, body);
   fillRect(ctx, -4*s, -6*s, 8*s, 12*s, body);
-  // Eye / sensor (glowing)
+  // Body panel highlights
+  fillRect(ctx, -6*s, -4*s, 12*s, 1*s, bodyHi, 0.35); // top edge
+  fillRect(ctx, -5*s, -3*s, 1*s, 6*s, '#ffffff', 0.06); // left highlight
+  fillRect(ctx,  4*s, -3*s, 1*s, 6*s, '#000', 0.18); // right shadow
+  fillRect(ctx, -6*s,  3*s, 12*s, 1*s, '#000', 0.2); // bottom shadow
+
+  // Central sensor eye (glowing)
   fillRect(ctx, -2*s, -2*s, 4*s, 4*s, glow, 0.9);
-  fillRect(ctx,  0,   -1*s, 2*s, 2*s, '#c0e0ff', 0.8);
-  // Rotors
-  fillRect(ctx, -12*s, -2*s, 4*s, 1*s, dark);
-  fillRect(ctx,  8*s, -2*s, 4*s, 1*s, dark);
-  fillRect(ctx, -2*s, -10*s, 1*s, 4*s, dark);
-  fillRect(ctx,  1*s, -10*s, 1*s, 4*s, dark);
+  fillRect(ctx,  0,   -1*s, 2*s, 2*s, '#c0e0ff', 0.85);
+  fillRect(ctx, -1*s, -2*s, 2*s, 1*s, '#e0f4ff', 0.4); // highlight
+  fillRect(ctx, -2*s,  2*s, 4*s, 1*s, '#000', 0.3); // eye bottom shadow
+
+  // Belly sensor array
+  fillRect(ctx, -3*s,  3*s, 6*s, 2*s, dark);
+  fillRect(ctx, -2*s,  3*s, 1*s, 1*s, glow, 0.45);
+  fillRect(ctx,  0,    3*s, 1*s, 1*s, glow, 0.45);
+  fillRect(ctx,  2*s,  3*s, 1*s, 1*s, glow, 0.45);
+
   ctx.restore();
 }
 
@@ -272,27 +514,89 @@ function drawRobotSprite(ctx, x, y, s, facing) {
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);
 
-  const body = '#303840';
-  const head = '#252c34';
-  const eye  = '#cc2020';
-  const leg  = '#202830';
+  const body  = '#303840';
+  const bodyHi= '#404e5c';
+  const bodyDk= '#1c2228';
+  const head  = '#252c34';
+  const headHi= '#323c48';
+  const eye   = '#cc2020';
+  const eyeHi = '#ff6060';
+  const leg   = '#202830';
+  const legHi = '#2c3a48';
+  const joint = '#505a68';
 
-  // Head
-  fillRect(ctx, -5*s, -24*s, 10*s, 8*s, head);
-  fillRect(ctx, -3*s, -21*s, 5*s, 3*s, eye, 0.9);
-  // Torso
-  fillRect(ctx, -6*s, -16*s, 12*s, 10*s, body);
-  // Arms
-  fillRect(ctx, -9*s, -15*s, 3*s, 8*s, body);
-  fillRect(ctx,  6*s, -15*s, 3*s, 8*s, body);
-  // Lower body
-  fillRect(ctx, -5*s, -6*s, 10*s, 4*s, body);
+  _shadowOval(ctx, 9*s, 2.5*s);
+
   // Legs
   fillRect(ctx, -5*s, -2*s, 4*s, 8*s, leg);
   fillRect(ctx,  1*s, -2*s, 4*s, 8*s, leg);
-  // Feet
+  // Leg highlights + shadows
+  fillRect(ctx, -5*s, -2*s, 1*s, 8*s, '#fff', 0.08);
+  fillRect(ctx,  4*s, -2*s, 1*s, 8*s, '#000', 0.18);
+  fillRect(ctx,  1*s, -2*s, 1*s, 8*s, '#fff', 0.08);
+  // Knee joints
+  fillRect(ctx, -5*s, 2*s, 4*s, 2*s, joint);
+  fillRect(ctx,  1*s, 2*s, 4*s, 2*s, joint);
+  fillRect(ctx, -5*s, 2*s, 4*s, 1*s, '#fff', 0.1);
+  // Feet (extended)
   fillRect(ctx, -6*s, 6*s, 5*s, 2*s, leg);
   fillRect(ctx,  1*s, 6*s, 5*s, 2*s, leg);
+  fillRect(ctx, -6*s, 6*s, 5*s, 1*s, legHi, 0.35);
+
+  // Lower body
+  fillRect(ctx, -5*s, -6*s, 10*s, 4*s, body);
+  fillRect(ctx, -5*s, -6*s, 10*s, 1*s, '#fff', 0.09);
+  fillRect(ctx, -5*s, -3*s, 10*s, 1*s, '#000', 0.18);
+  // Hip joints
+  fillRect(ctx, -5*s, -3*s, 4*s, 1*s, joint);
+  fillRect(ctx,  1*s, -3*s, 4*s, 1*s, joint);
+
+  // Shoulder pads (before arms, drawn wider)
+  fillRect(ctx, -9*s, -16*s, 3*s, 4*s, bodyHi);
+  fillRect(ctx,  6*s, -16*s, 3*s, 4*s, bodyHi);
+  fillRect(ctx, -9*s, -16*s, 3*s, 1*s, '#fff', 0.12);
+
+  // Arms
+  fillRect(ctx, -9*s, -15*s, 3*s, 8*s, body);
+  fillRect(ctx,  6*s, -15*s, 3*s, 8*s, body);
+  fillRect(ctx, -9*s, -14*s, 1*s, 7*s, '#fff', 0.08); // left arm highlight
+  fillRect(ctx,  8*s, -14*s, 1*s, 7*s, '#000', 0.15); // right arm shadow
+  // Elbow joints
+  fillRect(ctx, -9*s, -10*s, 3*s, 2*s, joint);
+  fillRect(ctx,  6*s, -10*s, 3*s, 2*s, joint);
+
+  // Torso
+  fillRect(ctx, -6*s, -16*s, 12*s, 10*s, body);
+  fillRect(ctx, -6*s, -16*s, 12*s, 1*s, '#fff', 0.1); // top highlight
+  fillRect(ctx,  5*s, -15*s, 1*s, 8*s, '#000', 0.15); // right edge shadow
+  fillRect(ctx, -6*s, -15*s, 1*s, 8*s, '#fff', 0.06); // left edge highlight
+  // Torso panel lines
+  fillRect(ctx, -6*s, -11*s, 12*s, 1*s, bodyDk, 0.45); // horizontal panel seam
+  fillRect(ctx,  0,   -15*s, 1*s, 8*s, bodyDk, 0.3);   // vertical seam
+  // Chest reactor
+  fillRect(ctx, -2*s, -14*s, 4*s, 4*s, '#141820');
+  fillRect(ctx, -1*s, -13*s, 2*s, 2*s, eye, 0.85);
+  fillRect(ctx, -1*s, -13*s, 2*s, 1*s, eyeHi, 0.35); // glow top
+  // Side vents
+  fillRect(ctx, -6*s, -13*s, 1*s, 2*s, bodyDk);
+  fillRect(ctx,  5*s, -13*s, 1*s, 2*s, bodyDk);
+
+  // Head
+  fillRect(ctx, -5*s, -24*s, 10*s, 8*s, head);
+  fillRect(ctx, -5*s, -24*s, 10*s, 1*s, '#fff', 0.12); // top
+  fillRect(ctx,  4*s, -23*s, 1*s, 6*s, '#000', 0.18);  // right shadow
+  fillRect(ctx, -5*s, -23*s, 1*s, 6*s, '#fff', 0.07);  // left highlight
+  // Head panel seam
+  fillRect(ctx, -5*s, -20*s, 10*s, 1*s, bodyDk, 0.3);
+  // Visor (full-width red bar, two-tone)
+  fillRect(ctx, -4*s, -21*s, 8*s, 3*s, '#1a0808');
+  fillRect(ctx, -4*s, -21*s, 8*s, 3*s, eye, 0.82);
+  fillRect(ctx, -4*s, -21*s, 8*s, 1*s, eyeHi, 0.3); // visor top glow
+  fillRect(ctx, -4*s, -19*s, 8*s, 1*s, '#000', 0.3); // visor bottom shadow
+  // Head side lights
+  fillRect(ctx, -5*s, -22*s, 1*s, 1*s, eye, 0.5);
+  fillRect(ctx,  4*s, -22*s, 1*s, 1*s, eye, 0.5);
+
   ctx.restore();
 }
 
@@ -301,29 +605,134 @@ function drawHumanEnemy(ctx, x, y, s, facing, animFrame) {
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);
 
-  const sk  = '#a07040';
-  const cl  = '#3a2020';
-  const leg = (animFrame % 2 === 0) ? 0 : 1;
+  const sk   = '#a07040';
+  const skD  = '#705020';
+  const cl   = '#3a2020';
+  const vest = '#241a14';
+  const leg  = (animFrame % 2 === 0) ? 0 : 1;
 
+  _shadowOval(ctx, 7*s, 2*s);
+
+  // Head
   fillRect(ctx, -4*s, -18*s, 8*s, 8*s, sk);
-  fillRect(ctx, -4*s, -18*s, 8*s, 2*s, '#1a1008');
-  // Angry eyes
-  fillRect(ctx, -2*s, -13*s, 2*s, 1*s, '#1a0808');
-  fillRect(ctx,  1*s, -13*s, 2*s, 1*s, '#1a0808');
-  fillRect(ctx, -4*s,  -8*s, 8*s, 7*s, cl);
-  fillRect(ctx, -6*s,  -8*s, 2*s, 5*s, cl);
-  fillRect(ctx,  4*s,  -8*s, 2*s, 5*s, cl);
-  fillRect(ctx, -4*s,  -1*s, 3*s, 6*s + leg*s, '#201818');
-  fillRect(ctx,  1*s,  -1*s, 3*s, 6*s - leg*s, '#201818');
-  fillRect(ctx, -4*s,   5*s + leg*s, 3*s, 2*s, '#161010');
-  fillRect(ctx,  1*s,   5*s - leg*s, 3*s, 2*s, '#161010');
-  // Weapon hint
-  fillRect(ctx,  4*s,  -6*s, 4*s, 1*s, '#4a4a3a');
+  fillRect(ctx, -4*s, -18*s, 8*s, 1*s, '#fff', 0.1);
+  fillRect(ctx,  3*s, -17*s, 1*s, 6*s, '#000', 0.12);
+  // Bandana / head wrap (full head cover)
+  fillRect(ctx, -4*s, -18*s, 8*s, 4*s, '#1a1010');
+  fillRect(ctx, -4*s, -14*s, 8*s, 1*s, '#2e1818'); // wrap lower edge
+  fillRect(ctx, -4*s, -18*s, 8*s, 1*s, '#2e1818', 0.5); // wrap top
+  // Angry furrowed brows
+  fillRect(ctx, -3*s, -14*s, 3*s, 1*s, '#0a0606', 0.9); // brow L (angled)
+  fillRect(ctx,  1*s, -14*s, 3*s, 1*s, '#0a0606', 0.9); // brow R
+  fillRect(ctx, -3*s, -15*s, 1*s, 1*s, '#0a0606', 0.6); // brow inner L
+  fillRect(ctx,  3*s, -15*s, 1*s, 1*s, '#0a0606', 0.6); // brow inner R
+  // Eyes (red-tinted angry)
+  fillRect(ctx, -3*s, -13*s, 2*s, 2*s, '#c8a090', 0.7);
+  fillRect(ctx,  1*s, -13*s, 2*s, 2*s, '#c8a090', 0.7);
+  fillRect(ctx, -2*s, -13*s, 1*s, 2*s, '#3a0808'); // iris L
+  fillRect(ctx,  2*s, -13*s, 1*s, 2*s, '#3a0808'); // iris R
+  // Nose
+  fillRect(ctx, -1*s, -11*s, 1*s, 1*s, skD, 0.6);
+  // Snarl / grit
+  fillRect(ctx, -2*s, -10*s, 5*s, 1*s, skD, 0.5);
+  fillRect(ctx, -1*s, -10*s, 3*s, 1*s, '#1a0808', 0.4); // dark gap
+  // Neck
+  fillRect(ctx, -1*s, -10*s, 2*s, 2*s, sk);
+
+  // Base shirt / arms
+  fillRect(ctx, -4*s, -8*s, 8*s, 7*s, cl);
+  fillRect(ctx, -6*s, -8*s, 2*s, 5*s, cl);
+  fillRect(ctx,  4*s, -8*s, 2*s, 5*s, cl);
+  fillRect(ctx, -6*s, -7*s, 1*s, 4*s, '#fff', 0.06);
+  fillRect(ctx,  5*s, -7*s, 1*s, 4*s, '#000', 0.12);
+  // Tactical vest overlay
+  fillRect(ctx, -3*s, -8*s, 6*s, 7*s, vest);
+  fillRect(ctx, -3*s, -8*s, 6*s, 1*s, '#3a2828', 0.5);
+  fillRect(ctx,  2*s, -7*s, 1*s, 5*s, '#000', 0.2);
+  // Vest pouches
+  fillRect(ctx, -3*s, -5*s, 2*s, 3*s, '#181210');
+  fillRect(ctx,  1*s, -5*s, 2*s, 3*s, '#181210');
+  fillRect(ctx, -3*s, -5*s, 2*s, 1*s, '#2a1e14', 0.5);
+  fillRect(ctx,  1*s, -5*s, 2*s, 1*s, '#2a1e14', 0.5);
+  // Hands
+  fillRect(ctx, -6*s, -3*s, 2*s, 2*s, sk);
+  fillRect(ctx,  4*s, -3*s, 2*s, 2*s, sk);
+
+  // Legs
+  fillRect(ctx, -4*s, -1*s, 3*s, 6*s + leg*s, '#201818');
+  fillRect(ctx,  1*s, -1*s, 3*s, 6*s - leg*s, '#201818');
+  fillRect(ctx, -4*s, -1*s, 1*s, 6*s + leg*s, '#fff', 0.06);
+  fillRect(ctx,  3*s, -1*s, 1*s, 6*s - leg*s, '#000', 0.1);
+  // Boots
+  fillRect(ctx, -5*s, 5*s + leg*s, 4*s, 2*s, '#161010');
+  fillRect(ctx,  1*s, 5*s - leg*s, 4*s, 2*s, '#161010');
+  fillRect(ctx, -5*s, 5*s + leg*s, 4*s, 1*s, '#2a1e1e', 0.35);
+  fillRect(ctx, -5*s, 6*s + leg*s, 1*s, 1*s, '#2a2020'); // heel
+
+  // Weapon (rifle barrel over shoulder)
+  fillRect(ctx,  4*s, -8*s, 1*s, 10*s, '#3a3820');
+  fillRect(ctx,  4*s, -7*s, 3*s, 2*s, '#4a4a2a');
+  fillRect(ctx,  6*s, -7*s, 1*s, 2*s, '#686040', 0.5); // receiver highlight
+
   ctx.restore();
 }
 
 function drawWolfSprite(ctx, x, y, s, facing, animFrame) {
-  drawDog(ctx, x, y, s, facing, animFrame); // reuse dog, slightly different call
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  if (facing < 0) { ctx.scale(-1, 1); }
+
+  const fur  = '#4a4038'; // grey-brown wolf
+  const furHi= '#6a5a50';
+  const dark = '#282018';
+  const nose = '#1a1010';
+  const leg  = (animFrame % 2 === 0) ? 0 : 1;
+
+  _shadowOval(ctx, 10*s, 2.5*s);
+
+  // Tail (low, aggressive)
+  fillRect(ctx, -10*s, -2*s, 3*s, 2*s, fur);
+  fillRect(ctx, -10*s, -2*s, 3*s, 1*s, furHi, 0.25);
+
+  // Body (larger than dog)
+  fillRect(ctx, -7*s, -8*s, 14*s, 6*s, fur);
+  fillRect(ctx, -7*s, -8*s, 14*s, 1*s, furHi, 0.35); // back highlight
+  fillRect(ctx, -7*s, -7*s, 1*s, 5*s, '#fff', 0.06);
+  // Neck hump (hackles raised)
+  fillRect(ctx,  4*s, -10*s, 4*s, 3*s, fur);
+  fillRect(ctx,  4*s, -12*s, 2*s, 2*s, dark); // hackle spikes
+  fillRect(ctx,  6*s, -11*s, 2*s, 1*s, dark);
+
+  // Head (longer, lower snout)
+  fillRect(ctx,  5*s, -12*s, 6*s, 6*s, fur);
+  fillRect(ctx,  5*s, -12*s, 6*s, 1*s, furHi, 0.3);
+  fillRect(ctx, 10*s, -11*s, 1*s, 5*s, '#000', 0.1);
+  // Ears (pointed)
+  fillRect(ctx,  5*s, -15*s, 2*s, 4*s, dark);
+  fillRect(ctx,  8*s, -14*s, 2*s, 3*s, dark);
+  fillRect(ctx,  5*s, -14*s, 1*s, 2*s, '#7a5040', 0.4);
+  // Eye (amber / menacing)
+  fillRect(ctx,  9*s, -11*s, 2*s, 2*s, '#d09020', 0.8);
+  fillRect(ctx, 10*s, -11*s, 1*s, 2*s, dark);
+  fillRect(ctx,  9*s, -11*s, 1*s, 1*s, '#fff', 0.3);
+  // Long snout
+  fillRect(ctx, 10*s, -10*s, 4*s, 3*s, dark);
+  fillRect(ctx, 10*s, -10*s, 4*s, 1*s, '#6a4830', 0.3);
+  fillRect(ctx, 13*s, -9*s, 1*s, 1*s, nose); // nostril
+  // Teeth hint
+  fillRect(ctx, 11*s, -7*s, 3*s, 1*s, '#d0c0a0', 0.6);
+
+  // Legs
+  fillRect(ctx,  3*s, -2*s, 2*s, 4*s + leg*s, fur);
+  fillRect(ctx,  0,   -2*s, 2*s, 4*s - leg*s, fur);
+  fillRect(ctx, -4*s, -2*s, 2*s, 4*s + leg*s, dark);
+  fillRect(ctx, -2*s, -2*s, 2*s, 4*s - leg*s, dark);
+  // Paws
+  fillRect(ctx,  3*s, 2*s + leg*s, 3*s, 1*s, dark);
+  fillRect(ctx,  0,   2*s - leg*s, 3*s, 1*s, dark);
+  fillRect(ctx, -4*s, 2*s + leg*s, 3*s, 1*s, nose);
+
+  ctx.restore();
 }
 
 // ── Environment / shelter tiles ───────────────────────────────────────────────

@@ -272,7 +272,22 @@ function finishTask(gs, who, task) {
 }
 
 function completeBuildTask(gs, task) {
-  if (task.roomId) {
+  if (task.roomId && task.upgradeLevel) {
+    // Room level upgrade
+    const room = getRoom(task.roomId);
+    if (room) {
+      const def = ROOM_DEFS[room.id];
+      room.level = task.upgradeLevel;
+      // Apply storage bonus for storage room upgrades
+      if (def && def.effect === 'moreStorage') {
+        const bonus = task.upgradeLevel === 2 ? 30 : 50;
+        gs.shelter.storageMax += bonus;
+        notify(`${def.name} upgraded to level ${room.level}. +${bonus}kg capacity.`, 'good');
+      } else {
+        notify(`${def ? def.name : 'Room'} upgraded to level ${room.level}.`, 'good');
+      }
+    }
+  } else if (task.roomId) {
     const room = getRoom(task.roomId);
     if (room) {
       room.unlocked = true; room.level = 1; room.building = false;

@@ -709,8 +709,13 @@ function drawRoomMenu(ctx, gs, mx, my) {
       y += 22;
     }
   } else {
-    drawText(ctx, 'Room level: ' + room.level, px+8, y+9, C.textGood, 8);
-    y += 14;
+    // Level indicator with stars
+    const curLevel = room.level || 1;
+    const maxLevel = def ? (def.maxLevel || 1) : 1;
+    const stars = '★'.repeat(curLevel) + '☆'.repeat(Math.max(0, maxLevel - curLevel));
+    drawText(ctx, `Level ${curLevel}/${maxLevel}  ${stars}`, px+8, y+9, C.textGood, 8);
+    y += 13;
+
     if (roomId === 'bedroom') {
       const maxSurv = maxSurvivors(gs);
       drawText(ctx, `Max survivors: ${maxSurv}`, px+8, y+9, C.textDim, 8);
@@ -720,6 +725,32 @@ function drawRoomMenu(ctx, gs, mx, my) {
       drawText(ctx, `2nd bed: ${bed2done ? '✓ Built' : 'Not built'}`, px+8, y+9, bed2done ? C.textGood : C.textDim, 8);
       y += 11;
       drawText(ctx, `3rd bed: ${bed3done ? '✓ Built' : 'Not built'}`, px+8, y+9, bed3done ? C.textGood : C.textDim, 8);
+      y += 11;
+    }
+
+    // Upgrade button (if not at max level)
+    if (def && def.upgradeCost && curLevel < maxLevel) {
+      const nextCost = def.upgradeCost[curLevel];
+      if (nextCost) {
+        const upDesc = def.upgradeDesc ? def.upgradeDesc[curLevel] : '';
+        if (upDesc) { drawText(ctx, upDesc, px+8, y+9, C.textDim, 7); y += 11; }
+        drawText(ctx, 'Upgrade cost:', px+8, y+9, C.textDim, 7); y += 10;
+        for (const [id, qty] of Object.entries(nextCost)) {
+          const have = countInInventory(gs.shelter.storage, id) + countInInventory(gs.parent.inventory, id);
+          const col  = have >= qty ? C.textGood : C.textDanger;
+          drawText(ctx, `  ${getItemDef(id)?.name || id}: ${have}/${qty}`, px+8, y+9, col, 7);
+          y += 10;
+        }
+        const canUpg = def.upgradeCost[curLevel] &&
+          Object.entries(def.upgradeCost[curLevel]).every(([id, q]) =>
+            countInInventory(gs.shelter.storage, id) + countInInventory(gs.parent.inventory, id) >= q)
+          && gs.parent.task === null;
+        const upgBtnY = py + H2 - 48;
+        drawButton(ctx, px+8, upgBtnY, W2-16, 18, `Upgrade to Level ${curLevel + 1}`,
+          hitTest(mx, my, px+8, upgBtnY, W2-16, 18), false, !canUpg);
+      }
+    } else if (def && curLevel >= maxLevel) {
+      drawText(ctx, 'Max level reached', px+8, y+9, C.textGood, 7);
       y += 11;
     }
   }
@@ -1177,6 +1208,20 @@ function handleMenuClick(mx, my, gs) {
         if (result.ok) M.activeMenu = null;
         else notify(result.msg, 'warn');
         return;
+      }
+    }
+    // Upgrade button (for built rooms not at max level)
+    if (room.unlocked && def && def.upgradeCost) {
+      const curLevel = room.level || 1;
+      const maxLevel = def.maxLevel || 1;
+      if (curLevel < maxLevel) {
+        const upgBtnY = py + H2 - 48;
+        if (hitTest(mx, my, px+8, upgBtnY, W2-16, 18)) {
+          const result = upgradeRoom(gs, roomId);
+          if (result.ok) M.activeMenu = null;
+          else notify(result.msg, 'warn');
+          return;
+        }
       }
     }
     // Close

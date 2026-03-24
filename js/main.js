@@ -331,7 +331,7 @@ function update(dt) {
         if (sf.pendingFn) { sf.pendingFn(); sf.pendingFn = null; }
         // Hold on the title card if one is shown; otherwise go straight to fade-in
         sf.phase    = sf.titleText ? 'hold' : 'in';
-        sf.holdTimer = sf.titleText ? 210 : 0; // ~3.5s at 60fps
+        sf.holdTimer = sf.titleText ? 180 : 0; // ~3s at 60fps
       }
     } else if (sf.phase === 'hold') {
       sf.holdTimer = (sf.holdTimer || 0) - 1;

@@ -145,6 +145,8 @@ function drawRoomFurniture(ctx, roomId, r, level, gs) {
 }
 
 function renderShelter(ctx, gs) {
+  const mx = gs.mouse.x, my = gs.mouse.y;
+
   // Background
   fillRect(ctx, 0, 0, MAIN_W, CFG.H, C.bg);
 
@@ -154,6 +156,17 @@ function renderShelter(ctx, gs) {
 
   // Weather overlay on surface
   drawShelterWeather(ctx, gs);
+
+  // Time speed buttons — top-right of surface area, next to the day/status panel
+  {
+    const ts  = gs.timeScale || 1;
+    const spw = 26, sph = 16, spy = 4;
+    const sp4x = MAIN_W - 4  - spw;
+    const sp2x = MAIN_W - 4  - spw * 2 - 3;
+    drawButton(ctx, sp2x, spy, spw, sph, '2x', hitTest(mx, my, sp2x, spy, spw, sph), ts === 2);
+    drawButton(ctx, sp4x, spy, spw, sph, '4x', hitTest(mx, my, sp4x, spy, spw, sph), ts === 4);
+    gs._timeSpeedBtns = { x2:{x:sp2x,y:spy,w:spw,h:sph}, x4:{x:sp4x,y:spy,w:spw,h:sph} };
+  }
 
   // Drone patrol above shelter
   drawDronePatrol(ctx, gs);
@@ -166,7 +179,6 @@ function renderShelter(ctx, gs) {
   fillRect(ctx, MAIN_W/2 - 6, CFG.SURFACE_H - 2, 12, 14, C.metal);
 
   // Draw rooms
-  const mx = gs.mouse.x, my = gs.mouse.y;
   for (let row = 0; row < ROOM_GRID.length; row++) {
     for (let col = 0; col < ROOM_GRID[row].length; col++) {
       const roomId = ROOM_GRID[row][col];
@@ -651,13 +663,7 @@ function drawShelterControls(ctx, gs, mx, my) {
     bx += btn.w + 4;
   }
 
-  // Time speed buttons (far right of bar)
-  const ts = gs.timeScale || 1;
-  const sp2x = MAIN_W - 60, sp4x = MAIN_W - 28;
-  const spy = barY + 5, sph = 20, spw = 26;
-  drawButton(ctx, sp2x, spy, spw, sph, '2x', hitTest(mx, my, sp2x, spy, spw, sph), ts === 2);
-  drawButton(ctx, sp4x, spy, spw, sph, '4x', hitTest(mx, my, sp4x, spy, spw, sph), ts === 4);
-  gs._timeSpeedBtns = { x2: { x: sp2x, y: spy, w: spw, h: sph }, x4: { x: sp4x, y: spy, w: spw, h: sph } };
+  // Time speed buttons drawn in surface area (top-right) — see drawShelterSurfaceSpeedBtns
 }
 
 // ── Context menus ─────────────────────────────────────────────────────────────

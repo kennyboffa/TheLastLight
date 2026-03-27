@@ -467,7 +467,14 @@ function updateExplore(gs, dt) {
   }
 
   es.showReturnPrompt = es.px < 80 || es.px > CFG.WORLD_W - 120;
-  if (p.tiredness >= 92) { endExploration(gs); notify('Too exhausted. Returned home.', 'warn'); return; }
+  if (p.tiredness >= 92) {
+    // Collapsed from exhaustion — treated like a late return (found at dawn)
+    gs.lateReturn    = true;
+    gs.parent.wounded = true;
+    addLog(`${p.name} collapsed from exhaustion in the field.`, 'danger');
+    endExploration(gs);
+    return;
+  }
 
   // Creepy ambient FX — triggers randomly, roughly every 2-5 minutes
   es._creepyTimer = (es._creepyTimer || 0) + 1;
@@ -722,6 +729,22 @@ function exploreClick(mx, my, gs) {
           gs.event = { id: slot.id, type: 'note', title: def.name, text: def.noteText || '...', choices: [] };
           gs.screen = 'event';
           es.invOpen = false;
+          es.invSelected = null;
+          return;
+        }
+
+        if (btn.action === 'learn_bp') {
+          const recipeId = def.blueprintFor;
+          if (recipeId && !(gs.unlockedRecipes || []).includes(recipeId)) {
+            if (!gs.unlockedRecipes) gs.unlockedRecipes = [];
+            gs.unlockedRecipes.push(recipeId);
+            removeFromInventory(gs.parent.inventory, slot.id, 1);
+            const recipeName = def.name.replace('Blueprint: ', '');
+            notify(`Blueprint learned: ${recipeName}`, 'good');
+            addLog(`Learned crafting recipe: ${recipeName}.`, 'good');
+          } else {
+            notify('Already known.', 'info');
+          }
           es.invSelected = null;
           return;
         }
@@ -1581,6 +1604,52 @@ function drawBuildingInteriorDecor(ctx, theme, floorW, groundY) {
       }
       break;
     }
+    case 'church': {
+      // Crucifixion cross at center — Singularity cult scene
+      const cx2 = Math.round(W * 0.45);
+      // Vertical beam
+      fillRect(ctx, cx2 - 3, G - 90, 6, 90, '#1e1610');
+      strokeRect(ctx, cx2 - 3, G - 90, 6, 90, '#2e261a');
+      // Horizontal beam
+      fillRect(ctx, cx2 - 28, G - 74, 56, 5, '#1e1610');
+      strokeRect(ctx, cx2 - 28, G - 74, 56, 5, '#2e261a');
+      // Crucified figure (stick figure, dark)
+      ctx.globalAlpha = 0.70;
+      // Body
+      fillRect(ctx, cx2 - 2, G - 68, 4, 22, '#2a1c10');
+      // Head
+      ctx.fillStyle = '#3a2818';
+      ctx.beginPath(); ctx.arc(cx2, G - 72, 5, 0, Math.PI * 2); ctx.fill();
+      // Arms along crossbeam
+      fillRect(ctx, cx2 - 26, G - 72, 22, 3, '#2a1c10');
+      fillRect(ctx, cx2 + 4,  G - 72, 22, 3, '#2a1c10');
+      // Legs
+      fillRect(ctx, cx2 - 4, G - 46, 3, 16, '#2a1c10');
+      fillRect(ctx, cx2 + 1, G - 46, 3, 16, '#2a1c10');
+      ctx.globalAlpha = 0.55;
+      // Candles at base of cross
+      for (let ci = -1; ci <= 1; ci++) {
+        const cx3 = cx2 + ci * 14;
+        fillRect(ctx, cx3 - 2, G - 14, 4, 14, '#c8a840');
+        fillRect(ctx, cx3 - 1, G - 14, 2, 2,  '#ffe880'); // flame
+        ctx.fillStyle = '#ff8820';
+        ctx.beginPath(); ctx.arc(cx3, G - 15, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#c8a840';
+      }
+      // Note on floor near cross
+      fillRect(ctx, cx2 + 22, G - 8, 14, 10, '#c8b870');
+      strokeRect(ctx, cx2 + 22, G - 8, 14, 10, '#a09050');
+      drawText(ctx, '✉', cx2 + 29, G - 2, '#a09050', 6, 'center');
+      // Pews (benches) further back
+      ctx.globalAlpha = 0.55;
+      for (let px2 = 80; px2 < W - 80; px2 += 180) {
+        if (Math.abs(px2 - cx2) < 100) continue;
+        fillRect(ctx, px2, G - 18, 70, 12, '#1a1208');
+        strokeRect(ctx, px2, G - 18, 70, 12, '#2a1e10');
+        fillRect(ctx, px2, G - 22, 70, 5,  '#141008'); // backrest
+      }
+      break;
+    }
     default: {
       // Generic: some rubble and debris
       for (let rx = 100; rx < W - 100; rx += 180) {
@@ -1653,6 +1722,14 @@ function drawExploreInventory(ctx, gs, es) {
       const hov = hitTest(mx, my, bx, by, bw, bh);
       drawButton(ctx, bx, by, bw, bh, 'Read', hov);
       gs._exploreInvActionBtns.push({ action: 'read', x: bx, y: by, w: bw, h: bh });
+      bx += bw + 5;
+    }
+    if (selDef.type === 'blueprint') {
+      const bw = 42;
+      const alreadyKnown = selDef.blueprintFor && (gs.unlockedRecipes || []).includes(selDef.blueprintFor);
+      const hov = !alreadyKnown && hitTest(mx, my, bx, by, bw, bh);
+      drawButton(ctx, bx, by, bw, bh, alreadyKnown ? 'Known' : 'Learn', hov, false, alreadyKnown);
+      gs._exploreInvActionBtns.push({ action: 'learn_bp', x: bx, y: by, w: bw, h: bh });
       bx += bw + 5;
     }
     if (isConsumable(selDef)) {

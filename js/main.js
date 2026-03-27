@@ -137,10 +137,17 @@ canvas.addEventListener('touchmove', (e) => {
   if (GS.screen === 'exploreSelect') {
     esScrollY = Math.max(0, esScrollY - (cy - _touchLastY));
   } else if (GS.screen === 'shelter' && shelterUI) {
-    if (shelterUI.activeMenu === 'journal' || shelterUI.activeMenu === 'storage') {
-      shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) - (cy - _touchLastY));
+    const delta = cy - _touchLastY;
+    if (shelterUI.activeMenu === 'storage') {
+      shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) - delta);
+    } else if (shelterUI.activeMenu === 'journal') {
+      const jt = shelterUI.journalTab;
+      if      (jt === 'help')  shelterUI.helpScroll  = Math.max(0, (shelterUI.helpScroll  || 0) - delta);
+      else if (jt === 'diary') shelterUI.diaryScroll = Math.max(0, (shelterUI.diaryScroll || 0) - delta);
+      else if (jt === 'other') shelterUI.otherScroll = Math.max(0, (shelterUI.otherScroll || 0) - delta);
+      else                     shelterUI.storageScroll = Math.max(0, (shelterUI.storageScroll || 0) - delta);
     } else if (shelterUI.activeMenu === 'crafting') {
-      shelterUI.craftingScroll = Math.max(0, (shelterUI.craftingScroll || 0) - (cy - _touchLastY));
+      shelterUI.craftingScroll = Math.max(0, (shelterUI.craftingScroll || 0) - delta);
     }
   }
   _touchLastY = cy;

@@ -29,7 +29,7 @@ const CFG = {
   DEPR_WARN:     70,
   DEPR_LEAVE:    88,   // survivors may leave above this
 
-  HEALTH_DRAIN_PER_HOUR: 2.5,  // HP lost per hour when stat > DAMAGE threshold
+  HEALTH_DRAIN_PER_HOUR: 0.6,  // HP lost per hour when stat > DAMAGE threshold (scaled to 25 maxHP)
   SUSPICION_MAX: 100,
 
   // ── Shelter layout ───────────────────────────────────────────────────────

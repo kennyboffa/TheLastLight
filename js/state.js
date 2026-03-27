@@ -14,12 +14,13 @@ const GS = {
   parent: {
     name:    'Alex',
     gender:  'father',   // 'father' | 'mother'
-    health:  100, maxHealth: 100,
+    health:  25, maxHealth: 25,
     hunger:  20,
     thirst:  20,
     tiredness: 20,
     depression: 15,
     infected: false,
+    trait: null,             // optional trait id (slow_metabolism, fast_healer, etc.)
     hasExploredToday: false,   // reset each morning; prevents multiple runs per day
     // Attributes
     strength: 5, agility: 5, perception: 5, intelligence: 5, charisma: 5,
@@ -49,7 +50,7 @@ const GS = {
   // ── Child ─────────────────────────────────────────────────────────────────
   child: {
     name:   'Lily',
-    health: 80, maxHealth: 80,
+    health: 20, maxHealth: 20,
     hunger: 20,
     thirst: 20,
     tiredness: 25,
@@ -97,7 +98,11 @@ const GS = {
   },
 
   // ── Weather ───────────────────────────────────────────────────────────────
-  weather: { type: 'clear', timer: 0, nextChange: 240, rainAccum: 0 },
+  // nextRainDay: day number when next rain event is scheduled
+  weather: { type: 'clear', timer: 0, nextChange: 4, rainAccum: 0, nextRainDay: 3, rainDuration: 0 },
+
+  // ── Distant background drone (visual only, flies above bunker skyline) ───
+  distantDrone: { x: -60, dir: 1, active: false, timer: 0, nextAppear: 900 },
 
   // ── Zoom ──────────────────────────────────────────────────────────────────
   zoom: 1.0,
@@ -144,6 +149,10 @@ const GS = {
   // ── Journal archives ──────────────────────────────────────────────────────
   seenStories: [],   // story IDs seen, in order (oldest first)
   readNotes:   [],   // { id, title, text } for world notes found and read
+
+  // ── Crafting unlock system ────────────────────────────────────────────────
+  // Recipes marked needsBlueprint:true are hidden until their blueprint is used
+  unlockedRecipes: ['r_bandage', 'r_torch', 'r_spear'],  // always available
 
   // ── Location unlock system ────────────────────────────────────────────────
   unlockedLocations: ['forest', 'church'],

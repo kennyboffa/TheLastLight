@@ -148,6 +148,8 @@ function craftItem(gs, recipeId, qty) {
   if (recipe.needsTools) useToolCharge(gs);
 
   const p = gs.parent;
+  if (p.isSleeping) return { ok: false, msg: 'Cannot craft while sleeping.' };
+  if (p.task) return { ok: false, msg: 'Already busy with another task.' };
   p.task         = { type: 'craft', recipeId, qty: outQty };
   p.taskDuration = (recipe.craftTime || 0.5) * batches;
   p.taskProgress = 0;

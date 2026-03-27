@@ -3,6 +3,16 @@
 
 const ATTRS  = ['strength','agility','perception','intelligence','charisma'];
 const SKILLS_LIST = ['scavenging','stealth','exploration','bartering','speech','lockpick','melee','firearms'];
+
+const TRAITS_DB = [
+  { id:'slow_metabolism', name:'Slow Metabolism', desc:'Hunger and thirst decay 25% slower. Easier to manage supplies.' },
+  { id:'fast_healer',     name:'Fast Healer',     desc:'Recovers HP 40% faster from wounds and medical items.' },
+  { id:'fast_learner',    name:'Fast Learner',    desc:'Gains 25% more XP from all activities.' },
+  { id:'slow_learner',    name:'Slow Learner',    desc:'Gains 20% less XP. Harder to level up. (Negative trait)' },
+  { id:'lucky',           name:'Lucky',           desc:'Slightly better loot finds and reduced chance of bad events.' },
+  { id:'night_owl',       name:'Night Owl',       desc:'No tiredness penalty at night. Small tiredness increase during daytime tasks.' },
+  { id:'meticulous',      name:'Meticulous',      desc:'Crafting and tasks take 30% longer but produce 1 extra item or better quality.' },
+];
 const ATTR_DESCS = {
   strength:     'Carry weight, melee damage',
   agility:      'Speed, flee chance, dodge',
@@ -39,6 +49,7 @@ function initCharCreate() {
     skillPts: 5,
     attrs:  { strength:5, agility:5, perception:5, intelligence:5, charisma:5 },
     skills: { scavenging:1, stealth:1, exploration:1, bartering:1, speech:1, lockpick:1, melee:1, firearms:1 },
+    trait: null,
     nameInputActive: false,
     hoveredItem: null,
   };
@@ -55,14 +66,14 @@ function renderCharCreate(ctx, gs) {
   drawText(ctx, 'CHARACTER CREATION', cx, 22, C.textBright, 13, 'center', true);
   drawDivider(ctx, 40, 28, CFG.W - 80, C.border2);
 
-  // Step indicator (4 steps now)
-  const steps = ['Difficulty', 'Identity', 'Attributes', 'Skills'];
-  let sx = cx - (steps.length * 68) / 2 + 10;
+  // Step indicator (5 steps)
+  const steps = ['Difficulty', 'Identity', 'Attributes', 'Skills', 'Trait'];
+  let sx = cx - (steps.length * 60) / 2 + 10;
   for (let i = 0; i < steps.length; i++) {
     const active = i === cc.step;
     const col = active ? C.textBright : (i < cc.step ? C.textGood : C.textDim);
     drawText(ctx, `${i+1}. ${steps[i]}`, sx, 42, col, 8, 'left', active);
-    sx += 68;
+    sx += 60;
   }
   drawDivider(ctx, 40, 47, CFG.W - 80, C.border);
 
@@ -70,6 +81,7 @@ function renderCharCreate(ctx, gs) {
   else if (cc.step === 1) renderStep0(ctx, gs, cx);
   else if (cc.step === 2) renderStep1(ctx, gs, cx);
   else if (cc.step === 3) renderStep2(ctx, gs, cx);
+  else if (cc.step === 4) renderStepTraits(ctx, gs, cx);
 
   // Bottom navigation
   const mx = gs.mouse.x, my = gs.mouse.y;
@@ -77,7 +89,7 @@ function renderCharCreate(ctx, gs) {
     drawButton(ctx, 40, CFG.H - 32, 80, 20, '< Back', hitTest(mx, my, 40, CFG.H-32, 80, 20));
   }
   const nextDisabledStep2 = cc.step === 2 && cc.attrPts > 0;
-  const nextLabel = cc.step === 3 ? 'Begin →' : 'Next >';
+  const nextLabel = cc.step === 4 ? 'Begin →' : 'Next >';
   drawButton(ctx, CFG.W - 120, CFG.H - 32, 80, 20, nextLabel,
     hitTest(mx, my, CFG.W-120, CFG.H-32, 80, 20), false, nextDisabledStep2);
 }
@@ -233,6 +245,53 @@ function renderStep2(ctx, gs, cx) {
   }
 }
 
+// ── Step 4: Trait selection ────────────────────────────────────────────────────
+
+function renderStepTraits(ctx, gs, cx) {
+  const cc = gs.cc;
+  const mx = gs.mouse.x, my = gs.mouse.y;
+  let y = 60;
+
+  drawText(ctx, 'Choose a trait (optional):', cx, y, C.textDim, 9, 'center');
+  y += 14;
+
+  const btnW = 230, btnH = 20;
+  const bx = cx - btnW / 2;
+
+  // "None" option first
+  {
+    const sel = cc.trait === null;
+    const hov = hitTest(mx, my, bx, y, btnW, btnH);
+    fillRect(ctx, bx, y, btnW, btnH, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
+    strokeRect(ctx, bx, y, btnW, btnH, sel ? C.textGood : (hov ? C.border2 : C.border));
+    drawText(ctx, 'None — no special trait', cx, y + btnH / 2 + 3, sel ? C.textGood : C.textBright, 9, 'center', sel);
+    y += btnH + 4;
+  }
+
+  for (const t of TRAITS_DB) {
+    const sel = cc.trait === t.id;
+    const hov = hitTest(mx, my, bx, y, btnW, btnH);
+    fillRect(ctx, bx, y, btnW, btnH, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
+    strokeRect(ctx, bx, y, btnW, btnH, sel ? C.textGood : (hov ? C.border2 : C.border));
+    drawText(ctx, t.name, cx, y + btnH / 2 + 3, sel ? C.textGood : C.textBright, 9, 'center', sel);
+    if (sel || hov) {
+      drawText(ctx, t.desc, cx, CFG.H - 44, C.textDim, 7, 'center');
+    }
+    y += btnH + 4;
+  }
+
+  // Show selected trait summary
+  y += 6;
+  if (cc.trait) {
+    const t = TRAITS_DB.find(tr => tr.id === cc.trait);
+    if (t) {
+      drawDivider(ctx, 80, y, CFG.W - 160, C.border);
+      y += 10;
+      drawText(ctx, `Selected: ${t.name}`, cx, y, C.textGood, 9, 'center', true);
+    }
+  }
+}
+
 // ── Input handlers ─────────────────────────────────────────────────────────────
 
 function charCreateClick(mx, my, gs) {
@@ -242,7 +301,7 @@ function charCreateClick(mx, my, gs) {
   // Navigation
   const nextDisabled = (cc.step === 2 && cc.attrPts > 0);
   if (hitTest(mx, my, CFG.W - 120, CFG.H - 32, 80, 20) && !nextDisabled) {
-    if (cc.step < 3) {
+    if (cc.step < 4) {
       cc.step++;
     } else {
       finalizeCharacter(gs);
@@ -308,6 +367,19 @@ function charCreateClick(mx, my, gs) {
       }
     }
   }
+
+  if (cc.step === 4) {
+    const btnW = 230, btnH = 20;
+    const bx = cx - btnW / 2;
+    let ty = 74; // matches renderStepTraits y after header
+    // "None" row
+    if (hitTest(mx, my, bx, ty, btnW, btnH)) { cc.trait = null; }
+    ty += btnH + 4;
+    for (const t of TRAITS_DB) {
+      if (hitTest(mx, my, bx, ty, btnW, btnH)) { cc.trait = t.id; }
+      ty += btnH + 4;
+    }
+  }
 }
 
 function showNameInput(gs) {
@@ -336,6 +408,7 @@ function finalizeCharacter(gs) {
     charisma:   cc.attrs.charisma,
     skills:  { ...cc.skills },
     level: 1, xp: 0, pendingSkillPts: cc.skillPts,
+    trait: cc.trait || null,
   });
 
   // Starting inventory based on skills

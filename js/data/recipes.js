@@ -110,25 +110,28 @@ const UPGRADES_DB = {
 };
 
 // ── Item Crafting Recipes ─────────────────────────────────────────────────────
+// needsBlueprint:true → hidden until the matching blueprint item is used/learned
 const RECIPES_DB = [
-  // Basic (no workshop needed)
+  // Always available (no blueprint needed)
   { id:'r_bandage',   name:'Bandage',        output:'bandage',      qty:2,
-    cost:{ cloth:3 },         needsWorkshop:false, craftTime:0.25, desc:'Tear cloth into bandages.' },
+    cost:{ cloth:3 },         needsWorkshop:false, craftTime:0.25, desc:'Tear cloth into bandages. Stops bleeding.' },
   { id:'r_torch',     name:'Torch',          output:'matches',      qty:3,
-    cost:{ wood:2, cloth:1 }, needsWorkshop:false, craftTime:0.25, desc:'Improvised torch / matches.' },
+    cost:{ wood:2, cloth:1 }, needsWorkshop:false, craftTime:0.25, desc:'Improvised torch / matches. Provides light.' },
+  { id:'r_spear',     name:'Spear',          output:'spear',        qty:1,
+    cost:{ wood:3, metal:2 }, needsWorkshop:false, craftTime:0.75, desc:'A wooden shaft with a sharpened metal tip. Good reach.' },
 
-  // Workshop recipes
+  // Blueprint-locked recipes (hidden until blueprint is found)
   { id:'r_sbackpack', name:'Small Backpack', output:'small_backpack', qty:1,
-    cost:{ cloth:9, rope:3 }, needsWorkshop:true, craftTime:1.5, desc:'Sew a small carrying pack.' },
+    cost:{ cloth:9, rope:3 }, needsWorkshop:true, needsBlueprint:true, craftTime:1.5, desc:'Sew a small carrying pack. Adds carry weight.' },
   { id:'r_backpack',  name:'Backpack',       output:'backpack',     qty:1,
-    cost:{ cloth:15, rope:6, metal:3 }, needsWorkshop:true, craftTime:2.0, desc:'Standard backpack.' },
+    cost:{ cloth:15, rope:6, metal:3 }, needsWorkshop:true, needsBlueprint:true, craftTime:2.0, desc:'Standard backpack. Significantly increases carry capacity.' },
   { id:'r_pipe_wpn',  name:'Metal Pipe',     output:'pipe',         qty:1,
-    cost:{ metal:5 }, needsWorkshop:true, craftTime:1.0, desc:'Shape scrap into a pipe weapon.' },
+    cost:{ metal:5 }, needsWorkshop:true, needsBlueprint:true, craftTime:1.0, desc:'Shape scrap into a heavy pipe weapon.' },
   { id:'r_crowbar',   name:'Crowbar',        output:'crowbar',      qty:1,
-    cost:{ metal:8 }, needsWorkshop:true, needsTools:true, craftTime:1.5, desc:'Forge a crowbar.' },
+    cost:{ metal:8 }, needsWorkshop:true, needsTools:true, needsBlueprint:true, craftTime:1.5, desc:'Forge a crowbar. Opens doors and crates. Good melee weapon.' },
   { id:'r_purify',    name:'Purify Water',   output:'purified_water', qty:2,
     cost:{ dirty_water:3, chemicals:1 }, needsWorkshop:false, requiresUpgrade:'water_filter',
-    craftTime:0.5, desc:'Filter dirty water. Requires water filter.' },
+    craftTime:0.5, desc:'Filter dirty water into clean drinking water. Requires water filter.' },
   { id:'r_medkit',    name:'First Aid Kit',  output:'medkit',       qty:1,
-    cost:{ bandage:6, chemicals:4, cloth:3 }, needsWorkshop:true, craftTime:1.0, desc:'Assemble a medkit.' },
+    cost:{ bandage:6, chemicals:4, cloth:3 }, needsWorkshop:true, needsBlueprint:true, craftTime:1.0, desc:'Assemble a comprehensive first aid kit. High healing value.' },
 ];

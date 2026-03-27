@@ -31,8 +31,9 @@ let shelterUI = {
   tooltipX: 0, tooltipY: 0,
   selectedChar: null,    // null | 'parent' | 'child' | survivor.id
   charPanelX: 60, charPanelY: 100,
-  craftConfirm: null,  // null | { recipeId, maxQty }
-  craftQty: 1,         // chosen quantity in craft confirm dialog
+  craftConfirm: null,   // null | { recipeId, maxQty }
+  craftQty: 1,          // chosen quantity in craft confirm dialog
+  selectedRecipe: null, // recipe id currently selected (shows description)
   statsPanelScroll: 0, // scroll offset for survivors in stats panel
   journalTab: 'log',   // 'log' | 'diary' | 'other' | 'help'
   helpScroll: 0,
@@ -156,6 +157,9 @@ function renderShelter(ctx, gs) {
   // Surface scene
   drawSurface(ctx, gs.day * 30, gs.time);
   drawHatch(ctx, MAIN_W / 2, CFG.SURFACE_H - 2);
+
+  // Distant background drone near rooftop level
+  drawDistantDrone(ctx, gs);
 
   // Weather overlay on surface
   drawShelterWeather(ctx, gs);
@@ -425,7 +429,9 @@ function drawCharPanel(ctx, gs, mx, my) {
   // Show personality for survivors
   const personality = (sel !== 'parent' && sel !== 'child' && who.personality) ? who.personality : null;
 
-  const PW = 184, PH = sel === 'parent' ? 260 : (personality ? 230 : 220);
+  const traitExtra  = who.trait ? 8 : 0;
+  const equipExtra  = who.equipped ? 20 : 0;
+  const PW = 184, PH = (sel === 'parent' ? 280 : (personality ? 250 : 240)) + traitExtra + equipExtra;
   const px = clamp(shelterUI.charPanelX, 2, MAIN_W - PW - 2);
   const py = clamp(shelterUI.charPanelY, 2, CFG.H - PH - 36);
 
@@ -439,7 +445,14 @@ function drawCharPanel(ctx, gs, mx, my) {
     drawText(ctx, personality.toUpperCase(), px + PW/2, py + 20, pc, 6, 'center');
   }
 
-  let y = py + 24;
+  // Trait label
+  if (who.trait) {
+    const traitNames = { slow_metabolism:'Slow Metabolism', fast_healer:'Fast Healer', fast_learner:'Fast Learner',
+      slow_learner:'Slow Learner', lucky:'Lucky', night_owl:'Night Owl', meticulous:'Meticulous' };
+    drawText(ctx, `Trait: ${traitNames[who.trait] || who.trait}`, px + PW/2, py + 22, '#a0a070', 6, 'center');
+  }
+
+  let y = py + (who.trait ? 30 : 24);
   const sw = PW - 16;
   drawStatBar(ctx, px+8, y, sw, 5, who.health, who.maxHealth, C.hp,         null, 'HP');      y += 9;
   drawStatBar(ctx, px+8, y, sw, 5, who.hunger,        100,    C.hunger,     null, 'Hunger');   y += 9;
@@ -456,6 +469,28 @@ function drawCharPanel(ctx, gs, mx, my) {
   y += 11;
   drawStatBar(ctx, px+8, y, sw, 4, curXP, needXP, '#d4aa40');
   y += 10;
+
+  // Equipped weapon / armor info
+  if (who.equipped) {
+    const wpnDef = who.equipped.weapon ? getItemDef(who.equipped.weapon) : null;
+    const armDef = who.equipped.armor  ? getItemDef(who.equipped.armor)  : null;
+    if (wpnDef) {
+      const dmgStr = Array.isArray(wpnDef.damage)
+        ? `${wpnDef.damage[0]}–${wpnDef.damage[1]} dmg`
+        : (wpnDef.damage ? `${wpnDef.damage} dmg` : '');
+      drawText(ctx, `⚔ ${wpnDef.name}${dmgStr ? '  ' + dmgStr : ''}`, px+8, y+8, C.weapon || '#c03030', 7);
+      y += 10;
+    }
+    if (armDef) {
+      const avStr = armDef.armorValue ? `  ${armDef.armorValue} armor` : '';
+      drawText(ctx, `🛡 ${armDef.name}${avStr}`, px+8, y+8, '#6080a0', 7);
+      y += 10;
+    }
+    if (!wpnDef && !armDef) {
+      drawText(ctx, 'No weapon/armor equipped', px+8, y+8, C.textDim, 6);
+      y += 10;
+    }
+  }
 
   const taskLabel = who.isSleeping ? 'Sleeping...'
     : who.task ? (who.task.type[0].toUpperCase() + who.task.type.slice(1) + '...')
@@ -818,11 +853,17 @@ function drawCraftingMenu(ctx, gs, mx, my) {
     return;
   }
 
-  // List area with scroll
+  // List area with scroll — show desc panel below when a recipe is selected
+  const selRec = shelterUI.selectedRecipe || null;
+  const descH  = selRec ? 48 : 0;
   const listY  = py + 18;
-  const listH  = H2 - 18 - 30; // leave room for close button
+  const listH  = H2 - 18 - 30 - descH; // leave room for close button + desc panel
   const rowH   = 20;
-  const visRecipes = RECIPES_DB.concat(Object.values(UPGRADES_DB)).filter(r => !(r.key && gs.shelter[r.key]));
+  const unlocked = gs.unlockedRecipes || [];
+  const visRecipes = RECIPES_DB.concat(Object.values(UPGRADES_DB)).filter(r =>
+    !(r.key && gs.shelter[r.key]) &&
+    (!r.needsBlueprint || unlocked.includes(r.id))
+  );
   const totalListH = visRecipes.length * rowH;
   const maxScroll  = Math.max(0, totalListH - listH);
   shelterUI.craftingScroll = Math.min(Math.max(shelterUI.craftingScroll || 0, 0), maxScroll);
@@ -842,8 +883,11 @@ function drawCraftingMenu(ctx, gs, mx, my) {
       const canMake = recipe.buildCost
         ? canAfford(recipe.buildCost, gs, true)
         : canAfford(recipe.cost || {}, gs, true);
-      const hov = hitTest(mx, my, px+4, y, W2-8, rowH);
-      if (hov) fillRect(ctx, px+4, y, W2-8, rowH, C.highlight);
+      const isSel = selRec === recipe.id;
+      const hov   = hitTest(mx, my, px+4, y, W2-8, rowH);
+      if (isSel) fillRect(ctx, px+4, y, W2-8, rowH, '#0e1a10');
+      else if (hov) fillRect(ctx, px+4, y, W2-8, rowH, C.highlight);
+      if (isSel) strokeRect(ctx, px+4, y, W2-8, rowH, '#2a4a2a');
       const col = canMake ? C.text : C.textDim;
       drawText(ctx, recipe.name, px + 10, y + 13, col, 8);
       if (canMake) drawText(ctx, '✓', px + W2 - 18, y + 13, C.textGood, 8);
@@ -852,6 +896,34 @@ function drawCraftingMenu(ctx, gs, mx, my) {
     y += rowH;
   }
   ctx.restore();
+
+  // ── Selected recipe description panel ──────────────────────────────────────
+  if (selRec) {
+    const rec = visRecipes.find(r => r.id === selRec);
+    if (rec) {
+      const dy = listY + listH + 2;
+      fillRect(ctx, px + 2, dy, W2 - 4, descH - 2, '#0a0a14');
+      strokeRect(ctx, px + 2, dy, W2 - 4, descH - 2, C.border2);
+      drawText(ctx, rec.name, px + 8, dy + 9, C.textBright, 8, 'left', true);
+      // Cost summary
+      const costObj = rec.buildCost || rec.cost || {};
+      const costStr = Object.entries(costObj).map(([k, v]) => `${v}×${k}`).join(' ');
+      drawText(ctx, costStr, px + W2 - 6, dy + 9, C.textDim, 7, 'right');
+      // Description
+      if (rec.desc) {
+        const words = rec.desc.split(' ');
+        let line = '', ld = dy + 20;
+        for (const w of words) {
+          const test = line ? line + ' ' + w : w;
+          ctx.font = '7px monospace';
+          if (ctx.measureText(test).width > W2 - 16 && line) {
+            drawText(ctx, line, px + 8, ld, C.textDim, 7); ld += 10; line = w;
+          } else { line = test; }
+        }
+        if (line) drawText(ctx, line, px + 8, ld, C.textDim, 7);
+      }
+    }
+  }
 
   // Scroll indicator
   if (maxScroll > 0) {
@@ -1397,13 +1469,20 @@ function handleMenuClick(mx, my, gs) {
     // Click in recipe list using stored row bounds
     if (GS._craftingRows) {
       const listY = py + 18;
-      const listH = H2 - 18 - 30;
+      const selRec2 = M.selectedRecipe || null;
+      const descH2  = selRec2 ? 48 : 0;
+      const listH = H2 - 18 - 30 - descH2;
       // Only process if click is within the list area
       if (hitTest(mx, my, px + 4, listY, W2 - 8, listH)) {
         for (const row of GS._craftingRows) {
           if (my >= row.y1 && my < row.y2) {
             const recipe = RECIPES_DB.find(r => r.id === row.recipeId) || UPGRADES_DB[row.recipeId];
             if (!recipe) return;
+            // First click → select (show desc); second click on same → open confirm
+            if (M.selectedRecipe !== recipe.id) {
+              M.selectedRecipe = recipe.id;
+              return;
+            }
             if (gs.parent.task) { notify('Already busy.', 'warn'); return; }
             let maxQty = 1;
             if (!UPGRADES_DB[recipe.id] && recipe.cost) {
@@ -1423,7 +1502,7 @@ function handleMenuClick(mx, my, gs) {
       }
     }
     if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16) || !hitTest(mx, my, px, py, W2, H2)) {
-      M.activeMenu = null; M.craftConfirm = null;
+      M.activeMenu = null; M.craftConfirm = null; M.selectedRecipe = null;
     }
     return;
   }
@@ -1600,34 +1679,60 @@ function handleMenuClick(mx, my, gs) {
 // ── Drone patrol ──────────────────────────────────────────────────────────────
 
 function updateShelterAmbient(gs) {
+  // ── Near drone patrol (low-level, over shelter) ────────────────────────────
   const dp = gs.shelter.dronePatrol;
-  if (!dp) return;
+  if (dp) {
+    if (dp.active) {
+      dp.x += dp.dir * 1.2;
+      if (dp.x > MAIN_W + 40 || dp.x < -40) {
+        dp.active = false;
+        dp.timer  = 0;
+        const sus = gs.suspicion || 0;
+        let base;
+        if      (sus >= 80) base = 60;
+        else if (sus >= 60) base = 130;
+        else if (sus >= 40) base = 280;
+        else if (sus >= 20) base = 700;
+        else                base = 1600;
+        dp.nextPatrol = base + randInt(0, Math.floor(base * 0.25));
+      }
+    } else {
+      dp.timer++;
+      if ((gs.suspicion || 0) < 10) { dp.timer = 0; }
+      else if (dp.timer >= dp.nextPatrol) {
+        dp.active = true;
+        dp.timer  = 0;
+        dp.dir    = randInt(0, 1) === 0 ? 1 : -1;
+        dp.x      = dp.dir === 1 ? -30 : MAIN_W + 30;
+      }
+    }
+  }
 
-  if (dp.active) {
-    dp.x += dp.dir * 1.2;
-    // Drone reached far edge — deactivate
-    if (dp.x > MAIN_W + 40 || dp.x < -40) {
-      dp.active = false;
-      dp.timer  = 0;
-      // Suspicion heavily controls patrol frequency
+  // ── Distant background drone (tiny, near rooftops, visual only) ─────────────
+  const dd = gs.distantDrone;
+  if (!dd) return;
+  if (dd.active) {
+    dd.x += dd.dir * 0.35;
+    dd.timer++;
+    if (dd.x > MAIN_W + 80 || dd.x < -80) {
+      dd.active = false;
+      dd.timer  = 0;
       const sus = gs.suspicion || 0;
-      let base;
-      if      (sus >= 80) base = 60;         // very frequent
-      else if (sus >= 60) base = 130;
-      else if (sus >= 40) base = 280;
-      else if (sus >= 20) base = 700;        // rare
-      else                base = 1600;       // almost never
-      dp.nextPatrol = base + randInt(0, Math.floor(base * 0.25));
+      // Passes per day: 1 (normal), 2 (>50%), 4 (>75%)
+      // A day is ~15000 frames; divide by passes to get interval
+      let passesPerDay = 1;
+      if      (sus >= 75) passesPerDay = 4;
+      else if (sus >= 50) passesPerDay = 2;
+      const intervalBase = Math.floor(15000 / passesPerDay);
+      dd.nextAppear = intervalBase + randInt(0, Math.floor(intervalBase * 0.3));
     }
   } else {
-    dp.timer++;
-    // Skip entirely when suspicion is very low (< 10)
-    if ((gs.suspicion || 0) < 10) { dp.timer = 0; return; }
-    if (dp.timer >= dp.nextPatrol) {
-      dp.active = true;
-      dp.timer  = 0;
-      dp.dir    = randInt(0, 1) === 0 ? 1 : -1;
-      dp.x      = dp.dir === 1 ? -30 : MAIN_W + 30;
+    dd.timer++;
+    if (dd.timer >= dd.nextAppear) {
+      dd.active = true;
+      dd.timer  = 0;
+      dd.dir    = randInt(0, 1) === 0 ? 1 : -1;
+      dd.x      = dd.dir === 1 ? -60 : MAIN_W + 60;
     }
   }
 }
@@ -1652,6 +1757,34 @@ function drawDronePatrol(ctx, gs) {
   ctx.lineTo(dp.x + 28, CFG.SURFACE_H);
   ctx.closePath();
   ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ── Distant background drone (tiny, near rooftops) ───────────────────────────
+
+function drawDistantDrone(ctx, gs) {
+  const dd = gs.distantDrone;
+  if (!dd || !dd.active) return;
+
+  // Y position: near the tops of the distant building silhouettes (~30-40% of SURFACE_H)
+  const H = CFG.SURFACE_H;
+  const dy = Math.round(H * 0.30 + Math.sin(dd.timer * 0.05) * 2);
+
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  // Draw as a tiny drone silhouette: 3px body + 2 rotors
+  ctx.fillStyle = '#1c1c2a';
+  ctx.fillRect(dd.x - 3, dy - 1, 6, 2);   // body
+  ctx.fillRect(dd.x - 6, dy - 2, 3, 1);   // left arm
+  ctx.fillRect(dd.x + 3,  dy - 2, 3, 1);  // right arm
+  // Faint blinking light
+  const blink = Math.floor(dd.timer / 18) % 2 === 0;
+  if (blink) {
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#4040cc';
+    ctx.fillRect(dd.x - 1, dy - 2, 2, 2);
+  }
   ctx.globalAlpha = 1;
   ctx.restore();
 }

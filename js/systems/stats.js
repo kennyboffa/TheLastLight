@@ -46,16 +46,22 @@ function tickStats(gs, dt) {
 
   // ── Parent ──────────────────────────────────────────────────────────────────
   const p = gs.parent;
+  // Trait multipliers
+  const pMetab = (p.trait === 'slow_metabolism') ? 0.75 : 1.0;
+  const isNightTime = gs.time < 7 * 60 || gs.time >= 20 * 60;
+  const pTireMult = (p.trait === 'night_owl')
+    ? (isNightTime ? 0.6 : 1.25)
+    : 1.0;
   if (!p.isSleeping) {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs, 0, 100);
+    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs * pMetab, 0, 100);
+    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs * pMetab, 0, 100);
     const tireRate = (p.isExploring || p.isWorking) ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR;
     const rainTire = (p.isExploring && gs.weather && gs.weather.type === 'rain')
       ? CFG.TIRE_ACTIVE_PER_HOUR * 0.6 : 0;
-    p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs, 0, 100);
+    p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs * pTireMult, 0, 100);
   } else {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs, 0, 100);
+    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs * pMetab, 0, 100);
+    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs * pMetab, 0, 100);
     p.tiredness = clamp(p.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
     if (p.tiredness <= 0) {
       p.isSleeping = false; p.tiredness = 0;
@@ -76,9 +82,9 @@ function tickStats(gs, dt) {
   if (p.hunger  >= CFG.HUNGER_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
   if (p.thirst  >= CFG.THIRST_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
 
-  // Infection: slow health drain (1.5 HP/hour), notify once per hour
+  // Infection: slow health drain (scaled to 25 maxHP), notify once per hour
   if (p.infected) {
-    p.health = Math.max(1, p.health - 1.5 * hrs);
+    p.health = Math.max(1, p.health - 0.4 * hrs);
     // Periodic reminder (roughly once per game hour)
     if (!p._infNotifyTimer) p._infNotifyTimer = 0;
     p._infNotifyTimer -= hrs;
@@ -112,7 +118,7 @@ function tickStats(gs, dt) {
   if (ch.hunger  >= CFG.HUNGER_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
   if (ch.thirst  >= CFG.THIRST_DAMAGE)  ch.health = Math.max(0, ch.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
   if (ch.infected) {
-    ch.health = Math.max(1, ch.health - 1.5 * hrs);
+    ch.health = Math.max(1, ch.health - 0.4 * hrs);
     if (!ch._infNotifyTimer) ch._infNotifyTimer = 0;
     ch._infNotifyTimer -= hrs;
     if (ch._infNotifyTimer <= 0) {
@@ -338,30 +344,48 @@ function finishHunt(gs, task) {
 // ── Weather tick ──────────────────────────────────────────────────────────────
 function tickWeather(gs, hrs) {
   const w = gs.weather;
-  w.timer += hrs;
-  if (w.timer >= w.nextChange) {
-    w.timer = 0;
-    w.nextChange = randFloat(CFG.WEATHER_CHANGE_MIN, CFG.WEATHER_CHANGE_MAX);
-    // Weighted: mostly clear, sometimes cloudy, occasionally rain
-    const roll = Math.random();
-    const prev = w.type;
-    w.type = roll < 0.45 ? 'clear' : roll < 0.78 ? 'cloudy' : 'rain';
-    if (w.type !== prev) {
-      if (w.type === 'rain' && gs.screen === 'explore') {
-        notify('It started raining — you tire faster outside.', 'warn');
-      } else {
-        notify(`Weather: ${w.type}`, 'info');
+
+  if (w.type === 'rain') {
+    // Active rain: count down duration
+    w.rainDuration = Math.max(0, (w.rainDuration || 0) - hrs);
+    if (w.rainDuration <= 0) {
+      w.type = 'cloudy';
+      notify('The rain has stopped.', 'info');
+    }
+    // Raincatcher: 1 clean water_bottle per hour of rain
+    if (gs.shelter.hasRaincatcher) {
+      w.rainAccum = (w.rainAccum || 0) + hrs;
+      if (w.rainAccum >= 1) {
+        w.rainAccum -= 1;
+        addToInventory(gs.shelter.storage, 'water_bottle', 1);
+        notify('Raincatcher collected a bottle of water.', 'good');
       }
     }
-  }
-  // Raincatcher fills when raining
-  if (w.type === 'rain' && gs.shelter.hasRaincatcher) {
-    w.rainAccum = (w.rainAccum || 0) + hrs;
-    if (w.rainAccum >= 2.5) {
-      w.rainAccum -= 2.5;
-      addToInventory(gs.shelter.storage, 'dirty_water', 1);
-      notify('Rain caught: dirty water collected.', 'info');
+  } else {
+    // Between rain events: slow clear/cloudy cycling
+    w.timer += hrs;
+    if (w.timer >= (w.nextChange || 4)) {
+      w.timer = 0;
+      w.nextChange = randFloat(CFG.WEATHER_CHANGE_MIN, CFG.WEATHER_CHANGE_MAX);
+      const prev = w.type;
+      w.type = Math.random() < 0.55 ? 'clear' : 'cloudy';
+      if (w.type !== prev) notify(`Weather: ${w.type}`, 'info');
     }
+  }
+}
+
+// Called from advanceDay — checks whether rain should start today
+function maybeStartRain(gs) {
+  const w = gs.weather;
+  if (!w.nextRainDay) w.nextRainDay = gs.day + randInt(3, 7);
+  if (gs.day >= w.nextRainDay && w.type !== 'rain') {
+    w.type        = 'rain';
+    w.rainDuration = randFloat(2, 8); // 2–8 game hours of rain
+    w.rainAccum   = 0;
+    w.nextRainDay  = gs.day + randInt(3, 7);
+    addLog('It is raining today.', 'info');
+    if (gs.screen === 'explore') notify('It has started raining — you tire faster outside.', 'warn');
+    else notify('It started raining outside.', 'info');
   }
 }
 
@@ -408,7 +432,7 @@ function advanceDay(gs) {
     gs.time             = CFG.DAY_START + randInt(120, 300); // returns 8–11 AM
     // Lily didn't sleep — override the normal night rest that already ran above
     gs.child.tiredness  = 55;  // exhausted from staying up all night
-    gs.child.health     = Math.max(1, gs.child.health - 8); // stress/fear toll
+    gs.child.health     = Math.max(1, gs.child.health - 2); // stress/fear toll
     gs.child.depression = clamp(gs.child.depression + 10, 0, 100);
     addLog(`${gs.parent.name} returned wounded and exhausted after a night outside.`, 'danger');
     addLog(`${gs.child.name} didn't sleep. She was awake the whole night waiting.`, 'warn');
@@ -445,6 +469,9 @@ function advanceDay(gs) {
     giveXP(s, 5, gs);
   }
 
+  // Check if rain should start today
+  maybeStartRain(gs);
+
   // Daily survival XP
   giveXP(gs.parent, 8, gs);
   giveXP(gs.child,  5, gs);
@@ -471,6 +498,9 @@ const _SKILL_CYCLE = ['scavenging','stealth','exploration','bartering','speech',
 
 function giveXP(who, amount, gs) {
   if (!who || amount <= 0) return;
+  // Apply XP trait modifiers
+  if (who.trait === 'fast_learner') amount = Math.round(amount * 1.25);
+  else if (who.trait === 'slow_learner') amount = Math.round(amount * 0.80);
   who.xp   = (who.xp   || 0) + amount;
   who.level = (who.level || 1);
   const needed = xpForLevel(who.level);

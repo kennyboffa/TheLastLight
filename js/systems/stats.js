@@ -46,22 +46,24 @@ function tickStats(gs, dt) {
 
   // ── Parent ──────────────────────────────────────────────────────────────────
   const p = gs.parent;
-  // Trait multipliers
-  const pMetab = (p.trait === 'slow_metabolism') ? 0.75 : 1.0;
-  const isNightTime = gs.time < 7 * 60 || gs.time >= 20 * 60;
+  // Trait multipliers for hunger/thirst
+  const isNightTime = gs.time < 7 * 60 || gs.time >= 20 * 60; // before 7am or after 8pm
+  let pHungerMult = 1.0;
+  if (p.trait === 'slow_metabolism') pHungerMult = 0.80;
+  if (p.trait === 'fast_healer')     pHungerMult = 1.20;
   const pTireMult = (p.trait === 'night_owl')
     ? (isNightTime ? 0.6 : 1.25)
     : 1.0;
   if (!p.isSleeping) {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs * pMetab, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs * pMetab, 0, 100);
+    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs * pHungerMult, 0, 100);
+    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs * pHungerMult, 0, 100);
     const tireRate = (p.isExploring || p.isWorking) ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR;
     const rainTire = (p.isExploring && gs.weather && gs.weather.type === 'rain')
       ? CFG.TIRE_ACTIVE_PER_HOUR * 0.6 : 0;
     p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs * pTireMult, 0, 100);
   } else {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs * pMetab, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs * pMetab, 0, 100);
+    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
+    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
     p.tiredness = clamp(p.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
     if (p.tiredness <= 0) {
       p.isSleeping = false; p.tiredness = 0;
@@ -227,6 +229,12 @@ function tickTasks(gs, hrs) {
   }
 }
 
+function _healMult(who) {
+  if (who.trait === 'fast_healer')     return 1.30;
+  if (who.trait === 'slow_metabolism') return 0.80;
+  return 1.0;
+}
+
 function finishTask(gs, who, task) {
   switch (task.type) {
     case 'sleep':
@@ -236,10 +244,11 @@ function finishTask(gs, who, task) {
     case 'eat': {
       const def = getItemDef(task.itemId);
       if (!def) break;
+      const hm = _healMult(who);
       who.hunger    = clamp(who.hunger    + (def.hunger    || 0), 0, 100);
       who.thirst    = clamp(who.thirst    + (def.thirst    || 0), 0, 100);
       who.depression= clamp(who.depression+ (def.depression|| 0), 0, 100);
-      who.health    = clamp(who.health    + (def.health    || 0), 0, who.maxHealth);
+      who.health    = clamp(who.health    + Math.round((def.health || 0) * hm), 0, who.maxHealth);
       if (def.clearsInfection) who.infected = false;
       notify(`${who.name} ate ${def.name}.`, 'good');
       break;
@@ -247,8 +256,9 @@ function finishTask(gs, who, task) {
     case 'drink': {
       const def = getItemDef(task.itemId);
       if (!def) break;
+      const hm = _healMult(who);
       who.thirst = clamp(who.thirst + (def.thirst || 0), 0, 100);
-      who.health = clamp(who.health + (def.health || 0), 0, who.maxHealth);
+      who.health = clamp(who.health + Math.round((def.health || 0) * hm), 0, who.maxHealth);
       notify(`${who.name} drank ${def.name}.`, 'good');
       break;
     }
@@ -400,6 +410,7 @@ function startDayTransition(gs) {
 function advanceDay(gs) {
   gs.day++;
   gs.time = CFG.DAY_START;
+  gs.timeScale = 1; // reset game speed to normal at start of each new day
 
   // Parent: if sleeping when day ends, they wake up fully rested
   if (gs.parent.isSleeping) {
@@ -499,7 +510,7 @@ const _SKILL_CYCLE = ['scavenging','stealth','exploration','bartering','speech',
 function giveXP(who, amount, gs) {
   if (!who || amount <= 0) return;
   // Apply XP trait modifiers
-  if (who.trait === 'fast_learner') amount = Math.round(amount * 1.25);
+  if      (who.trait === 'fast_learner') amount = Math.round(amount * 1.20);
   else if (who.trait === 'slow_learner') amount = Math.round(amount * 0.80);
   who.xp   = (who.xp   || 0) + amount;
   who.level = (who.level || 1);
@@ -514,12 +525,17 @@ function giveXP(who, amount, gs) {
     const attrKey = _ATTR_CYCLE[(who.level - 2) % _ATTR_CYCLE.length];
     if (who[attrKey] !== undefined) who[attrKey] = Math.min(10, who[attrKey] + 1);
 
-    // Give 2 spendable skill points every level
+    // Skill points per level — modified by trait
     if (who.skills) {
-      who.pendingSkillPts = (who.pendingSkillPts || 0) + 2;
+      let pts = 2;
+      if      (who.trait === 'fast_learner') pts = 1; // -1 skill pt
+      else if (who.trait === 'slow_learner') pts = 3; // +1 skill pt
+      else if (who.trait === 'lucky')        pts = 1; // -1 skill pt
+      who.pendingSkillPts = (who.pendingSkillPts || 0) + pts;
+      notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}, +${pts} skill pts, +5 HP`, 'good');
+    } else {
+      notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}, +5 HP`, 'good');
     }
-
-    notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}, +2 skill pts, +5 HP`, 'good');
     if (gs) addLog(`${who.name} leveled up to Level ${who.level}.`, 'good');
     Audio.levelUp();
   }
@@ -593,10 +609,11 @@ function useItem(who, inv, itemId, gs) {
   if (!def) return false;
   if (countInInventory(inv, itemId) < 1) return false;
   removeFromInventory(inv, itemId, 1);
+  const hm = _healMult(who);
   who.hunger     = clamp(who.hunger     + (def.hunger     || 0), 0, 100);
   who.thirst     = clamp(who.thirst     + (def.thirst     || 0), 0, 100);
   who.depression = clamp(who.depression + (def.depression  || 0), 0, 100);
-  who.health     = clamp(who.health     + (def.health      || 0), 0, who.maxHealth);
+  who.health     = clamp(who.health     + Math.round((def.health || 0) * hm), 0, who.maxHealth);
   if (def.clearsInfection && who) who.infected = false;
   if (def.childDeprBonus && gs) gs.child.depression = clamp(gs.child.depression + def.childDeprBonus, 0, 100);
   return true;

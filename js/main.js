@@ -26,6 +26,7 @@ function resizeCanvas() {
   const displayScale = fitScale >= 1 ? Math.floor(fitScale) || 1 : fitScale;
   canvas.style.width  = Math.round(CFG.W * displayScale) + 'px';
   canvas.style.height = Math.round(CFG.H * displayScale) + 'px';
+  canvas.style.filter = 'saturate(0.7)';
 
   // User zoom: CSS transform that scales from the BOTTOM so the bottom
   // control bar always stays visible.  Overflow grows upward and is clipped
@@ -434,15 +435,15 @@ function render(ctx) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, CFG.W, CFG.H);
 
-  // Film grain — deterministic noise pattern cycling through 8 seeds
+  // Film grain — deterministic noise pattern cycling through 16 seeds
   if (gs.screen !== 'intro') {
-    const seed = frameCount % 8;
+    const seed = frameCount % 16;
     ctx.save();
-    ctx.globalAlpha = 0.055;
-    for (let i = 0; i < 1200; i++) {
+    ctx.globalAlpha = 0.11;
+    for (let i = 0; i < 2800; i++) {
       const gx = Math.floor(((i * 139 + seed * 1031) % 997) / 997 * CFG.W);
       const gy = Math.floor(((i * 269 + seed * 877)  % 991) / 991 * CFG.H);
-      ctx.fillStyle = (i + seed) % 2 === 0 ? '#ffffff' : '#000000';
+      ctx.fillStyle = (i + seed) % 3 === 0 ? '#ffffff' : '#000000';
       ctx.fillRect(gx, gy, 1, 1);
     }
     ctx.restore();

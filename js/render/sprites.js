@@ -1074,3 +1074,247 @@ function drawExploreBuilding(ctx, bx, by, bw, bh, label) {
     drawText(ctx, label, bx + bw / 2, by - 4, C.textDim, 8, 'center');
   }
 }
+
+function drawExploreChurch(ctx, bx, by, bw, bh, label) {
+  // Stone-coloured walls
+  fillRect(ctx, bx, by, bw, bh, '#1e1c18');
+  // Stone texture — horizontal lines
+  for (let sy = by + 6; sy < by + bh; sy += 10) {
+    fillRect(ctx, bx, sy, bw, 1, '#16140e', 0.5);
+  }
+  // Roofline crenellation
+  for (let cx = bx; cx < bx + bw; cx += 10) {
+    fillRect(ctx, cx, by, 6, 5, '#161410');
+  }
+  // Central spire
+  const spireX = bx + Math.floor(bw / 2);
+  ctx.save();
+  ctx.fillStyle = '#161410';
+  ctx.beginPath();
+  ctx.moveTo(spireX - 10, by);
+  ctx.lineTo(spireX, by - 34);
+  ctx.lineTo(spireX + 10, by);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#2a2620'; ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  // Cross atop spire
+  fillRect(ctx, spireX - 1, by - 38, 2, 10, '#3a3028');
+  fillRect(ctx, spireX - 4, by - 34, 8, 2,  '#3a3028');
+  // Gothic pointed-arch windows
+  const gw = 12, gh = 20;
+  for (let gx = bx + 16; gx < bx + bw - gw; gx += gw + 18) {
+    // Rectangular base
+    fillRect(ctx, gx, by + bh - 40, gw, gh, '#08080e');
+    strokeRect(ctx, gx, by + bh - 40, gw, gh, '#2a2620');
+    // Pointed arch cap
+    ctx.save();
+    ctx.fillStyle = '#08080e';
+    ctx.beginPath();
+    ctx.moveTo(gx, by + bh - 40);
+    ctx.quadraticCurveTo(gx + gw / 2, by + bh - 54, gx + gw, by + bh - 40);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#2a2620'; ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+  // Arched door
+  const doorX = bx + Math.floor(bw / 2) - 10;
+  fillRect(ctx, doorX, by + bh - 28, 20, 28, '#06060a');
+  strokeRect(ctx, doorX, by + bh - 28, 20, 28, '#2a2620');
+  ctx.save();
+  ctx.fillStyle = '#06060a';
+  ctx.beginPath();
+  ctx.moveTo(doorX, by + bh - 28);
+  ctx.quadraticCurveTo(doorX + 10, by + bh - 40, doorX + 20, by + bh - 28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#2a2620'; ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  if (label) drawText(ctx, label, bx + bw / 2, by - 38, '#9a9080', 8, 'center');
+}
+
+function drawExploreFactory(ctx, bx, by, bw, bh, label) {
+  // Industrial concrete walls — dark grey-green
+  fillRect(ctx, bx, by, bw, bh, '#181a16');
+  // Concrete panel lines
+  for (let sy = by + 16; sy < by + bh; sy += 20) {
+    fillRect(ctx, bx, sy, bw, 2, '#111210', 0.7);
+  }
+  for (let vx = bx + 40; vx < bx + bw; vx += 40) {
+    fillRect(ctx, vx, by, 2, bh, '#111210', 0.5);
+  }
+  // Flat roof with industrial lip
+  fillRect(ctx, bx - 4, by, bw + 8, 6, '#22241e');
+  fillRect(ctx, bx - 4, by, bw + 8, 2, '#363830');
+  // Vents on roof
+  for (let vx = bx + 20; vx < bx + bw - 10; vx += 35) {
+    fillRect(ctx, vx, by - 10, 14, 12, '#1a1c18');
+    strokeRect(ctx, vx, by - 10, 14, 12, '#2e302a');
+    for (let sl = 2; sl < 12; sl += 3) {
+      fillRect(ctx, vx + 1, by - 10 + sl, 12, 1, '#0e0e0c');
+    }
+  }
+  // Barred windows
+  const winW = 18, winH = 10;
+  for (let wx = bx + 14; wx < bx + bw - winW; wx += winW + 16) {
+    fillRect(ctx, wx, by + 12, winW, winH, '#0a0c08');
+    strokeRect(ctx, wx, by + 12, winW, winH, '#2a2c28');
+    // Bars
+    for (let bar = wx + 4; bar < wx + winW; bar += 4) {
+      fillRect(ctx, bar, by + 12, 1, winH, '#1e201c', 0.8);
+    }
+  }
+  // Loading bay door (wide)
+  const doorX = bx + Math.floor(bw / 2) - 16;
+  fillRect(ctx, doorX, by + bh - 34, 32, 34, '#0c0e0a');
+  strokeRect(ctx, doorX, by + bh - 34, 32, 34, '#222420');
+  // Shutter lines
+  for (let sl = 4; sl < 34; sl += 6) {
+    fillRect(ctx, doorX, by + bh - 34 + sl, 32, 1, '#1a1c18', 0.7);
+  }
+  if (label) drawText(ctx, label, bx + bw / 2, by - 14, '#7a8070', 8, 'center');
+}
+
+function drawExploreHospital(ctx, bx, by, bw, bh, label) {
+  // Pale grey-white clinical walls
+  fillRect(ctx, bx, by, bw, bh, '#1a1c1e');
+  // Horizontal panel lines
+  for (let sy = by + 14; sy < by + bh; sy += 14) {
+    fillRect(ctx, bx, sy, bw, 1, '#141618', 0.6);
+  }
+  // Flat roof — white parapet
+  fillRect(ctx, bx - 2, by, bw + 4, 5, '#24262a');
+  fillRect(ctx, bx - 2, by, bw + 4, 2, '#3a3c40');
+  // Red cross sign on wall
+  const crX = bx + Math.floor(bw / 2) - 8;
+  const crY = by + 8;
+  fillRect(ctx, crX + 5, crY, 5, 15, '#6a1010');
+  fillRect(ctx, crX, crY + 5, 15, 5, '#6a1010');
+  // Large grid windows
+  const winW = 20, winH = 14, winGap = 28;
+  for (let wx = bx + 10; wx < bx + bw - winW; wx += winGap) {
+    if (Math.abs(wx - crX) < 20) continue; // skip near cross
+    fillRect(ctx, wx, by + 8, winW, winH, '#0a0c10');
+    strokeRect(ctx, wx, by + 8, winW, winH, '#20242a');
+    // Window grid
+    fillRect(ctx, wx + winW/2, by + 8, 1, winH, '#141618', 0.6);
+    fillRect(ctx, wx, by + 8 + winH/2, winW, 1, '#141618', 0.6);
+  }
+  // Automatic doors
+  const doorX = bx + Math.floor(bw / 2) - 14;
+  fillRect(ctx, doorX, by + bh - 26, 28, 26, '#0a0c0e');
+  strokeRect(ctx, doorX, by + bh - 26, 28, 26, '#20242a');
+  fillRect(ctx, doorX + 13, by + bh - 26, 2, 26, '#141618'); // door split
+  if (label) drawText(ctx, label, bx + bw / 2, by - 6, '#8090a0', 8, 'center');
+}
+
+function drawExploreOffice(ctx, bx, by, bw, bh, label) {
+  // Modern dark glass and steel
+  fillRect(ctx, bx, by, bw, bh, '#141820');
+  // Vertical steel columns
+  for (let vx = bx; vx <= bx + bw; vx += Math.floor(bw / 4)) {
+    fillRect(ctx, vx, by, 4, bh, '#1c2030');
+  }
+  // Glass curtain wall — grid of windows
+  const cW = Math.floor(bw / 4) - 6, cH = 12, cGapY = 16;
+  for (let col = 0; col < 4; col++) {
+    const cx2 = bx + col * Math.floor(bw / 4) + 6;
+    for (let wy2 = by + 4; wy2 < by + bh - 20; wy2 += cGapY) {
+      const lit = chance(20);
+      fillRect(ctx, cx2, wy2, cW, cH, lit ? '#0e1018' : '#0a0c14');
+      if (lit) fillRect(ctx, cx2 + 1, wy2 + 1, cW - 2, cH - 2, '#181c14', 0.4);
+      strokeRect(ctx, cx2, wy2, cW, cH, '#20283a');
+    }
+  }
+  // Steel roof beam
+  fillRect(ctx, bx - 2, by, bw + 4, 4, '#1c2030');
+  fillRect(ctx, bx - 2, by, bw + 4, 2, '#2e3848');
+  // Revolving door entrance
+  const doorX = bx + Math.floor(bw / 2) - 10;
+  fillRect(ctx, doorX, by + bh - 24, 20, 24, '#0a0c10');
+  strokeRect(ctx, doorX, by + bh - 24, 20, 24, '#22303a');
+  // Door cross lines (revolving door symbol)
+  fillRect(ctx, doorX + 9, by + bh - 24, 2, 24, '#1a2028');
+  fillRect(ctx, doorX, by + bh - 13, 20, 2, '#1a2028');
+  if (label) drawText(ctx, label, bx + bw / 2, by - 6, '#7090b0', 8, 'center');
+}
+
+function drawExploreHouse(ctx, bx, by, bw, bh, label) {
+  // Suburban house with pitched roof
+  fillRect(ctx, bx, by + 10, bw, bh - 10, '#1c1810');
+  // Horizontal siding lines
+  for (let sy = by + 14; sy < by + bh; sy += 7) {
+    fillRect(ctx, bx, sy, bw, 1, '#141008', 0.5);
+  }
+  // Gabled roof
+  ctx.save();
+  ctx.fillStyle = '#181412';
+  ctx.beginPath();
+  ctx.moveTo(bx - 6, by + 10);
+  ctx.lineTo(bx + bw / 2, by - 14);
+  ctx.lineTo(bx + bw + 6, by + 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#242018'; ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  // Chimney
+  fillRect(ctx, bx + bw * 0.65, by - 20, 10, 18, '#1e1a14');
+  strokeRect(ctx, bx + bw * 0.65, by - 20, 10, 18, '#2e2818');
+  // Windows
+  const ww = 16, wh = 12;
+  fillRect(ctx, bx + 10, by + 16, ww, wh, '#0a0c08');
+  strokeRect(ctx, bx + 10, by + 16, ww, wh, '#2e2818');
+  fillRect(ctx, bx + 10 + ww/2, by + 16, 1, wh, '#1a1410', 0.6); // pane divider
+  if (bw > 70) {
+    fillRect(ctx, bx + bw - 10 - ww, by + 16, ww, wh, '#0a0c08');
+    strokeRect(ctx, bx + bw - 10 - ww, by + 16, ww, wh, '#2e2818');
+    fillRect(ctx, bx + bw - 10 - ww/2, by + 16, 1, wh, '#1a1410', 0.6);
+  }
+  // Front door
+  const doorX = bx + Math.floor(bw / 2) - 8;
+  fillRect(ctx, doorX, by + bh - 26, 16, 26, '#0e0c08');
+  strokeRect(ctx, doorX, by + bh - 26, 16, 26, '#2a2014');
+  fillRect(ctx, doorX + 11, by + bh - 14, 3, 3, '#4a3820', 0.8); // handle
+  if (label) drawText(ctx, label, bx + bw / 2, by - 18, '#907860', 8, 'center');
+}
+
+function drawExplorePharmacy(ctx, bx, by, bw, bh, label) {
+  // Small shopfront — pale off-white
+  fillRect(ctx, bx, by, bw, bh, '#1a1c1a');
+  // Flat roof with sign board
+  fillRect(ctx, bx - 4, by - 10, bw + 8, 14, '#141618');
+  strokeRect(ctx, bx - 4, by - 10, bw + 8, 14, '#20242a');
+  // Medical cross on signboard
+  const scX = bx + bw / 2;
+  fillRect(ctx, scX - 1, by - 8, 3, 10, '#1a5030');
+  fillRect(ctx, scX - 4, by - 5, 9, 3, '#1a5030');
+  // Large shop windows
+  const winW2 = Math.floor(bw * 0.3), winH2 = Math.floor(bh * 0.45);
+  fillRect(ctx, bx + 6, by + 6, winW2, winH2, '#080a10');
+  strokeRect(ctx, bx + 6, by + 6, winW2, winH2, '#1a2030');
+  fillRect(ctx, bx + bw - 6 - winW2, by + 6, winW2, winH2, '#080a10');
+  strokeRect(ctx, bx + bw - 6 - winW2, by + 6, winW2, winH2, '#1a2030');
+  // Door
+  const doorX = bx + Math.floor(bw / 2) - 7;
+  fillRect(ctx, doorX, by + bh - 22, 14, 22, '#080a0c');
+  strokeRect(ctx, doorX, by + bh - 22, 14, 22, '#202428');
+  if (label) drawText(ctx, label, bx + bw / 2, by - 14, '#809080', 8, 'center');
+}
+
+// Dispatch building draw based on theme
+function drawExploreBuildingByTheme(ctx, theme, bx, by, bw, bh, label) {
+  switch (theme) {
+    case 'church':   drawExploreChurch(ctx, bx, by, bw, bh, label);   break;
+    case 'factory':  drawExploreFactory(ctx, bx, by, bw, bh, label);  break;
+    case 'hospital': drawExploreHospital(ctx, bx, by, bw, bh, label); break;
+    case 'office':   drawExploreOffice(ctx, bx, by, bw, bh, label);   break;
+    case 'house':    drawExploreHouse(ctx, bx, by, bw, bh, label);    break;
+    case 'pharmacy': drawExplorePharmacy(ctx, bx, by, bw, bh, label); break;
+    default:         drawExploreBuilding(ctx, bx, by, bw, bh, label); break;
+  }
+}

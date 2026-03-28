@@ -25,22 +25,30 @@ function drawStatsPanel(ctx, gs) {
 
   // ── Parent stats ───────────────────────────────────────────────────────────
   const pLvl = gs.parent.level || 1;
-  drawText(ctx, gs.parent.name.toUpperCase() + ' (' + parentTitle() + ')', x + 8, y + 8, C.text, 8, 'left', true);
+  const pRowStart = y;
+  const isPSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === 'parent';
+  if (isPSel) fillRect(ctx, x + 4, y, w - 8, 8, '#1a1a2a');
+  drawText(ctx, gs.parent.name.toUpperCase() + ' (' + parentTitle() + ')', x + 8, y + 8, isPSel ? '#aaaaff' : C.text, 8, 'left', true);
   drawText(ctx, `Lv.${pLvl}`, x + w - 8, y + 8, '#d4aa40', 7, 'right', true);
   y += 12;
 
   y = drawPersonStats(ctx, gs.parent, x + 8, y, w - 16);
   y += 4;
+  gs._parentStatBounds = { x, y: pRowStart, w, h: y - pRowStart };
   drawDivider(ctx, x + 6, y, w - 12, C.border2);
   y += 5;
 
   // ── Child stats ────────────────────────────────────────────────────────────
   const chLvl = gs.child.level || 1;
-  drawText(ctx, gs.child.name.toUpperCase() + ' (Child)', x + 8, y + 8, '#a0809a', 8, 'left', true);
+  const chRowStart = y;
+  const isCSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === 'child';
+  if (isCSel) fillRect(ctx, x + 4, y, w - 8, 8, '#2a1a2a');
+  drawText(ctx, gs.child.name.toUpperCase() + ' (Child)', x + 8, y + 8, isCSel ? '#ffaaff' : '#a0809a', 8, 'left', true);
   drawText(ctx, `Lv.${chLvl}`, x + w - 8, y + 8, '#d4aa40', 7, 'right', true);
   y += 12;
   y = drawPersonStats(ctx, gs.child, x + 8, y, w - 16);
   y += 4;
+  gs._childStatBounds = { x, y: chRowStart, w, h: y - chRowStart };
 
   // Survivors (hidden during combat — player fights alone)
   if (gs.survivors.length > 0 && gs.screen !== 'combat') {

@@ -409,7 +409,7 @@ function updateExplore(gs, dt) {
   const dpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || dpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || dpadRight;
-  const speedMult = gs.parent.wounded ? 0.55 : 1.0;
+  const speedMult = (gs.parent.wounded ? 0.55 : 1.0) * (gs.timeScale || 1);
   if (left)       { es.velX = -CFG.PLAYER_SPEED * speedMult; es.facing = -1; }
   else if (right) { es.velX =  CFG.PLAYER_SPEED * speedMult; es.facing =  1; }
   else es.velX = 0;
@@ -429,7 +429,8 @@ function updateExplore(gs, dt) {
   for (const c of es.containers) {
     if (c.searching) {
       c.searchProgress += dt;
-      if (c.searchProgress >= c.searchDuration) {
+      const dur = c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration;
+      if (c.searchProgress >= dur) {
         c.searching = false; c.searched = true;
         finishSearch(c, gs);
       }
@@ -510,8 +511,9 @@ function updateBuildingInterior(gs, dt) {
   const biDpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || biDpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || biDpadRight;
-  if (left)       { bi.velX = -CFG.PLAYER_SPEED; bi.facing = -1; }
-  else if (right) { bi.velX =  CFG.PLAYER_SPEED; bi.facing =  1; }
+  const biSpeedMult = gs.timeScale || 1;
+  if (left)       { bi.velX = -CFG.PLAYER_SPEED * biSpeedMult; bi.facing = -1; }
+  else if (right) { bi.velX =  CFG.PLAYER_SPEED * biSpeedMult; bi.facing =  1; }
   else bi.velX = 0;
 
   bi.px = clamp(bi.px + bi.velX, 10, fl.width - 10);
@@ -529,7 +531,8 @@ function updateBuildingInterior(gs, dt) {
   for (const c of fl.containers) {
     if (c.searching) {
       c.searchProgress += dt;
-      if (c.searchProgress >= c.searchDuration) {
+      const dur = c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration;
+      if (c.searchProgress >= dur) {
         c.searching = false; c.searched = true;
         finishSearch(c, gs);
       }
@@ -542,10 +545,46 @@ function finishSearch(container, gs) {
     notify('Nothing useful found.', 'info');
     return;
   }
+
+  // Apply trait-based loot bonuses — expand loot pool before picking up
+  let loot = container.loot.slice();
+  const trait = gs.parent.trait;
+  const nf    = nightFactor(gs.time);
+  // lucky: 10% more items (extra roll per item)
+  if (trait === 'lucky') {
+    const bonus = [];
+    for (const item of loot) {
+      if (Math.random() < 0.10) bonus.push({ ...item });
+    }
+    loot = loot.concat(bonus);
+  }
+  // meticulous: 30% more items
+  if (trait === 'meticulous') {
+    const bonus = [];
+    for (const item of loot) {
+      if (Math.random() < 0.30) bonus.push({ ...item });
+    }
+    loot = loot.concat(bonus);
+  }
+  // night_owl: +20% items at night, -10% at day
+  if (trait === 'night_owl') {
+    if (nf > 0.5) {
+      // night — add ~20% extra items
+      const bonus = [];
+      for (const item of loot) {
+        if (Math.random() < 0.20) bonus.push({ ...item });
+      }
+      loot = loot.concat(bonus);
+    } else {
+      // day — remove ~10% of items
+      loot = loot.filter(() => Math.random() >= 0.10);
+    }
+  }
+
   let added = 0;
   let tooHeavy = 0;
   const names = [];
-  for (const item of container.loot) {
+  for (const item of loot) {
     const def  = getItemDef(item.id);
     const maxW = parentMaxCarry();
     const curW = calcWeight(gs.parent.inventory);
@@ -616,7 +655,11 @@ function interactOutdoor(gs) {
 
   // Start searching a container
   const nearC = es.containers.find(c => !c.searched && !c.searching && Math.abs(es.px - c.wx) < 30);
-  if (nearC) { nearC.searching = true; nearC.searchProgress = 0; notify('Searching...', 'info'); return; }
+  if (nearC) {
+    nearC.searching = true; nearC.searchProgress = 0;
+    if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
+    notify('Searching...', 'info'); return;
+  }
 
   // Search a tent (not enterable — just a search prompt)
   const nearTent = es.buildings.find(b => b.isTent && !b._tentSearched && Math.abs(es.px - (b.bx + b.bw / 2)) < 30);
@@ -697,7 +740,11 @@ function interactBuilding(gs) {
 
   // Start searching
   const nearC = fl.containers.find(c => !c.searched && !c.searching && Math.abs(bi.px - c.wx) < 30);
-  if (nearC) { nearC.searching = true; nearC.searchProgress = 0; notify('Searching...', 'info'); }
+  if (nearC) {
+    nearC.searching = true; nearC.searchProgress = 0;
+    if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
+    notify('Searching...', 'info');
+  }
 }
 
 // ── Click handling ────────────────────────────────────────────────────────────
@@ -848,7 +895,11 @@ function exploreClick(mx, my, gs) {
     const wx  = mx + bi.scrollX;
     const nearC = fl.containers.find(c => !c.searched && !c.searching &&
       Math.abs(wx - c.wx) < 24 && my > GROUND_Y - 35 && my < GROUND_Y + 10);
-    if (nearC) { nearC.searching = true; nearC.searchProgress = 0; notify('Searching...', 'info'); }
+    if (nearC) {
+      nearC.searching = true; nearC.searchProgress = 0;
+      if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
+      notify('Searching...', 'info');
+    }
     return;
   }
 
@@ -871,7 +922,11 @@ function exploreClick(mx, my, gs) {
   // Outdoor click on container
   const nearC = es.containers.find(c => !c.searched && !c.searching &&
     Math.abs(wx - c.wx) < 24 && my > GROUND_Y - 35 && my < GROUND_Y + 10);
-  if (nearC) { nearC.searching = true; nearC.searchProgress = 0; notify('Searching...', 'info'); }
+  if (nearC) {
+    nearC.searching = true; nearC.searchProgress = 0;
+    if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
+    notify('Searching...', 'info');
+  }
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -954,7 +1009,7 @@ function renderOutdoor(ctx, gs, es) {
       if (bld.theme === 'cabin') {
         drawExploreCabin(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
       } else {
-        drawExploreBuilding(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
+        drawExploreBuildingByTheme(ctx, bld.theme, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
       }
       if (Math.abs(es.px - (bld.doorX + 8)) < 24) {
         drawText(ctx, '[E] Enter', bld.doorX + 8, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
@@ -968,7 +1023,7 @@ function renderOutdoor(ctx, gs, es) {
     const near = Math.abs(es.px - c.wx) < 30;
     drawExploreContainer(ctx, c.wx, GROUND_Y, c.type, near);
     if (c.searching) {
-      drawSearchBar(ctx, c.wx, GROUND_Y - 22, c.searchProgress / c.searchDuration);
+      drawSearchBar(ctx, c.wx, GROUND_Y - 22, c.searchProgress / (c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration));
     } else if (near) {
       drawText(ctx, '[E] Search', c.wx, GROUND_Y - 24, C.textBright, 7, 'center');
     }
@@ -1097,7 +1152,7 @@ function renderBuildingInterior(ctx, gs, es) {
     const near = Math.abs(bi.px - c.wx) < 30;
     drawExploreContainer(ctx, c.wx, GROUND_Y, c.type, near);
     if (c.searching) {
-      drawSearchBar(ctx, c.wx, GROUND_Y - 22, c.searchProgress / c.searchDuration);
+      drawSearchBar(ctx, c.wx, GROUND_Y - 22, c.searchProgress / (c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration));
     } else if (near) {
       drawText(ctx, '[E] Search', c.wx, GROUND_Y - 24, C.textBright, 7, 'center');
     }
@@ -1605,8 +1660,8 @@ function drawBuildingInteriorDecor(ctx, theme, floorW, groundY) {
       break;
     }
     case 'church': {
-      // Crucifixion cross at center — Singularity cult scene
-      const cx2 = Math.round(W * 0.45);
+      // Crucifixion cross near entry — Singularity cult scene
+      const cx2 = Math.round(W * 0.25);
       // Vertical beam
       fillRect(ctx, cx2 - 3, G - 90, 6, 90, '#1e1610');
       strokeRect(ctx, cx2 - 3, G - 90, 6, 90, '#2e261a');

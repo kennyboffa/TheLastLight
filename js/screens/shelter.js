@@ -352,6 +352,11 @@ function drawShelterCharacters(ctx, gs) {
   if (ch.isSleeping && _bedSlot < BED_POSITIONS.length) {
     const bed = BED_POSITIONS[_bedSlot++];
     drawCX = bed.x; drawCY = bed.y; chPose = 'sleep';
+  } else if (!p.isExploring && p.task && p.task.type === 'play') {
+    // Stand next to parent while playing
+    drawCX = Math.round((p.shelterX !== undefined ? p.shelterX : 28) + 22);
+    drawCY = groundY;
+    chPose = 'front';
   }
   const csel = shelterUI.selectedChar === 'child';
   if (csel) {
@@ -520,6 +525,10 @@ function drawCharPanel(ctx, gs, mx, my) {
   const hasWater = waterIds.some(id => countInInventory(gs.shelter.storage, id) > 0);
 
   addBtn('Sleep',             'sleep',   !noTask);
+  // Allow waking up if sleeping and tiredness < 50%
+  if (who.isSleeping && (who.tiredness || 0) < 50) {
+    addBtn('Stop Sleeping',   'wake',    false);
+  }
   addBtn('Eat from Storage',  'eat',     !noTask || !hasFood);
   addBtn('Drink from Storage','drink',   !noTask || !hasWater);
   if (sel === 'parent') {
@@ -570,6 +579,18 @@ function handleCharTask(taskId, gs) {
       if (sel === 'parent') gs.parent.isWorking = false;
       notify(`${who.name} went to sleep.`, 'normal');
       shelterUI.activeMenu = null;
+      break;
+
+    case 'wake':
+      if (who.isSleeping && (who.tiredness || 0) < 50) {
+        who.isSleeping   = false;
+        who.task         = null;
+        who.taskProgress = 0;
+        who.taskDuration = 0;
+        who.isWorking    = false;
+        notify(`${who.name} stopped sleeping.`, 'normal');
+        shelterUI.activeMenu = null;
+      }
       break;
 
     case 'eat': {
@@ -691,7 +712,10 @@ function drawShelterControls(ctx, gs, mx, my) {
   for (const btn of CTRL_BUTTONS) {
     const disabled = (btn.needsCampfire && !gs.shelter.campfire)
                   || (btn.id === 'explore' && (gs.parent.isExploring || !!gs.parent.task || gs.parent.isSleeping || gs.parent.hasExploredToday))
-                  || (btn.id === 'sleep'   && gs.parent.isSleeping);
+                  || (btn.id === 'sleep'   && gs.parent.isSleeping)
+                  || (btn.id === 'craft'   && (gs.parent.isSleeping || !!gs.parent.task))
+                  || (btn.id === 'cook'    && (gs.parent.isSleeping || !!gs.parent.task))
+                  || (btn.id === 'play'    && (gs.parent.isSleeping || !!gs.parent.task));
     const active = (btn.id === 'craft'   && shelterUI.activeMenu === 'crafting')
                 || (btn.id === 'storage' && shelterUI.activeMenu === 'storage')
                 || (btn.id === 'cook'    && shelterUI.activeMenu === 'cooking')
@@ -1284,6 +1308,18 @@ function shelterClick(mx, my, gs) {
     }
   }
 
+  // Parent / child stat panel click (right-side bar)
+  for (const [id, key] of [['parent', '_parentStatBounds'], ['child', '_childStatBounds']]) {
+    const b = gs[key];
+    if (b && hitTest(mx, my, b.x, b.y, b.w, b.h)) {
+      M.selectedChar = id;
+      M.activeMenu   = 'char';
+      M.charPanelX   = clamp(MAIN_W - 188, 2, MAIN_W - 188);
+      M.charPanelY   = clamp(b.y, 2, CFG.H - 260);
+      return;
+    }
+  }
+
   // Survivor stat panel click (right-side bar)
   if (gs._survivorStatBounds) {
     for (const bound of gs._survivorStatBounds) {
@@ -1681,9 +1717,10 @@ function handleMenuClick(mx, my, gs) {
 function updateShelterAmbient(gs) {
   // ── Near drone patrol (low-level, over shelter) ────────────────────────────
   const dp = gs.shelter.dronePatrol;
+  const _ts = gs.timeScale || 1;
   if (dp) {
     if (dp.active) {
-      dp.x += dp.dir * 1.2;
+      dp.x += dp.dir * 1.2 * _ts;
       if (dp.x > MAIN_W + 40 || dp.x < -40) {
         dp.active = false;
         dp.timer  = 0;
@@ -1712,7 +1749,7 @@ function updateShelterAmbient(gs) {
   const dd = gs.distantDrone;
   if (!dd) return;
   if (dd.active) {
-    dd.x += dd.dir * 0.35;
+    dd.x += dd.dir * 0.35 * _ts;
     dd.timer++;
     if (dd.x > MAIN_W + 80 || dd.x < -80) {
       dd.active = false;

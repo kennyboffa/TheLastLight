@@ -459,6 +459,7 @@ function finalizeCharacter(gs) {
   addToInventory(storage, 'matches', 2);
 
   setScreen('shelter');
+  Audio.startShelterMusic();
   const diffLabel = DIFFICULTIES[gs.difficulty].label;
   addLog(`Day 1. ${gs.parent.name} and Lily are hiding below ground. Difficulty: ${diffLabel}.`, 'info');
 }

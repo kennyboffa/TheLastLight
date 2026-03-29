@@ -2,8 +2,8 @@
 'use strict';
 
 const CFG = {
-  W: 640,
-  H: 360,
+  W: 736,
+  H: 414,
 
   // ── Time ─────────────────────────────────────────────────────────────────
   MINS_PER_REAL_SEC: 4,   // 1 real second = 4 game minutes (so a full day ~54 real min, speedy)
@@ -38,7 +38,7 @@ const CFG = {
   ROOM_H:   86,          // taller rooms (was 68)
   ROOM_GAP:   6,
   ROOM_COLS:  3,
-  SURFACE_H: 95,         // height of surface scene at top of shelter view
+  SURFACE_H: 130,        // height of surface scene at top of shelter view
 
   // ── Exploration ──────────────────────────────────────────────────────────
   WORLD_W: 2800,         // exploration world pixel width
@@ -46,10 +46,10 @@ const CFG = {
   PLAYER_SPEED: 1.575,  // reduced 10% from 1.75
 
   // ── Building interiors ───────────────────────────────────────────────────
-  BLDG_GROUND_Y: 230,    // floor y inside buildings
-  BLDG_CEIL_Y:    55,    // ceiling y inside buildings
-  FOG_RADIUS_OUT: 190,   // outdoor visibility radius
-  FOG_RADIUS_IN:  140,   // indoor visibility radius
+  BLDG_GROUND_Y: 264,    // floor y inside buildings
+  BLDG_CEIL_Y:    63,    // ceiling y inside buildings
+  FOG_RADIUS_OUT: 218,   // outdoor visibility radius
+  FOG_RADIUS_IN:  161,   // indoor visibility radius
 
   // ── Weather ──────────────────────────────────────────────────────────────
   WEATHER_CHANGE_MIN: 3, // game hours min between changes

@@ -379,14 +379,20 @@ function update(dt) {
 function render(ctx) {
   const gs = GS;
 
-  // Zoom transition (cinematic enter/exit for explore and shelter)
+  // Zoom transition — clips to the main game world area only (excludes right stats panel
+  // and bottom controls so the UI stays at normal scale during cinematic zoom)
   const zoom = gs.zoomAnim ? gs.zoomAnim.scale : 1.0;
   const hasZoom = Math.abs(zoom - 1.0) > 0.001;
+  const zoomW = (typeof MAIN_W !== 'undefined') ? MAIN_W : CFG.W; // main game area width
+
   if (hasZoom) {
     ctx.save();
-    ctx.translate(CFG.W / 2, CFG.H / 2);
+    ctx.beginPath();
+    ctx.rect(0, 0, zoomW, CFG.H);
+    ctx.clip();
+    ctx.translate(zoomW / 2, CFG.H / 2);
     ctx.scale(zoom, zoom);
-    ctx.translate(-CFG.W / 2, -CFG.H / 2);
+    ctx.translate(-zoomW / 2, -CFG.H / 2);
   }
 
   switch (gs.screen) {
@@ -424,7 +430,15 @@ function render(ctx) {
       fillRect(ctx, 0, 0, CFG.W, CFG.H, C.bg);
   }
 
-  if (hasZoom) ctx.restore();
+  if (hasZoom) {
+    ctx.restore();
+    // Redraw UI panels at 1:1 scale on top — they were drawn inside the zoom
+    // context above but got clipped away since they're outside the game world area
+    if (gs.screen === 'shelter') {
+      drawStatsPanel(ctx, gs);
+      drawShelterControls(ctx, gs, gs.mouse.x, gs.mouse.y);
+    }
+  }
 
   // Vignette — dark edges for a gritty, claustrophobic feel
   const vig = ctx.createRadialGradient(CFG.W / 2, CFG.H / 2, CFG.W * 0.28, CFG.W / 2, CFG.H / 2, CFG.W * 0.82);
@@ -433,16 +447,24 @@ function render(ctx) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, CFG.W, CFG.H);
 
-  // Film grain — deterministic noise pattern cycling through 16 seeds
+  // Film grain — scattered noise/dirt particles, no directional pattern
   if (gs.screen !== 'intro') {
-    const seed = frameCount % 16;
+    const seed = frameCount % 31;
     ctx.save();
-    ctx.globalAlpha = 0.11;
+    ctx.globalAlpha = 0.10;
     for (let i = 0; i < 2800; i++) {
-      const gx = Math.floor(((i * 139 + seed * 1031) % 997) / 997 * CFG.W);
-      const gy = Math.floor(((i * 269 + seed * 877)  % 991) / 991 * CFG.H);
-      ctx.fillStyle = (i + seed) % 3 === 0 ? '#ffffff' : '#000000';
-      ctx.fillRect(gx, gy, 1, 1);
+      // Cross-multiplied large coprimes break any linear/diagonal distribution
+      const h1 = (i * 7369 + seed * 3491 + i * seed * 113) % 7919;
+      const h2 = (i * 5171 + seed * 6143 + (i ^ seed) * 317) % 7793;
+      const gx = Math.floor(h1 / 7919 * CFG.W);
+      const gy = Math.floor(h2 / 7793 * CFG.H);
+      // Mixed gray tones: dark specks, mid-gray, occasional light dust
+      const tone = (i * 3 + seed * 7) % 9;
+      if      (tone < 4) ctx.fillStyle = '#1a1a1a';   // dark speck
+      else if (tone < 7) ctx.fillStyle = '#555555';   // mid gray
+      else               ctx.fillStyle = '#cccccc';   // light dust
+      const sz = (i * 11 + seed) % 17 < 2 ? 2 : 1;  // ~12% are 2×2 dust blobs
+      ctx.fillRect(gx, gy, sz, sz);
     }
     ctx.restore();
   }

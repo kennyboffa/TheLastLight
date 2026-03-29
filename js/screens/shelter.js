@@ -1260,38 +1260,79 @@ function drawJournalPanel(ctx, gs, mx, my) {
 // ── Settings menu ─────────────────────────────────────────────────────────────
 
 function drawSettingsMenu(ctx, gs, mx, my) {
-  const W2 = 240, H2 = 160;
-  const px = Math.floor((MAIN_W - W2) / 2), py = 80;
+  const W2 = 250, H2 = 280;
+  const px = Math.floor((MAIN_W - W2) / 2), py = 70;
   drawModal(ctx, px, py, W2, H2, 'SETTINGS');
 
-  let y = py + 30;
+  let y = py + 28;
 
-  // Game scale
+  // Helper: one row with label, − value + buttons
+  function volRow(label, val, rowY) {
+    const pct = Math.round(val * 100);
+    const mx1 = px + 14, px1 = px + W2 - 42;
+    drawText(ctx, label, px + W2 / 2, rowY + 8, C.text, 8, 'center', true);
+    rowY += 16;
+    drawButton(ctx, mx1, rowY, 24, 18, '−', hitTest(mx, my, mx1, rowY, 24, 18), false, val <= 0);
+    drawText(ctx, `${pct}%`, px + W2 / 2, rowY + 12, C.textBright, 10, 'center', true);
+    drawButton(ctx, px1, rowY, 24, 18, '+', hitTest(mx, my, px1, rowY, 24, 18), false, val >= 1.0);
+    return { minusX: mx1, minusY: rowY, plusX: px1, plusY: rowY, bW: 24, bH: 18 };
+  }
+
+  // Display Scale row
   drawText(ctx, 'Display Scale', px + W2/2, y + 8, C.text, 9, 'center', true); y += 20;
-  const scale = gs.userScale || 1.0;
-  const pct   = Math.round(scale * 100);
-  const minusX = px + 20, plusX = px + W2 - 48;
-  drawButton(ctx, minusX, y, 28, 20, '−', hitTest(mx, my, minusX, y, 28, 20), false, scale <= 0.6);
-  drawText(ctx, `${pct}%`, px + W2/2, y + 13, C.textBright, 11, 'center', true);
-  drawButton(ctx, plusX,  y, 28, 20, '+', hitTest(mx, my, plusX,  y, 28, 20), false, scale >= 2.0);
-  y += 30;
+  const scale  = gs.userScale || 1.0;
+  const sPct   = Math.round(scale * 100);
+  const sMinX  = px + 14, sPlusX = px + W2 - 42;
+  drawButton(ctx, sMinX,  y, 24, 18, '−', hitTest(mx, my, sMinX,  y, 24, 18), false, scale <= 0.6);
+  drawText(ctx, `${sPct}%`, px + W2/2, y + 12, C.textBright, 10, 'center', true);
+  drawButton(ctx, sPlusX, y, 24, 18, '+', hitTest(mx, my, sPlusX, y, 24, 18), false, scale >= 2.0);
+  const scaleBtns = { minusX: sMinX, minusY: y, plusX: sPlusX, plusY: y, bW: 24, bH: 18 };
+  y += 28;
 
-  // SFX toggle
+  drawDivider(ctx, px + 10, y, W2 - 20, C.border);
+  y += 10;
+
+  // Music Volume
+  const mVol   = Audio.getMusicVol();
+  const mBtns  = volRow('Music Volume', mVol, y);
+  y += 40;
+
+  // SFX Volume
+  const sVol   = Audio.getSfxVol();
+  const sBtns  = volRow('SFX Volume', sVol, y);
+  y += 40;
+
+  // Click Volume
+  const cVol   = Audio.getClickVol();
+  const cBtns  = volRow('Click Volume', cVol, y);
+  y += 40;
+
+  drawDivider(ctx, px + 10, y, W2 - 20, C.border);
+  y += 8;
+
+  // Master mute toggle
   const sfxOn  = Audio.isEnabled();
   const sfxCol = sfxOn ? C.textGood : C.textDim;
-  drawText(ctx, `SFX: ${sfxOn ? 'ON' : 'OFF'}`, px + W2/2, y + 8, sfxCol, 8, 'center', true);
-  drawButton(ctx, px + W2/2 - 30, y + 14, 60, 16, sfxOn ? 'Disable' : 'Enable',
-    hitTest(mx, my, px + W2/2 - 30, y + 14, 60, 16));
+  drawText(ctx, `Audio: ${sfxOn ? 'ON' : 'OFF'}`, px + W2/2, y + 8, sfxCol, 8, 'center', true);
+  const muteX = px + W2/2 - 30, muteY = y + 14;
+  drawButton(ctx, muteX, muteY, 60, 16, sfxOn ? 'Mute All' : 'Unmute',
+    hitTest(mx, my, muteX, muteY, 60, 16));
   y += 36;
 
-  const closeX = px + W2 - 58, closeY = py + H2 - 24;
-  drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
+  const closeX = px + W2 - 62, closeY = py + H2 - 22;
+  drawButton(ctx, closeX, closeY, 54, 16, 'Close', hitTest(mx, my, closeX, closeY, 54, 16));
 
   gs._settingsBtns = {
-    minus:   { x: minusX,      y: py + 50, w: 28, h: 20 },
-    plus:    { x: plusX,       y: py + 50, w: 28, h: 20 },
-    sfx:     { x: px + W2/2 - 30, y: py + 94, w: 60, h: 16 },
-    close:   { x: closeX,     y: closeY,  w: 50, h: 16 },
+    minus:      { x: scaleBtns.minusX, y: scaleBtns.minusY, w: 24, h: 18 },
+    plus:       { x: scaleBtns.plusX,  y: scaleBtns.plusY,  w: 24, h: 18 },
+    musicMinus: { x: mBtns.minusX, y: mBtns.minusY, w: 24, h: 18 },
+    musicPlus:  { x: mBtns.plusX,  y: mBtns.plusY,  w: 24, h: 18 },
+    sfxMinus:   { x: sBtns.minusX, y: sBtns.minusY, w: 24, h: 18 },
+    sfxPlus:    { x: sBtns.plusX,  y: sBtns.plusY,  w: 24, h: 18 },
+    clickMinus: { x: cBtns.minusX, y: cBtns.minusY, w: 24, h: 18 },
+    clickPlus:  { x: cBtns.plusX,  y: cBtns.plusY,  w: 24, h: 18 },
+    sfx:        { x: muteX,   y: muteY,  w: 60, h: 16 },
+    close:      { x: closeX,  y: closeY, w: 54, h: 16 },
   };
 }
 
@@ -1728,16 +1769,37 @@ function handleMenuClick(mx, my, gs) {
   if (M.activeMenu === 'settings') {
     const btns = GS._settingsBtns;
     if (!btns) return;
+    // Display scale
     if (hitTest(mx, my, btns.minus.x, btns.minus.y, btns.minus.w, btns.minus.h)) {
       gs.userScale = Math.max(0.6, Math.round(((gs.userScale || 1.0) - 0.1) * 10) / 10);
-      if (typeof resizeCanvas === 'function') resizeCanvas();
-      return;
+      if (typeof resizeCanvas === 'function') resizeCanvas(); return;
     }
     if (hitTest(mx, my, btns.plus.x, btns.plus.y, btns.plus.w, btns.plus.h)) {
       gs.userScale = Math.min(2.0, Math.round(((gs.userScale || 1.0) + 0.1) * 10) / 10);
-      if (typeof resizeCanvas === 'function') resizeCanvas();
-      return;
+      if (typeof resizeCanvas === 'function') resizeCanvas(); return;
     }
+    // Music volume
+    if (hitTest(mx, my, btns.musicMinus.x, btns.musicMinus.y, btns.musicMinus.w, btns.musicMinus.h)) {
+      Audio.setMusicVol(Math.round((Audio.getMusicVol() - 0.1) * 10) / 10); return;
+    }
+    if (hitTest(mx, my, btns.musicPlus.x, btns.musicPlus.y, btns.musicPlus.w, btns.musicPlus.h)) {
+      Audio.setMusicVol(Math.round((Audio.getMusicVol() + 0.1) * 10) / 10); return;
+    }
+    // SFX volume
+    if (hitTest(mx, my, btns.sfxMinus.x, btns.sfxMinus.y, btns.sfxMinus.w, btns.sfxMinus.h)) {
+      Audio.setSfxVol(Math.round((Audio.getSfxVol() - 0.1) * 10) / 10); return;
+    }
+    if (hitTest(mx, my, btns.sfxPlus.x, btns.sfxPlus.y, btns.sfxPlus.w, btns.sfxPlus.h)) {
+      Audio.setSfxVol(Math.round((Audio.getSfxVol() + 0.1) * 10) / 10); return;
+    }
+    // Click volume
+    if (hitTest(mx, my, btns.clickMinus.x, btns.clickMinus.y, btns.clickMinus.w, btns.clickMinus.h)) {
+      Audio.setClickVol(Math.round((Audio.getClickVol() - 0.1) * 10) / 10); return;
+    }
+    if (hitTest(mx, my, btns.clickPlus.x, btns.clickPlus.y, btns.clickPlus.w, btns.clickPlus.h)) {
+      Audio.setClickVol(Math.round((Audio.getClickVol() + 0.1) * 10) / 10); return;
+    }
+    // Master mute
     if (hitTest(mx, my, btns.sfx.x, btns.sfx.y, btns.sfx.w, btns.sfx.h)) {
       Audio.toggle(); return;
     }
@@ -1745,8 +1807,8 @@ function handleMenuClick(mx, my, gs) {
       M.activeMenu = null; return;
     }
     // Click outside closes
-    const W2 = 240, H2 = 160;
-    const px = Math.floor((MAIN_W - W2) / 2), py = 80;
+    const W2 = 250, H2 = 280;
+    const px = Math.floor((MAIN_W - W2) / 2), py = 70;
     if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
     return;
   }

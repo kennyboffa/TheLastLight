@@ -1,7 +1,7 @@
 // explore.js — Side-scrolling exploration with buildings, containers, fog of war
 'use strict';
 
-const GROUND_Y    = 240;
+const GROUND_Y    = 276;
 const PLAYER_FOOT = GROUND_Y;
 const BUILDING_W  = 900;   // interior width of each building floor
 
@@ -313,6 +313,7 @@ function startExploration(gs, loc) {
   gs.child.isAlone         = true;
   gs.timeScale = 1; // always reset speed on exploration start
   Audio.resume();
+  Audio.stopShelterMusic();
   Audio.startMusic();
 
   // Travel time: harder locations take longer to reach (diff 1-2: +1h, diff 3-4: +2h)
@@ -1952,6 +1953,7 @@ function endExploration(gs) {
   gs.parent.isExploring = false;
   gs.child.isAlone      = false;
   Audio.stopMusic();
+  Audio.startShelterMusic();
   // Return companion
   if (gs.exploreCompanionId) {
     const comp = (gs.survivors || []).find(s => s.id === gs.exploreCompanionId);

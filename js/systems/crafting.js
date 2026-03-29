@@ -122,7 +122,13 @@ function upgradeRoom(gs, roomId) {
 }
 
 // Craft an item from RECIPES_DB (timed task — output given on completion)
-function craftItem(gs, recipeId, qty) {
+// who: the character doing the work (defaults to parent). Child (Lily) is not allowed.
+function craftItem(gs, recipeId, qty, who) {
+  who = who || gs.parent;
+  // Check worker availability BEFORE deducting materials
+  if (who.isSleeping) return { ok: false, msg: `${who.name} is sleeping.` };
+  if (who.task)       return { ok: false, msg: `${who.name} is already busy.` };
+
   const recipe = RECIPES_DB.find(r => r.id === recipeId);
   if (!recipe) return { ok: false, msg: 'Unknown recipe.' };
   if (recipe.needsWorkshop && !getRoomUnlocked('workshop')) {
@@ -144,16 +150,13 @@ function craftItem(gs, recipeId, qty) {
     return { ok: false, msg: 'Not enough materials.' };
   }
 
-  deductCost(scaledCost, gs, true);
+  deductCost(scaledCost, gs, true); // materials come from shared storage + parent inventory
   if (recipe.needsTools) useToolCharge(gs);
 
-  const p = gs.parent;
-  if (p.isSleeping) return { ok: false, msg: 'Cannot craft while sleeping.' };
-  if (p.task) return { ok: false, msg: 'Already busy with another task.' };
-  p.task         = { type: 'craft', recipeId, qty: outQty };
-  p.taskDuration = (recipe.craftTime || 0.5) * batches;
-  p.taskProgress = 0;
-  p.isWorking    = true;
+  who.task         = { type: 'craft', recipeId, qty: outQty };
+  who.taskDuration = (recipe.craftTime || 0.5) * batches;
+  who.taskProgress = 0;
+  who.isWorking    = true;
   return { ok: true };
 }
 

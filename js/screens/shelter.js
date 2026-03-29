@@ -33,6 +33,7 @@ let shelterUI = {
   charPanelX: 60, charPanelY: 100,
   craftConfirm: null,   // null | { recipeId, maxQty }
   craftQty: 1,          // chosen quantity in craft confirm dialog
+  craftWorker: null,    // 'parent' | survivor.id — who does the crafting
   selectedRecipe: null, // recipe id currently selected (shows description)
   statsPanelScroll: 0, // scroll offset for survivors in stats panel
   journalTab: 'log',   // 'log' | 'diary' | 'other' | 'help'
@@ -713,7 +714,6 @@ function drawShelterControls(ctx, gs, mx, my) {
     const disabled = (btn.needsCampfire && !gs.shelter.campfire)
                   || (btn.id === 'explore' && (gs.parent.isExploring || !!gs.parent.task || gs.parent.isSleeping || gs.parent.hasExploredToday))
                   || (btn.id === 'sleep'   && gs.parent.isSleeping)
-                  || (btn.id === 'craft'   && (gs.parent.isSleeping || !!gs.parent.task))
                   || (btn.id === 'cook'    && (gs.parent.isSleeping || !!gs.parent.task))
                   || (btn.id === 'play'    && (gs.parent.isSleeping || !!gs.parent.task));
     const active = (btn.id === 'craft'   && shelterUI.activeMenu === 'crafting')
@@ -837,7 +837,7 @@ function drawRoomMenu(ctx, gs, mx, my) {
 }
 
 function drawCraftingMenu(ctx, gs, mx, my) {
-  const W2 = 280, H2 = 220;
+  const W2 = 280, H2 = 260;
   const px = 60, py = 50;
   drawModal(ctx, px, py, W2, H2, 'CRAFTING');
 
@@ -856,6 +856,29 @@ function drawCraftingMenu(ctx, gs, mx, my) {
       drawText(ctx, `Time: ~${Math.round(timeH * 60)} min`, px + W2/2, cy + 8, C.textDim, 8, 'center');
     }
     cy += 16;
+
+    // ── Worker selection ────────────────────────────────────────────────────
+    const workers = [{ id: 'parent', who: gs.parent, name: gs.parent.name }];
+    for (const s of gs.survivors) {
+      if (!s.onMission) workers.push({ id: s.id, who: s, name: s.name });
+    }
+    // Lily (child) is intentionally excluded — she cannot craft
+    if (!shelterUI.craftWorker || !workers.find(w => w.id === shelterUI.craftWorker)) {
+      shelterUI.craftWorker = workers.find(w => !w.who.isSleeping && !w.who.task)?.id || 'parent';
+    }
+    drawText(ctx, 'Assign to:', px + 10, cy + 8, C.textDim, 7);
+    const wBtnW = Math.min(58, Math.floor((W2 - 20 - workers.length) / workers.length));
+    gs._craftWorkerBtns = [];
+    let wbx = px + 78;
+    for (const w of workers) {
+      const unavail = w.who.isSleeping || !!w.who.task;
+      const selW = shelterUI.craftWorker === w.id;
+      drawButton(ctx, wbx, cy, wBtnW, 16, w.name, hitTest(mx, my, wbx, cy, wBtnW, 16), selW, unavail);
+      gs._craftWorkerBtns.push({ id: w.id, x: wbx, y: cy, w: wBtnW, h: 16, disabled: unavail });
+      wbx += wBtnW + 4;
+    }
+    cy += 22;
+
     if (maxQty > 1) {
       // Quantity selector
       drawText(ctx, 'How many?', px + W2/2, cy + 8, C.text, 8, 'center'); cy += 16;
@@ -1464,11 +1487,20 @@ function handleMenuClick(mx, my, gs) {
   }
 
   if (M.activeMenu === 'crafting') {
-    const W2 = 280, H2 = 220;
+    const W2 = 280, H2 = 260;
     const px = 60, py = 50;
 
     // Handle confirmation sub-panel clicks
     if (M.craftConfirm) {
+      // Crafter selection buttons
+      if (GS._craftWorkerBtns) {
+        for (const wb of GS._craftWorkerBtns) {
+          if (!wb.disabled && hitTest(mx, my, wb.x, wb.y, wb.w, wb.h)) {
+            M.craftWorker = wb.id;
+            return;
+          }
+        }
+      }
       const btns = GS._craftConfirmBtns;
       if (btns) {
         if (hitTest(mx, my, btns.minus.x, btns.minus.y, btns.minus.w, btns.minus.h)) {
@@ -1485,20 +1517,24 @@ function handleMenuClick(mx, my, gs) {
           if (UPGRADES_DB[cf.recipeId]) {
             result = buildUpgrade(gs, cf.recipeId);
           } else {
-            result = craftItem(gs, cf.recipeId, M.craftQty);
+            // Resolve selected crafter (child/Lily is never in the list)
+            const crafter = M.craftWorker && M.craftWorker !== 'parent'
+              ? gs.survivors.find(s => s.id === M.craftWorker)
+              : gs.parent;
+            result = craftItem(gs, cf.recipeId, M.craftQty, crafter || gs.parent);
           }
           if (!result.ok) notify(result.msg, 'warn');
-          M.craftConfirm = null; M.craftQty = 1;
-          if (result.ok) M.activeMenu = null;  // close menu after successful craft start
+          M.craftConfirm = null; M.craftQty = 1; M.craftWorker = null;
+          if (result.ok) M.activeMenu = null;
           return;
         }
         if (hitTest(mx, my, btns.cancel.x, btns.cancel.y, btns.cancel.w, btns.cancel.h)) {
-          M.craftConfirm = null; M.craftQty = 1;
+          M.craftConfirm = null; M.craftQty = 1; M.craftWorker = null;
           return;
         }
       }
       // Click outside the modal closes the confirm panel
-      if (!hitTest(mx, my, px, py, W2, H2)) { M.craftConfirm = null; M.craftQty = 1; }
+      if (!hitTest(mx, my, px, py, W2, H2)) { M.craftConfirm = null; M.craftQty = 1; M.craftWorker = null; }
       return;
     }
 
@@ -1519,7 +1555,10 @@ function handleMenuClick(mx, my, gs) {
               M.selectedRecipe = recipe.id;
               return;
             }
-            if (gs.parent.task) { notify('Already busy.', 'warn'); return; }
+            // Check if any non-sleeping, non-busy crafter is available (Lily excluded)
+            const allCrafters = [gs.parent, ...gs.survivors.filter(s => !s.onMission)];
+            const freeCrafter = allCrafters.find(c => !c.isSleeping && !c.task);
+            if (!freeCrafter) { notify('Everyone is busy or sleeping.', 'warn'); return; }
             let maxQty = 1;
             if (!UPGRADES_DB[recipe.id] && recipe.cost) {
               const costPerBatch = recipe.cost;
@@ -1530,6 +1569,7 @@ function handleMenuClick(mx, my, gs) {
               }
               maxQty = Math.max(1, canBatch * (recipe.qty || 1));
             }
+            M.craftWorker = freeCrafter === gs.parent ? 'parent' : freeCrafter.id;
             M.craftConfirm = { recipeId: recipe.id, maxQty };
             M.craftQty = 1;
             return;
@@ -1538,7 +1578,7 @@ function handleMenuClick(mx, my, gs) {
       }
     }
     if (hitTest(mx, my, px+8, py + H2 - 24, 50, 16) || !hitTest(mx, my, px, py, W2, H2)) {
-      M.activeMenu = null; M.craftConfirm = null; M.selectedRecipe = null;
+      M.activeMenu = null; M.craftConfirm = null; M.selectedRecipe = null; M.craftWorker = null;
     }
     return;
   }

@@ -1086,22 +1086,49 @@ function drawExploreChurch(ctx, bx, by, bw, bh, label) {
   for (let cx = bx; cx < bx + bw; cx += 10) {
     fillRect(ctx, cx, by, 6, 5, '#161410');
   }
-  // Central spire
+  // Bell tower — wide stone base rising from roof centre
   const spireX = bx + Math.floor(bw / 2);
+  const towerW = 22, towerH = 38;
+  fillRect(ctx, spireX - towerW/2, by - towerH, towerW, towerH, '#1a1816');
+  strokeRect(ctx, spireX - towerW/2, by - towerH, towerW, towerH, '#2a2620');
+  // Stone texture on tower
+  for (let ty = by - towerH + 6; ty < by; ty += 8) {
+    fillRect(ctx, spireX - towerW/2, ty, towerW, 1, '#141210', 0.5);
+  }
+  // Bell-arch openings on tower top
   ctx.save();
-  ctx.fillStyle = '#161410';
+  ctx.fillStyle = '#06060a';
   ctx.beginPath();
-  ctx.moveTo(spireX - 10, by);
-  ctx.lineTo(spireX, by - 34);
-  ctx.lineTo(spireX + 10, by);
+  ctx.moveTo(spireX - 7, by - towerH + 8);
+  ctx.quadraticCurveTo(spireX, by - towerH - 2, spireX + 7, by - towerH + 8);
   ctx.closePath();
   ctx.fill();
   ctx.strokeStyle = '#2a2620'; ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
-  // Cross atop spire
-  fillRect(ctx, spireX - 1, by - 38, 2, 10, '#3a3028');
-  fillRect(ctx, spireX - 4, by - 34, 8, 2,  '#3a3028');
+  // Bell silhouette inside arch
+  ctx.save();
+  ctx.fillStyle = '#282018';
+  ctx.beginPath();
+  ctx.arc(spireX, by - towerH + 10, 4, 0, Math.PI);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  // Tall needle spire atop tower
+  ctx.save();
+  ctx.fillStyle = '#121010';
+  ctx.beginPath();
+  ctx.moveTo(spireX - 6, by - towerH);
+  ctx.lineTo(spireX,     by - towerH - 72);  // very tall needle
+  ctx.lineTo(spireX + 6, by - towerH);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#2a2620'; ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+  // Cross atop spire needle
+  fillRect(ctx, spireX - 1, by - towerH - 78, 2, 12, '#3a3028');
+  fillRect(ctx, spireX - 5, by - towerH - 73, 10, 2,  '#3a3028');
   // Gothic pointed-arch windows
   const gw = 12, gh = 20;
   for (let gx = bx + 16; gx < bx + bw - gw; gx += gw + 18) {
@@ -1134,7 +1161,7 @@ function drawExploreChurch(ctx, bx, by, bw, bh, label) {
   ctx.strokeStyle = '#2a2620'; ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
-  if (label) drawText(ctx, label, bx + bw / 2, by - 38, '#9a9080', 8, 'center');
+  if (label) drawText(ctx, label, bx + bw / 2, by - towerH - 86, '#9a9080', 8, 'center');
 }
 
 function drawExploreFactory(ctx, bx, by, bw, bh, label) {

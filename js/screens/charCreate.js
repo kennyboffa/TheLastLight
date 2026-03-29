@@ -5,13 +5,34 @@ const ATTRS  = ['strength','agility','perception','intelligence','charisma'];
 const SKILLS_LIST = ['scavenging','stealth','exploration','bartering','speech','lockpick','melee','firearms'];
 
 const TRAITS_DB = [
-  { id:'slow_metabolism', name:'Slow Metabolism', desc:'Hunger and thirst decay 25% slower. Easier to manage supplies.' },
-  { id:'fast_healer',     name:'Fast Healer',     desc:'Recovers HP 40% faster from wounds and medical items.' },
-  { id:'fast_learner',    name:'Fast Learner',    desc:'Gains 25% more XP from all activities.' },
-  { id:'slow_learner',    name:'Slow Learner',    desc:'Gains 20% less XP. Harder to level up. (Negative trait)' },
-  { id:'lucky',           name:'Lucky',           desc:'Slightly better loot finds and reduced chance of bad events.' },
-  { id:'night_owl',       name:'Night Owl',       desc:'No tiredness penalty at night. Small tiredness increase during daytime tasks.' },
-  { id:'meticulous',      name:'Meticulous',      desc:'Crafting and tasks take 30% longer but produce 1 extra item or better quality.' },
+  { id:'slow_metabolism', name:'Slow Metabolism',
+    pos:'Hunger increases 20% slower.',
+    neg:'Healing items give 20% less effect and healing tasks take 20% longer.',
+    desc:'Your body is efficient — you eat less, but also recovers from wounds more slowly.' },
+  { id:'fast_healer',     name:'Fast Healer',
+    pos:'Healing items and natural recovery give 30% more HP.',
+    neg:'Hunger increases 20% faster.',
+    desc:'You bounce back from injuries quickly, but your body burns through energy faster.' },
+  { id:'fast_learner',    name:'Fast Learner',
+    pos:'Gain 20% more XP from all activities.',
+    neg:'Earn 1 fewer skill point per level up.',
+    desc:'You pick things up quickly, but theory comes at the cost of hands-on practice.' },
+  { id:'slow_learner',    name:'Slow Learner',
+    pos:'Earn 1 extra skill point per level up.',
+    neg:'Gain 20% less XP from all activities.',
+    desc:'Progress is slower, but each milestone makes you more capable.' },
+  { id:'lucky',           name:'Lucky',
+    pos:'Find ~10% more items when searching containers.',
+    neg:'Earn 1 fewer skill point per level up.',
+    desc:'Fortune favors you in the field, but you never quite reach your full potential.' },
+  { id:'night_owl',       name:'Night Owl',
+    pos:'20% more loot and +20% combat damage at night (dusk onward).',
+    neg:'10% less loot and -10% combat damage during the day.',
+    desc:'You come alive after dark — but daylight dulls your edge.' },
+  { id:'meticulous',      name:'Meticulous',
+    pos:'Find 30% more items in containers.',
+    neg:'Searching containers takes 50% longer.',
+    desc:'You search every corner carefully — it pays off, but it takes time.' },
 ];
 const ATTR_DESCS = {
   strength:     'Carry weight, melee damage',
@@ -66,8 +87,8 @@ function renderCharCreate(ctx, gs) {
   drawText(ctx, 'CHARACTER CREATION', cx, 22, C.textBright, 13, 'center', true);
   drawDivider(ctx, 40, 28, CFG.W - 80, C.border2);
 
-  // Step indicator (5 steps)
-  const steps = ['Difficulty', 'Identity', 'Attributes', 'Skills', 'Trait'];
+  // Step indicator (5 steps: Trait now before Skills)
+  const steps = ['Difficulty', 'Identity', 'Attributes', 'Trait', 'Skills'];
   let sx = cx - (steps.length * 60) / 2 + 10;
   for (let i = 0; i < steps.length; i++) {
     const active = i === cc.step;
@@ -80,8 +101,8 @@ function renderCharCreate(ctx, gs) {
   if (cc.step === 0)      renderStepDifficulty(ctx, gs, cx);
   else if (cc.step === 1) renderStep0(ctx, gs, cx);
   else if (cc.step === 2) renderStep1(ctx, gs, cx);
-  else if (cc.step === 3) renderStep2(ctx, gs, cx);
-  else if (cc.step === 4) renderStepTraits(ctx, gs, cx);
+  else if (cc.step === 3) renderStepTraits(ctx, gs, cx);
+  else if (cc.step === 4) renderStep2(ctx, gs, cx);
 
   // Bottom navigation
   const mx = gs.mouse.x, my = gs.mouse.y;
@@ -245,17 +266,17 @@ function renderStep2(ctx, gs, cx) {
   }
 }
 
-// ── Step 4: Trait selection ────────────────────────────────────────────────────
+// ── Step 3: Trait selection (before Skills) ────────────────────────────────────
 
 function renderStepTraits(ctx, gs, cx) {
   const cc = gs.cc;
   const mx = gs.mouse.x, my = gs.mouse.y;
-  let y = 60;
+  let y = 57;
 
   drawText(ctx, 'Choose a trait (optional):', cx, y, C.textDim, 9, 'center');
-  y += 14;
+  y += 12;
 
-  const btnW = 230, btnH = 20;
+  const btnW = 240, btnH = 18;
   const bx = cx - btnW / 2;
 
   // "None" option first
@@ -264,8 +285,8 @@ function renderStepTraits(ctx, gs, cx) {
     const hov = hitTest(mx, my, bx, y, btnW, btnH);
     fillRect(ctx, bx, y, btnW, btnH, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
     strokeRect(ctx, bx, y, btnW, btnH, sel ? C.textGood : (hov ? C.border2 : C.border));
-    drawText(ctx, 'None — no special trait', cx, y + btnH / 2 + 3, sel ? C.textGood : C.textBright, 9, 'center', sel);
-    y += btnH + 4;
+    drawText(ctx, 'None — no special trait', cx, y + btnH / 2 + 3, sel ? C.textGood : C.textBright, 8, 'center', sel);
+    y += btnH + 3;
   }
 
   for (const t of TRAITS_DB) {
@@ -273,21 +294,28 @@ function renderStepTraits(ctx, gs, cx) {
     const hov = hitTest(mx, my, bx, y, btnW, btnH);
     fillRect(ctx, bx, y, btnW, btnH, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
     strokeRect(ctx, bx, y, btnW, btnH, sel ? C.textGood : (hov ? C.border2 : C.border));
-    drawText(ctx, t.name, cx, y + btnH / 2 + 3, sel ? C.textGood : C.textBright, 9, 'center', sel);
-    if (sel || hov) {
-      drawText(ctx, t.desc, cx, CFG.H - 44, C.textDim, 7, 'center');
-    }
-    y += btnH + 4;
+    drawText(ctx, t.name, cx, y + btnH / 2 + 3, sel ? C.textGood : C.textBright, 8, 'center', sel);
+    y += btnH + 3;
   }
 
-  // Show selected trait summary
-  y += 6;
+  // Bottom: show pos/neg for hovered or selected
+  const hovT = TRAITS_DB.find(t => hitTest(mx, my, bx,
+    57 + 21 + TRAITS_DB.indexOf(t) * (btnH + 3), btnW, btnH));
+  const dispT = hovT || (cc.trait ? TRAITS_DB.find(t => t.id === cc.trait) : null);
+  if (dispT) {
+    const infoY = CFG.H - 56;
+    fillRect(ctx, 40, infoY - 4, CFG.W - 80, 50, '#05050e');
+    strokeRect(ctx, 40, infoY - 4, CFG.W - 80, 50, C.border2);
+    drawText(ctx, dispT.name, cx, infoY + 6, C.textBright, 8, 'center', true);
+    drawText(ctx, `+ ${dispT.pos}`, cx, infoY + 18, C.textGood, 7, 'center');
+    drawText(ctx, `− ${dispT.neg}`, cx, infoY + 30, '#cc6644', 7, 'center');
+  }
+
+  // Show selected trait name above info box
   if (cc.trait) {
     const t = TRAITS_DB.find(tr => tr.id === cc.trait);
     if (t) {
-      drawDivider(ctx, 80, y, CFG.W - 160, C.border);
-      y += 10;
-      drawText(ctx, `Selected: ${t.name}`, cx, y, C.textGood, 9, 'center', true);
+      drawText(ctx, `Selected: ${t.name}`, cx, y + 2, C.textGood, 9, 'center', true);
     }
   }
 }
@@ -354,7 +382,21 @@ function charCreateClick(mx, my, gs) {
     }
   }
 
+  // Step 3: Trait selection (now before skills)
   if (cc.step === 3) {
+    const btnW = 240, btnH = 18;
+    const bx = cx - btnW / 2;
+    let ty = 69; // matches renderStepTraits y after header (57+12)
+    if (hitTest(mx, my, bx, ty, btnW, btnH)) { cc.trait = null; }
+    ty += btnH + 3;
+    for (const t of TRAITS_DB) {
+      if (hitTest(mx, my, bx, ty, btnW, btnH)) { cc.trait = t.id; }
+      ty += btnH + 3;
+    }
+  }
+
+  // Step 4: Skills
+  if (cc.step === 4) {
     for (let si = 0; si < SKILLS_LIST.length; si++) {
       const skill = SKILLS_LIST[si];
       const rowY = 93 + si * 24;
@@ -365,19 +407,6 @@ function charCreateClick(mx, my, gs) {
       if (hitTest(mx, my, plusX, rowY - 2, 26, 24) && cc.skillPts > 0 && cc.skills[skill] < 10) {
         cc.skills[skill]++; cc.skillPts--;
       }
-    }
-  }
-
-  if (cc.step === 4) {
-    const btnW = 230, btnH = 20;
-    const bx = cx - btnW / 2;
-    let ty = 74; // matches renderStepTraits y after header
-    // "None" row
-    if (hitTest(mx, my, bx, ty, btnW, btnH)) { cc.trait = null; }
-    ty += btnH + 4;
-    for (const t of TRAITS_DB) {
-      if (hitTest(mx, my, bx, ty, btnW, btnH)) { cc.trait = t.id; }
-      ty += btnH + 4;
     }
   }
 }

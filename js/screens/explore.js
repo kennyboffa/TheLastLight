@@ -321,7 +321,7 @@ function startExploration(gs, loc) {
 
   gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: loc.name, pendingFn: () => {
     gs.screen   = 'explore';
-    gs.zoomAnim = { scale: 1.55, target: 1.0 };
+    gs.zoomAnim = { scale: 0.08, target: 1.0 };
   }};
 
   // Mark companion as away on exploration
@@ -1982,13 +1982,13 @@ function endExploration(gs) {
     exploreState = null;
     gs.keys      = {};
     gs.screen    = 'shelter';
-    gs.zoomAnim  = { scale: 0.55, target: 1.0 };
+    gs.zoomAnim  = { scale: 0.08, target: 1.0 };
   } else {
     gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: 'Bunker', pendingFn: () => {
       exploreState = null;
       gs.keys      = {};
       gs.screen    = 'shelter';
-      gs.zoomAnim  = { scale: 0.55, target: 1.0 };
+      gs.zoomAnim  = { scale: 0.08, target: 1.0 };
     }};
   }
 }

@@ -13,7 +13,7 @@ const ROOM_DEFS = {
 
   bedroom:   { id:'bedroom',   name:'Bedroom',      col:1, row:0,
     desc:'Proper beds. Sleep restores tiredness faster.',
-    buildCost: { wood:12, cloth:8 }, needsTools:true, buildNoise:14, buildTime:8,
+    buildCost: { wood:24, cloth:16 }, needsTools:true, buildNoise:14, buildTime:8,
     storageBonus: 0, effect:'betterSleep',
     maxLevel: 3,
     upgradeCost: [null, { cloth:9, wood:6 }, { cloth:12, chemicals:5 }],
@@ -22,7 +22,7 @@ const ROOM_DEFS = {
 
   storage:   { id:'storage',   name:'Storage Room', col:2, row:0,
     desc:'Adds 40 kg of storage capacity.',
-    buildCost: { wood:15, metal:8 }, needsTools:true, buildNoise:14, buildTime:10,
+    buildCost: { wood:30, metal:16 }, needsTools:true, buildNoise:14, buildTime:10,
     storageBonus: 40, effect:'moreStorage',
     maxLevel: 3,
     upgradeCost: [null, { metal:9, wood:6 }, { metal:15, electronics:5 }],
@@ -31,7 +31,7 @@ const ROOM_DEFS = {
 
   workshop:  { id:'workshop',  name:'Workshop',     col:0, row:1,
     desc:'Allows advanced crafting of items and upgrades.',
-    buildCost: { wood:10, metal:16 }, needsTools:true, buildNoise:20, buildTime:12,
+    buildCost: { wood:20, metal:32 }, needsTools:true, buildNoise:20, buildTime:12,
     effect:'crafting',
     maxLevel: 3,
     upgradeCost: [null, { metal:12, electronics:6 }, { metal:18, electronics:12 }],
@@ -40,7 +40,7 @@ const ROOM_DEFS = {
 
   infirmary: { id:'infirmary', name:'Infirmary',    col:1, row:1,
     desc:'Heals injuries faster. Reduces infection chance.',
-    buildCost: { cloth:12, chemicals:7 }, needsTools:true, buildNoise:12, buildTime:8,
+    buildCost: { cloth:24, chemicals:14 }, needsTools:true, buildNoise:12, buildTime:8,
     effect:'healing',
     maxLevel: 3,
     upgradeCost: [null, { cloth:9, chemicals:6 }, { chemicals:12, electronics:6 }],
@@ -49,7 +49,7 @@ const ROOM_DEFS = {
 
   security:  { id:'security',  name:'Security Room',col:2, row:1,
     desc:'Monitor AI activity. Reduces daily suspicion gain.',
-    buildCost: { metal:12, electronics:10 }, needsTools:true, buildNoise:22, buildTime:16,
+    buildCost: { metal:24, electronics:20 }, needsTools:true, buildNoise:22, buildTime:16,
     effect:'lowSuspicion',
     maxLevel: 3,
     upgradeCost: [null, { electronics:9, metal:6 }, { electronics:15, metal:9 }],

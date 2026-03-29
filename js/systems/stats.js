@@ -420,9 +420,11 @@ function advanceDay(gs) {
     gs.parent.taskProgress = 0;
     gs.parent.taskDuration = 0;
     gs.parent.isWorking    = false;
+  } else if (!gs.lateReturn && !gs.parent.isExploring) {
+    // Parent was home in the bunker — they rested through the night even if not
+    // explicitly assigned a sleep task (working late, eating, etc.)
+    gs.parent.tiredness = 0;
   }
-  // Non-sleep tasks (craft, build, cook) are preserved across the day boundary.
-  // isWorking stays true if a non-sleep task is ongoing.
 
   gs.shelter.noiseToday = 0;
   gs.parent.hasExploredToday = false; // new day — can explore once more

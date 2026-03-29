@@ -114,9 +114,10 @@ canvas.addEventListener('touchstart', (e) => {
     const y = (t.clientY - rect.top)  / SCALE;
     if (GS.screen === 'explore') {
       const MB = _MOBILE_BTNS;
-      if (hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h))   { GS.keys['a'] = true; _mobileHeld.left   = true; continue; }
-      if (hitTest(x, y, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h))  { GS.keys['d'] = true; _mobileHeld.right  = true; continue; }
-      if (hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h)) { _mobileHeld.action = true; exploreKeyPress('e', GS); continue; }
+      // Store touch identifier so touchend can release regardless of final finger position
+      if (hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h))   { GS.keys['a'] = true; _mobileHeld.left   = t.identifier; continue; }
+      if (hitTest(x, y, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h))  { GS.keys['d'] = true; _mobileHeld.right  = t.identifier; continue; }
+      if (hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h)) { _mobileHeld.action = t.identifier; exploreKeyPress('e', GS); continue; }
     }
     // Regular touch → mouse
     GS.mouse.x = x; GS.mouse.y = y;
@@ -160,27 +161,24 @@ canvas.addEventListener('touchend', (e) => {
   Audio.resume();  // iOS AudioContext starts suspended
   const rect = canvas.getBoundingClientRect();
 
-  // If a screen transition happened while a D-pad button was held (e.g. an
-  // event fired mid-walk), _mobileHeld stays true and blocks all future clicks.
-  // Clear it now so taps on the new screen register normally.
-  if (GS.screen !== 'explore' && (_mobileHeld.left || _mobileHeld.right || _mobileHeld.action)) {
+  // If a screen transition happened while a D-pad button was held, clear it.
+  if (GS.screen !== 'explore' && (_mobileHeld.left !== false || _mobileHeld.right !== false || _mobileHeld.action !== false)) {
     _mobileHeld.left = _mobileHeld.right = _mobileHeld.action = false;
     GS.keys['a'] = false;
     GS.keys['d'] = false;
   }
 
   for (const t of e.changedTouches) {
-    const x = (t.clientX - rect.left) / SCALE;
-    const y = (t.clientY - rect.top)  / SCALE;
     if (GS.screen === 'explore') {
-      const MB = _MOBILE_BTNS;
-      if (hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h))   { GS.keys['a'] = false; _mobileHeld.left   = false; continue; }
-      if (hitTest(x, y, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h))  { GS.keys['d'] = false; _mobileHeld.right  = false; continue; }
-      if (hitTest(x, y, MB.action.x, MB.action.y, MB.action.w, MB.action.h)) { _mobileHeld.action = false; continue; }
+      // Release by matching the touch identifier that originally pressed each button.
+      // This fixes "stuck key" when the finger slides off the button before lifting.
+      if (_mobileHeld.left   === t.identifier) { GS.keys['a'] = false; _mobileHeld.left   = false; continue; }
+      if (_mobileHeld.right  === t.identifier) { GS.keys['d'] = false; _mobileHeld.right  = false; continue; }
+      if (_mobileHeld.action === t.identifier) { _mobileHeld.action = false; continue; }
     }
   }
   // Only fire click if no mobile button is still held and touch didn't drag
-  if (!_mobileHeld.left && !_mobileHeld.right && !_mobileHeld.action) {
+  if (_mobileHeld.left === false && _mobileHeld.right === false && _mobileHeld.action === false) {
     const t0 = e.changedTouches[0];
     const rect2 = canvas.getBoundingClientRect();
     const ex = (t0.clientX - rect2.left) / SCALE;
@@ -326,7 +324,7 @@ function update(dt) {
   // Zoom animation tick (runs even during day transitions)
   const za = gs.zoomAnim;
   if (za && Math.abs(za.scale - za.target) > 0.0005) {
-    za.scale = lerp(za.scale, za.target, 0.032);
+    za.scale = lerp(za.scale, za.target, 0.007);
     if (Math.abs(za.scale - za.target) < 0.002) za.scale = za.target;
   }
 

@@ -141,6 +141,13 @@ const GS = {
     storySuspicion:  false,  // suspicion crossed 50%
     storyChildren:   false,  // Lily wonders about other children
     storyWeekOne:    false,  // survived 7 days
+    // Endgame flags
+    lilySick:        false,  // Lily has fallen ill (day 15+)
+    lilySickDay:     0,      // day sickness started
+    lilyCured:       false,  // Lily has been given the antiviral
+    antiviralFound:  false,  // antiviral has been found in hospital
+    escapeReady:     false,  // escape event has been queued
+    gameWon:         false,  // player completed the game
   },
 
   // ── Pending story queue (IDs from STORY_DB, fire next shelter opportunity) ──

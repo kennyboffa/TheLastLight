@@ -43,6 +43,8 @@ const ITEMS_DB = {
     health:2, depression:-10, desc:'Dulls pain. Lifts mood slightly.', stackable:true },
   antibiotics:   { id:'antibiotics',  name:'Antibiotics',    type:'medicine', weight:0.1, value:80,
     health:6, clearsInfection:true, desc:'Rare. Treats infection.', stackable:true },
+  antiviral:     { id:'antiviral',    name:'Experimental Antiviral', type:'medicine', weight:0.1, value:200,
+    health:8, curesLilySickness:true, desc:'An experimental treatment. Rare hospital stock. For a very specific illness.', stackable:false },
 
   // ── MELEE WEAPONS ─────────────────────────────────────────────────────────
   knife:         { id:'knife',         name:'Hunting Knife',  type:'weapon', weaponType:'melee',

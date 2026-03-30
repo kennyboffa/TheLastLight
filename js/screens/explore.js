@@ -546,6 +546,14 @@ function finishSearch(container, gs) {
     return;
   }
 
+  // Hospital antiviral injection — 40% chance per container when Lily is sick and antiviral not yet found
+  if (exploreState && exploreState.location && exploreState.location.id === 'hospital'
+      && gs.flags.lilySick && !gs.flags.lilyCured && !gs.flags.antiviralFound
+      && Math.random() < 0.40) {
+    gs.flags.antiviralFound = true;
+    container.loot.push({ id: 'antiviral', qty: 1 });
+  }
+
   // Apply trait-based loot bonuses — expand loot pool before picking up
   let loot = container.loot.slice();
   const trait = gs.parent.trait;

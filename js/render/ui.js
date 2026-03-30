@@ -375,3 +375,65 @@ function drawGameOver(ctx, gs) {
   const bx = cx - 55, by = 200;
   drawButton(ctx, bx, by, 110, 24, 'Try Again', hitTest(mx, my, bx, by, 110, 24), false, false);
 }
+
+function drawGameWon(ctx, gs) {
+  fillRect(ctx, 0, 0, CFG.W, CFG.H, '#04060a');
+
+  // Grain overlay
+  ctx.globalAlpha = 0.025;
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 200; i++) {
+    ctx.fillRect(Math.random() * CFG.W | 0, Math.random() * CFG.H | 0, 1, 1);
+  }
+  ctx.globalAlpha = 1;
+
+  const cx  = CFG.W / 2;
+  const panW = CFG.W - 80;
+  const panX = 40;
+  drawPanel(ctx, panX, 14, panW, CFG.H - 28, '#060a06', '#3a6a3a');
+  fillRect(ctx, panX, 14, panW, 22, '#060e06');
+  drawText(ctx, 'THE LAST LIGHT', cx, 29, '#6ab46a', 11, 'center', true);
+  drawDivider(ctx, panX + 4, 36, panW - 8, '#3a6a3a');
+
+  const endText =
+`You left before dawn. You didn't look back.
+
+Lily walked beside you the whole way, her pack too big for her frame, her steps steady. She didn't ask if you were scared. You didn't ask her either. Some things you keep to yourselves.
+
+The rail yards were empty. The freight tunnel was dark and cold and longer than you expected. You held her hand through the worst of it and she held yours.
+
+On the other side — light. Real light, from fires and windows and people moving in the early morning.
+
+The Hollow was real.
+
+A woman at the perimeter gate looked at you both for a long moment, then stepped aside. "We've got a doctor," she said. "Food in an hour. You can sleep."
+
+You looked at Lily. She looked at you.
+
+"We made it," she said.
+
+Not a question. She never made it a question.
+
+You stayed.
+
+— — —
+
+The world outside was still broken. The AI was still searching. The drones still flew their grid patterns over the ruins of the old city. Nothing had been resolved. Nothing had been fixed.
+
+But here, for now, there was warmth. There was safety. There was a child who was going to be okay.
+
+Maybe that was enough to start with.
+
+Maybe, somewhere, there was a sequel to all of this.
+
+For now — you were here. Both of you. Together.
+
+That was everything.`;
+
+  let ty = 52;
+  ty = drawWrapped(ctx, endText, panX + 20, ty, panW - 40, 8, '#c0d4b0', 14);
+
+  const mx = gs.mouse.x, my = gs.mouse.y;
+  const bx = cx - 55, by = CFG.H - 38;
+  drawButton(ctx, bx, by, 110, 22, 'Play Again', hitTest(mx, my, bx, by, 110, 22));
+}

@@ -107,6 +107,14 @@ function playerAttack(gs, targetIdx) {
     hit    = CFG.BASE_HIT_CHANCE + p.skills.melee * 4;
   }
 
+  // Night Owl trait: +20% damage at night, -10% during day
+  if (p.trait === 'night_owl') {
+    const nf = nightFactor(gs.time);
+    const mult = nf > 0.5 ? 1.20 : 0.90;
+    dmgMin = Math.max(1, Math.round(dmgMin * mult));
+    dmgMax = Math.max(1, Math.round(dmgMax * mult));
+  }
+
   // Agility bonus to hit
   hit += p.agility * 1.5;
   hit = clamp(hit, 10, 96);
@@ -121,6 +129,9 @@ function playerAttack(gs, targetIdx) {
       target.dead = true;
       combatLog(gs, `${target.name} destroyed.`, 'good');
       collectLoot(gs, target);
+      // XP for kill
+      const _xpByType = { machine: 20, human: 15, animal: 10 };
+      giveXP(gs.parent, Math.round((_xpByType[target.type] || 12) * (target.isBoss ? 3 : 1)), gs);
       Audio.loot();
     }
   } else {

@@ -465,6 +465,13 @@ function drawCharPanel(ctx, gs, mx, my) {
   drawStatBar(ctx, px+8, y, sw, 5, who.thirst,        100,    C.thirst,     null, 'Thirst');   y += 9;
   drawStatBar(ctx, px+8, y, sw, 5, who.tiredness,     100,    C.tiredness,  null, 'Tired');    y += 9;
   drawStatBar(ctx, px+8, y, sw, 5, who.depression,    100,    C.depression, null, 'Depr.');    y += 10;
+  // Illness indicator for Lily
+  if (sel === 'child' && gs.flags && gs.flags.lilySick) {
+    const illCol = gs.flags.lilyCured ? '#3aaa50' : '#cc6644';
+    const illText = gs.flags.lilyCured ? 'Illness: Recovering' : 'Illness: Fever (needs medicine)';
+    drawText(ctx, illText, px + PW/2, y + 7, illCol, 7, 'center', true);
+    y += 14;
+  }
 
   // Level & XP
   const lvl    = who.level  || 1;
@@ -543,6 +550,14 @@ function drawCharPanel(ctx, gs, mx, my) {
     const alreadyCompanion = gs.exploreCompanionId === who.id;
     addBtn(alreadyCompanion ? 'Explore Together ✓' : 'Explore Together', 'explore_together',
       onMission || gs.parent.isExploring);
+  }
+
+  // Treat Lily — shown when Lily is sick and not yet cured
+  if (sel === 'child' && gs.flags && gs.flags.lilySick && !gs.flags.lilyCured) {
+    const hasAntiviral = countInInventory(gs.shelter.storage, 'antiviral') > 0
+                      || countInInventory(gs.parent.inventory, 'antiviral') > 0;
+    const sickLabel = hasAntiviral ? 'Treat Illness (Antiviral)' : 'Treat Illness — need Antiviral';
+    addBtn(sickLabel, 'treat_lily', !hasAntiviral);
   }
 
   // Character sheet button
@@ -650,6 +665,22 @@ function handleCharTask(taskId, gs) {
         notify(gs.exploreCompanionId ? `${who.name} will join the next exploration.` : `${who.name} will stay behind.`, 'info');
       }
       break;
+
+    case 'treat_lily': {
+      // Consume antiviral from storage or parent inventory to cure Lily
+      const antiInv = countInInventory(gs.parent.inventory, 'antiviral') > 0
+        ? gs.parent.inventory : gs.shelter.storage;
+      if (countInInventory(antiInv, 'antiviral') > 0) {
+        removeFromInventory(antiInv, 'antiviral', 1);
+        gs.flags.lilyCured = true;
+        gs.child.health = Math.min(gs.child.maxHealth, gs.child.health + 8);
+        addLog('The antiviral treatment worked. Lily\'s fever is finally breaking.', 'good');
+        notify('Lily has been treated. She\'s going to be okay.', 'good');
+        gs.storyQueue.push('story_lily_cured');
+        shelterUI.activeMenu = null;
+      }
+      break;
+    }
 
     case 'charSheet':
       shelterUI.activeMenu = 'charSheet';

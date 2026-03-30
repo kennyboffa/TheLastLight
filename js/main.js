@@ -426,6 +426,9 @@ function render(ctx) {
     case 'gameOver':
       renderGameOver(ctx, gs);
       break;
+    case 'gameWon':
+      renderGameWon(ctx, gs);
+      break;
     default:
       fillRect(ctx, 0, 0, CFG.W, CFG.H, C.bg);
   }
@@ -496,6 +499,10 @@ function renderGameOver(ctx, gs) {
   drawGameOver(ctx, gs);
 }
 
+function renderGameWon(ctx, gs) {
+  drawGameWon(ctx, gs);
+}
+
 // ── Click routing ─────────────────────────────────────────────────────────────
 
 function handleClick(mx, my, gs) {
@@ -535,6 +542,11 @@ function handleClick(mx, my, gs) {
     case 'gameOver': {
       const bx = CFG.W/2 - 55, by = 200;
       if (hitTest(mx, my, bx, by, 110, 24)) resetGame();
+      break;
+    }
+    case 'gameWon': {
+      const bx = CFG.W/2 - 55, by = CFG.H - 38;
+      if (hitTest(mx, my, bx, by, 110, 22)) resetGame();
       break;
     }
   }
@@ -683,7 +695,8 @@ function resetGame() {
     explore:null, combat:null, event:null,
     missions:[], eventLastFired:{},
     _pendingLoc: null,
-    flags:{dogEncountered:false,dogRescued:false,firstExplore:false,traderMet:false},
+    flags:{dogEncountered:false,dogRescued:false,firstExplore:false,traderMet:false,
+           lilySick:false,lilySickDay:0,lilyCured:false,antiviralFound:false,escapeReady:false,gameWon:false},
     log:[], notifications:[],
     dayFade:{active:false,alpha:0,phase:'out',timer:0},
     weather:{ type:'clear', timer:0, nextChange:240, rainAccum:0 },

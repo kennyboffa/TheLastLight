@@ -188,28 +188,37 @@ const EVENTS_DB = [
     text: 'A hunched figure behind a makeshift cart eyes you cautiously. "I trade," they say simply. Their voice is flat with exhaustion. They have supplies. So might you.',
     condition: gs => gs.screen === 'explore',
     choices: [
-      { label: 'Trade (opens barter)',
+      { label: 'Trade',
         action: gs => {
           gs.flags.traderMet = true;
-          // Simplified: give 3 random items, take 2
-          const traderStock = [
-            makeItem('bandage',2), makeItem('canned_beans',3),
-            makeItem('water_bottle',2), makeItem('pistol_ammo',8),
-            makeItem('cloth',4), makeItem('chemicals',2),
-          ];
-          // Find something player has to offer
           if (gs.parent.inventory.length === 0) {
             return 'You have nothing to offer. The trader waves you off.';
           }
-          // Simple auto-trade: first item for water+food
+          const barter = (gs.parent.skills && gs.parent.skills.bartering) || 1;
           const offered = gs.parent.inventory[0];
           const offerDef = getItemDef(offered.id);
-          const gain1 = makeItem('canned_beans', 2);
-          const gain2 = makeItem('water_bottle', 1);
           removeFromInventory(gs.parent.inventory, offered.id, 1);
-          addToInventory(gs.parent.inventory, gain1.id, gain1.qty);
-          addToInventory(gs.parent.inventory, gain2.id, gain2.qty);
-          return `You trade ${offerDef.name} for 2x Canned Beans and a Water Bottle. The trader nods and says nothing more.`;
+
+          // Base trade
+          addToInventory(gs.parent.inventory, 'canned_beans', 2);
+          addToInventory(gs.parent.inventory, 'water_bottle', 1);
+          let bonusText = '';
+
+          // Bartering skill bonuses
+          if (barter >= 4) {
+            addToInventory(gs.parent.inventory, 'canned_meat', 1);
+            bonusText += ' Your bartering nets an extra can of meat.';
+          }
+          if (barter >= 6) {
+            addToInventory(gs.parent.inventory, 'bandage', 2);
+            bonusText += ' A sharp eye spots bandages worth adding.';
+          }
+          if (barter >= 8) {
+            addToInventory(gs.parent.inventory, 'painkiller', 1);
+            bonusText += ' The trader throws in painkillers — respect for a skilled haggler.';
+          }
+          giveXP(gs.parent, 10, gs);
+          return `You trade ${offerDef.name} for 2x Canned Beans and a Water Bottle.${bonusText} The trader nods.`;
         }
       },
       { label: 'Ask about the AI',
@@ -320,7 +329,8 @@ const EVENTS_DB = [
           const surv = gs.survivors.find(s => s.depression >= 80);
           if (!surv) return 'Everyone seems stable.';
           const charisma = gs.parent.charisma;
-          if (chance(30 + charisma * 5)) {
+          const speech   = (gs.parent.skills && gs.parent.skills.speech) || 1;
+          if (chance(20 + charisma * 4 + speech * 4)) {
             surv.depression = Math.max(0, surv.depression - 20);
             gs.parent.depression = Math.max(0, gs.parent.depression - 3);
             return `${surv.name} hesitates, then drops the pack. "Alright," they say. "One more day." You both know that\'s how survival works — one day at a time.`;
@@ -809,6 +819,43 @@ const EVENTS_DB = [
       },
     ]
   },
+
+  // ─── Endgame: escape to The Hollow ────────────────────────────────────────────
+  {
+    id: 'ev_escape_ready',
+    title: 'Time to Leave',
+    text: `Lily is better. Actually, genuinely better — colour back in her face, the fever gone. This morning she was humming again. You didn't say anything. You just listened.
+
+She catches you watching her and says, quietly: "Now?"
+
+You know what she means. There's a place north of the old rail yards. People call it the Hollow. A settlement — two hundred survivors, they say. Trade, medicine, real security. No AI presence that far out. You've heard it from enough different mouths to believe at least the shape of it.
+
+It might not still be there. Nothing is guaranteed. But Lily is better, the suspicion keeps climbing, and staying underground forever was never the plan.
+
+The only way to know is to go.`,
+    condition: gs => gs.screen === 'shelter' && gs.flags.lilyCured && !gs.flags.gameWon,
+    choices: [
+      {
+        label: 'Leave for The Hollow',
+        action: gs => {
+          gs.flags.gameWon = true;
+          gs.screenFade = {
+            active: true, alpha: 0, phase: 'out', titleText: null,
+            pendingFn: () => { gs.screen = 'gameWon'; }
+          };
+          return null;
+        }
+      },
+      {
+        label: 'Not yet — a few more days',
+        action: gs => {
+          // Re-fires after 2 days
+          gs.eventLastFired['ev_escape_ready'] = gs.day - 3;
+          return 'You tell Lily soon. She nods. She\'s patient. She\'s always been patient. You both know the longer you wait the harder it gets.';
+        }
+      },
+    ]
+  },
 ];
 
 // Helper: build a survivor NPC
@@ -1113,6 +1160,61 @@ It's more than I expected when we started. I'm not sure that's something to be p
 I don't know what the end looks like. I'm not sure I'm allowed to think about that yet. But one week is real.
 
 We're still here.`,
+  },
+  {
+    id: 'story_lily_sick',
+    title: 'Something Wrong',
+    type: 'story',
+    text:
+`It started as a low fever. Lily said it was nothing. She always says it's nothing.
+
+But it didn't break. Three days in and she's still warm to the touch, sleeping more than usual, moving more slowly. She tries to hide it — stacks cans with quiet precision, smiles when she catches me looking.
+
+The regular medicine helps. Painkillers bring the fever down for a few hours, antibiotics slow whatever this is. But it keeps coming back.
+
+Whatever she has, it's not a simple infection. Something specific, something resistant. The medicine manages it but doesn't end it.
+
+I've been avoiding the hospital. Deep in AI territory. Difficult, dangerous. But there are things in a hospital that can't be found anywhere else.
+
+She needs something stronger. I need to go.`,
+  },
+  {
+    id: 'story_lily_cured',
+    title: 'The Fever Breaks',
+    type: 'story',
+    text:
+`By morning, the fever was gone.
+
+Not reduced — gone. Her forehead cool to the touch for the first time in weeks. She woke up before me and was already sorting the food stores when I opened my eyes. I watched her from across the room for a moment before she noticed.
+
+"What?" she said.
+
+"Nothing," I said. "You look better."
+
+She considered this. "I feel better." Then, because she is who she is: "The antiviral worked. I knew it would."
+
+She didn't say thank you. She didn't have to. She just went back to sorting the cans with her small precise hands, and I sat there in the quiet and let myself, for once, believe things might be okay.
+
+She started humming again around noon. Something without a name. Something that was hers.`,
+  },
+  {
+    id: 'story_lily_worsening',
+    title: 'Still Sick',
+    type: 'story',
+    text:
+`Five days now. Lily doesn't hum anymore while she works.
+
+She still talks, still asks questions, still watches me carefully with those eyes that have always seen too much. But the humming stopped. I didn't notice when. I noticed its absence.
+
+The medicine keeps her stable. Without it she'd be much worse — I can see that in the hours when the fever spikes before the next dose. But stable isn't better. Stable is just... not worse.
+
+She asked me last night if I was scared. I said no.
+
+She looked at me for a long moment. "You're lying," she said softly. "But it's okay. I know you're trying."
+
+She fell asleep holding my hand. Her palm was warm.
+
+The hospital. I need to go to the hospital.`,
   },
 ];
 

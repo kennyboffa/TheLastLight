@@ -412,6 +412,9 @@ function advanceDay(gs) {
   gs.time = CFG.DAY_START;
   gs.timeScale = 1; // reset game speed to normal at start of each new day
 
+  // Autosave at the start of every new day
+  if (typeof autoSaveGame === 'function') autoSaveGame(gs);
+
   // Parent: if sleeping when day ends, they wake up fully rested
   if (gs.parent.isSleeping) {
     gs.parent.isSleeping   = false;
@@ -453,6 +456,42 @@ function advanceDay(gs) {
     if (!gs.flags.storyLateReturn) {
       gs.flags.storyLateReturn = true;
       gs.storyQueue.push('story_late_return');
+    }
+  }
+
+  // Day 15: Lily falls ill with something medicine can slow but not cure
+  if (gs.day === 15 && !gs.flags.lilySick) {
+    gs.flags.lilySick    = true;
+    gs.flags.lilySickDay = gs.day;
+    gs.storyQueue.push('story_lily_sick');
+  }
+
+  // Lily sick: worsening story at day 20 if not yet cured
+  if (gs.day === 20 && gs.flags.lilySick && !gs.flags.lilyCured) {
+    gs.storyQueue.push('story_lily_worsening');
+  }
+
+  // Daily medicine consumption while Lily is sick
+  if (gs.flags.lilySick && !gs.flags.lilyCured) {
+    const medOrder = ['painkiller', 'antibiotics'];
+    let medFound = false;
+    for (const medId of medOrder) {
+      const storageCount = countInInventory(gs.shelter.storage, medId);
+      const invCount     = countInInventory(gs.parent.inventory, medId);
+      if (storageCount > 0) {
+        removeFromInventory(gs.shelter.storage, medId, 1);
+        addLog(`${gs.child.name} took ${getItemDef(medId).name} to manage her fever.`, 'info');
+        medFound = true; break;
+      } else if (invCount > 0) {
+        removeFromInventory(gs.parent.inventory, medId, 1);
+        addLog(`${gs.child.name} took ${getItemDef(medId).name} to manage her fever.`, 'info');
+        medFound = true; break;
+      }
+    }
+    if (!medFound) {
+      gs.child.health = Math.max(1, gs.child.health - 3);
+      addLog(`${gs.child.name} has no medicine — her fever is getting worse.`, 'danger');
+      notify(`${gs.child.name} needs medicine to manage her illness!`, 'danger');
     }
   }
 

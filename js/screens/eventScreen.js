@@ -160,8 +160,26 @@ function closeEvent(gs) {
 let _eventCooldown = 0;
 
 function maybeFireShelterEvent(gs) {
-  if (_eventCooldown > 0) { _eventCooldown--; return; }
   if (gs.screen !== 'shelter') return;
+
+  // Priority: escape event fires as soon as Lily is cured
+  if (gs.flags && gs.flags.lilyCured && !gs.flags.gameWon && !gs.flags.escapeReady) {
+    const lastFired = gs.eventLastFired && gs.eventLastFired['ev_escape_ready'];
+    if (!lastFired || gs.day - lastFired >= 2) {
+      const escEv = EVENTS_DB.find(e => e.id === 'ev_escape_ready');
+      if (escEv) {
+        gs.flags.escapeReady = true;
+        gs.event     = { ...escEv };
+        gs.screen    = 'event';
+        gs._returnTo = 'shelter';
+        eventUI.openLockFrames = 5;
+        Audio.alert();
+        return;
+      }
+    }
+  }
+
+  if (_eventCooldown > 0) { _eventCooldown--; return; }
   if (!chance(0.15)) return;
 
   const ev = pickEvent(gs, 'shelter');

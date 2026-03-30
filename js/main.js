@@ -540,8 +540,19 @@ function handleClick(mx, my, gs) {
       eventClick(mx, my, gs);
       break;
     case 'gameOver': {
-      const bx = CFG.W/2 - 55, by = 200;
-      if (hitTest(mx, my, bx, by, 110, 24)) resetGame();
+      // Autosave button (rendered by drawGameOver and stored in _gameOverAutoBtn)
+      if (gs._gameOverAutoBtn) {
+        const ab = gs._gameOverAutoBtn;
+        if (hitTest(mx, my, ab.x, ab.y, ab.w, ab.h)) {
+          loadAutosave(GS);
+          break;
+        }
+      }
+      // New game button
+      if (gs._gameOverNewBtn) {
+        const nb = gs._gameOverNewBtn;
+        if (hitTest(mx, my, nb.x, nb.y, nb.w, nb.h)) resetGame();
+      }
       break;
     }
     case 'gameWon': {

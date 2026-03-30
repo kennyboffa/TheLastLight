@@ -1,6 +1,41 @@
 // sprites.js — Pixel art character and environment drawing
 'use strict';
 
+// ── Player walk sprite sheet ──────────────────────────────────────────────────
+// Save the player sprite sheet to:  assets/player_sprites.png
+// The sheet should have the walk cycle in the TOP ROW (7 frames, facing right).
+// Left movement is handled by mirroring.  The full sheet can have any number of
+// additional rows below — only row 0 is used for the walk animation.
+//
+// Adjust these if your sheet has a different layout:
+const _SPRITE_WALK_COLS = 7;   // frames in the top walk row
+const _SPRITE_TOTAL_ROWS = 7;  // total rows in the full sheet (used to compute frame height)
+                                // set to 1 if you crop the sheet to just the top row
+
+let _walkSprite = null;  // { canvas, fw, fh } — populated on image load
+
+(function _loadPlayerSprite() {
+  const img = new Image();
+  img.onload = function () {
+    const fw = Math.floor(img.width  / _SPRITE_WALK_COLS);
+    const fh = Math.floor(img.height / _SPRITE_TOTAL_ROWS);
+    // Remove white/near-white background so the sprite renders transparently
+    const c  = document.createElement('canvas');
+    c.width  = img.width;
+    c.height = img.height;
+    const cx = c.getContext('2d');
+    cx.drawImage(img, 0, 0);
+    const idata = cx.getImageData(0, 0, c.width, c.height);
+    const d = idata.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] > 210 && d[i + 1] > 210 && d[i + 2] > 210) d[i + 3] = 0;
+    }
+    cx.putImageData(idata, 0, 0);
+    _walkSprite = { canvas: c, fw, fh };
+  };
+  img.src = 'assets/player_sprites.png';
+})();
+
 // ── Character sprites ─────────────────────────────────────────────────────────
 // All sprites drawn at "natural" 1px = 1 logical px scale.
 // Caller passes ctx with appropriate transform/scale.
@@ -20,6 +55,31 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   // facing: 1=right, -1=left
   // pose: 'front'(default) | 'side' | 'back' | 'sleep'
   pose = pose || 'front';
+
+  // ── Sprite-sheet path (when assets/player_sprites.png is loaded) ──────────
+  if (_walkSprite && (pose === 'front' || pose === 'side')) {
+    const frame   = pose === 'side' ? animFrame % _SPRITE_WALK_COLS : 0;
+    const sx      = frame * _walkSprite.fw;
+    const sy      = 0;  // top row only
+    const targetH = Math.round(25 * s);  // match pixel-art character height
+    const targetW = Math.round(_walkSprite.fw * targetH / _walkSprite.fh);
+
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    if (facing < 0) ctx.scale(-1, 1);
+
+    // Shadow underfoot
+    _shadowOval(ctx, 7 * s, 2 * s);
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(_walkSprite.canvas,
+      sx, sy, _walkSprite.fw, _walkSprite.fh,
+      -targetW / 2, -targetH, targetW, targetH);
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }

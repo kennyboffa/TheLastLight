@@ -773,6 +773,7 @@ function drawShelterMenu(ctx, gs, mx, my) {
   else if (M.activeMenu === 'charSheet') drawCharSheet(ctx, gs, mx, my);
   else if (M.activeMenu === 'journal')   drawJournalPanel(ctx, gs, mx, my);
   else if (M.activeMenu === 'settings')  drawSettingsMenu(ctx, gs, mx, my);
+  else if (M.activeMenu === 'loadMenu')  drawLoadMenu(ctx, gs, mx, my);
 }
 
 function drawRoomMenu(ctx, gs, mx, my) {
@@ -1290,6 +1291,47 @@ function drawJournalPanel(ctx, gs, mx, my) {
 
 // ── Settings menu ─────────────────────────────────────────────────────────────
 
+function drawLoadMenu(ctx, gs, mx, my) {
+  const W2 = 240, H2 = 140;
+  const px = Math.floor((MAIN_W - W2) / 2), py = 90;
+  drawModal(ctx, px, py, W2, H2, 'LOAD GAME');
+
+  let y = py + 30;
+  const bw = W2 - 24, bx = px + 12;
+
+  const autoInfo = (typeof getAutosaveInfo === 'function') && getAutosaveInfo();
+  const manInfo  = (typeof getSaveInfo === 'function')     && getSaveInfo();
+
+  if (autoInfo) {
+    const hov = hitTest(mx, my, bx, y, bw, 26);
+    drawButton(ctx, bx, y, bw, 26, `Autosave — Day ${autoInfo.day}`, hov);
+    gs._loadMenuAutoBtn = { x: bx, y, w: bw, h: 26 };
+    y += 32;
+  } else {
+    gs._loadMenuAutoBtn = null;
+  }
+
+  if (manInfo) {
+    const hov = hitTest(mx, my, bx, y, bw, 26);
+    drawButton(ctx, bx, y, bw, 26, `Manual Save — Day ${manInfo.day}`, hov);
+    gs._loadMenuManBtn = { x: bx, y, w: bw, h: 26 };
+    y += 32;
+  } else {
+    gs._loadMenuManBtn = null;
+    drawText(ctx, 'No manual save', px + W2/2, y + 12, C.textDim, 8, 'center');
+    y += 26;
+  }
+
+  if (!autoInfo && !manInfo) {
+    drawText(ctx, 'No saves found.', px + W2/2, y + 10, C.textDim, 8, 'center');
+    y += 20;
+  }
+
+  const cbx = px + W2/2 - 30;
+  drawButton(ctx, cbx, y + 4, 60, 20, 'Cancel', hitTest(mx, my, cbx, y + 4, 60, 20));
+  gs._loadMenuCancelBtn = { x: cbx, y: y + 4, w: 60, h: 20 };
+}
+
 function drawSettingsMenu(ctx, gs, mx, my) {
   const W2 = 240, H2 = 160;
   const px = Math.floor((MAIN_W - W2) / 2), py = 80;
@@ -1464,8 +1506,9 @@ function handleControlBtn(id, gs, mx, my) {
       saveGame(gs);
       break;
     case 'load':
-      if (hasSave()) {
-        loadGame(gs);
+      if (hasSave() || hasAutosave()) {
+        // Show load menu: manual save + autosave options
+        M.activeMenu = 'loadMenu';
       } else {
         notify('No save file found.', 'warn');
       }
@@ -1778,6 +1821,28 @@ function handleMenuClick(mx, my, gs) {
     // Click outside closes
     const W2 = 240, H2 = 160;
     const px = Math.floor((MAIN_W - W2) / 2), py = 80;
+    if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
+    return;
+  }
+
+  if (M.activeMenu === 'loadMenu') {
+    if (gs._loadMenuAutoBtn && hitTest(mx, my, gs._loadMenuAutoBtn.x, gs._loadMenuAutoBtn.y, gs._loadMenuAutoBtn.w, gs._loadMenuAutoBtn.h)) {
+      M.activeMenu = null;
+      loadAutosave(gs);
+      return;
+    }
+    if (gs._loadMenuManBtn && hitTest(mx, my, gs._loadMenuManBtn.x, gs._loadMenuManBtn.y, gs._loadMenuManBtn.w, gs._loadMenuManBtn.h)) {
+      M.activeMenu = null;
+      loadGame(gs);
+      return;
+    }
+    if (gs._loadMenuCancelBtn && hitTest(mx, my, gs._loadMenuCancelBtn.x, gs._loadMenuCancelBtn.y, gs._loadMenuCancelBtn.w, gs._loadMenuCancelBtn.h)) {
+      M.activeMenu = null;
+      return;
+    }
+    // Click outside closes
+    const W2 = 240, H2 = 140;
+    const px = Math.floor((MAIN_W - W2) / 2), py = 90;
     if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
     return;
   }

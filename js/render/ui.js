@@ -367,13 +367,29 @@ function drawGameOver(ctx, gs) {
   fillRect(ctx, 0, 0, CFG.W, CFG.H, '#000000');
 
   const cx = CFG.W / 2;
-  drawText(ctx, 'GAME OVER', cx, 100, '#441111', 40, 'center', true);
-  drawText(ctx, gs.gameOverReason || 'You did not survive.', cx, 145, C.textDim, 10, 'center');
-  drawText(ctx, `You survived ${gs.day} day${gs.day !== 1 ? 's' : ''}.`, cx, 165, C.textDim, 9, 'center');
+  drawText(ctx, 'GAME OVER', cx, 80, '#441111', 40, 'center', true);
+  drawText(ctx, gs.gameOverReason || 'You did not survive.', cx, 128, C.textDim, 10, 'center');
+  drawText(ctx, `You survived ${gs.day} day${gs.day !== 1 ? 's' : ''}.`, cx, 146, C.textDim, 9, 'center');
 
   const mx = gs.mouse.x, my = gs.mouse.y;
-  const bx = cx - 55, by = 200;
-  drawButton(ctx, bx, by, 110, 24, 'Try Again', hitTest(mx, my, bx, by, 110, 24), false, false);
+
+  // Autosave option — shown if an autosave exists
+  const autoInfo = (typeof getAutosaveInfo === 'function') && getAutosaveInfo();
+  let btnY = 170;
+  if (autoInfo) {
+    const abx = cx - 90, abw = 180, abh = 24;
+    const autoBtnHov = hitTest(mx, my, abx, btnY, abw, abh);
+    drawButton(ctx, abx, btnY, abw, abh, `Continue — Day ${autoInfo.day}`, autoBtnHov, false, false);
+    drawText(ctx, '(autosave)', cx, btnY + abh + 10, '#555566', 7, 'center');
+    btnY += abh + 20;
+    gs._gameOverAutoBtn = { x: abx, y: btnY - abh - 20, w: abw, h: abh };
+  } else {
+    gs._gameOverAutoBtn = null;
+  }
+
+  const bx = cx - 55, by = btnY + (autoInfo ? 10 : 0);
+  drawButton(ctx, bx, by, 110, 24, 'New Game', hitTest(mx, my, bx, by, 110, 24), false, false);
+  gs._gameOverNewBtn = { x: bx, y: by, w: 110, h: 24 };
 }
 
 function drawGameWon(ctx, gs) {

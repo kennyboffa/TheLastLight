@@ -319,9 +319,9 @@ function startExploration(gs, loc) {
   const travelMins = loc.difficulty >= 3 ? 120 : 60;
   gs.time = Math.min(gs.time + travelMins, CFG.DAY_END - 60);
 
-  gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: loc.name, pendingFn: () => {
+  gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: null, pendingFn: () => {
     gs.screen   = 'explore';
-    gs.zoomAnim = { scale: 0.08, target: 1.0 };
+    gs.zoomAnim = { scale: 1.0, target: 1.0 };
   }};
 
   // Mark companion as away on exploration
@@ -484,20 +484,6 @@ function updateExplore(gs, dt) {
     es._creepyTimer = Math.floor(Math.random() * 3600); // reset with variance
   }
 
-  // Zone title card — trigger when entering a new zone
-  const loc = es.location;
-  const curZone = loc.zones.find(z => es.px >= z.x && es.px < z.x + z.w);
-  if (curZone && curZone.id !== es._lastZoneId) {
-    es._lastZoneId = curZone.id;
-    if (es._zoneTitleCard) {
-      // Replace only if we've passed into the linger phase (360 frames in)
-      if (es._zoneTitleCard.timer > 360) {
-        es._zoneTitleCard = { text: curZone.name, timer: 0 };
-      }
-    } else {
-      es._zoneTitleCard = { text: curZone.name, timer: 0 };
-    }
-  }
 }
 
 function updateBuildingInterior(gs, dt) {
@@ -1846,33 +1832,7 @@ function drawGrainFilter(ctx) {
 // ── Zone title card (fade in 6s → linger 6s → fade out 6s) ──────────────────
 
 function drawZoneTitleCard(ctx, es) {
-  const tc = es._zoneTitleCard;
-  if (!tc) return;
-
-  tc.timer++;
-  // At 60fps: 360 frames = 6s per phase (3× original)
-  let alpha;
-  if      (tc.timer < 360)  alpha = tc.timer / 360;              // fade in  (6s)
-  else if (tc.timer < 720)  alpha = 1;                           // linger   (6s)
-  else if (tc.timer < 1080) alpha = 1 - (tc.timer - 720) / 360; // fade out (6s)
-  else { es._zoneTitleCard = null; return; }
-
-  ctx.save();
-  ctx.globalAlpha = alpha * 0.92;
-
-  // Background strip
-  const tw = ctx.measureText ? 200 : 200;
-  fillRect(ctx, 0, CFG.H / 2 - 44, CFG.W, 30, '#000000', 0.55);
-
-  // Location name in smaller text above zone name
-  if (es.location) {
-    ctx.globalAlpha = alpha * 0.5;
-    drawText(ctx, es.location.name.toUpperCase(), CFG.W / 2, CFG.H / 2 - 36, '#a09878', 7, 'center', false);
-  }
-  ctx.globalAlpha = alpha * 0.92;
-  drawText(ctx, tc.text.toUpperCase(), CFG.W / 2, CFG.H / 2 - 22, '#d4c89a', 12, 'center', true);
-
-  ctx.restore();
+  // Zone title cards removed per user request
 }
 
 // ── Weather overlay in explore ────────────────────────────────────────────────
@@ -1985,18 +1945,16 @@ function endExploration(gs) {
   }
 
   if (gs.lateReturn) {
-    // Forced night-out: dayFade handles the transition — no "Bunker" title
-    // Player is placed back in shelter immediately; dayFade black screen covers the swap.
     exploreState = null;
     gs.keys      = {};
     gs.screen    = 'shelter';
-    gs.zoomAnim  = { scale: 0.08, target: 1.0 };
+    gs.zoomAnim  = { scale: 1.0, target: 1.0 };
   } else {
-    gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: 'Bunker', pendingFn: () => {
+    gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: null, pendingFn: () => {
       exploreState = null;
       gs.keys      = {};
       gs.screen    = 'shelter';
-      gs.zoomAnim  = { scale: 0.08, target: 1.0 };
+      gs.zoomAnim  = { scale: 1.0, target: 1.0 };
     }};
   }
 }

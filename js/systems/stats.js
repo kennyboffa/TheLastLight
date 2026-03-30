@@ -412,6 +412,9 @@ function advanceDay(gs) {
   gs.time = CFG.DAY_START;
   gs.timeScale = 1; // reset game speed to normal at start of each new day
 
+  // Autosave at the start of every new day
+  if (typeof autoSaveGame === 'function') autoSaveGame(gs);
+
   // Parent: if sleeping when day ends, they wake up fully rested
   if (gs.parent.isSleeping) {
     gs.parent.isSleeping   = false;

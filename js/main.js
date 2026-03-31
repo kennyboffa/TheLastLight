@@ -15,8 +15,7 @@ function resizeCanvas() {
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
   const fitScale  = Math.min(ww / CFG.W, wh / CFG.H);
-  const userScale = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
-  SCALE = fitScale * userScale;
+  SCALE = fitScale;
 
   canvas.width  = CFG.W;
   canvas.height = CFG.H;

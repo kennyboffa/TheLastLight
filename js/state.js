@@ -3,7 +3,7 @@
 
 const GS = {
   // ── Screen ────────────────────────────────────────────────────────────────
-  screen: 'intro',   // intro | charCreate | shelter | explore | combat | event | gameOver | dayFade
+  screen: 'title',   // title | intro | charCreate | shelter | explore | combat | event | gameOver | dayFade
 
   // ── Time ──────────────────────────────────────────────────────────────────
   day:  1,
@@ -184,6 +184,12 @@ const GS = {
   // ── UI input state ────────────────────────────────────────────────────────
   mouse: { x: 0, y: 0, down: false, clicked: false, clickX: 0, clickY: 0 },
   keys:  {},
+
+  // ── Title screen ──────────────────────────────────────────────────────────
+  title: {
+    timer: 0, alpha: 0, textAlpha: 0, ready: false,
+    dustX: null, dustY: null, dustS: null,
+  },
 
   // ── Intro / char creation ─────────────────────────────────────────────────
   intro: {

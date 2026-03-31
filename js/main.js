@@ -20,8 +20,9 @@ function resizeCanvas() {
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
 
-  canvas.style.width  = Math.round(CFG.W * fitScale) + 'px';
-  canvas.style.height = Math.round(CFG.H * fitScale) + 'px';
+  const displayScale = fitScale;
+  canvas.style.width  = Math.round(CFG.W * displayScale) + 'px';
+  canvas.style.height = Math.round(CFG.H * displayScale) + 'px';
   canvas.style.filter = 'saturate(0.7)';
   canvas.style.transform       = '';
   canvas.style.transformOrigin = '';
@@ -221,6 +222,7 @@ window.addEventListener('keyup', (e) => {
 
 function handleKeyPress(key) {
   if (key === 'enter' || key === ' ') {
+    if (GS.screen === 'title')      { Audio.resume(); titleAdvance(); return; }
     if (GS.screen === 'intro')      { introAdvance(); return; }
     if (GS.screen === 'gameOver')   { resetGame(); return; }
   }
@@ -347,6 +349,7 @@ function update(dt) {
   }
 
   // Screen-specific update
+  if (gs.screen === 'title')      updateTitle(dt);
   if (gs.screen === 'intro')      updateIntro(dt);
   if (gs.screen === 'explore' && !(gs.screenFade && gs.screenFade.active))
     updateExplore(gs, dt);
@@ -383,6 +386,9 @@ function render(ctx) {
   }
 
   switch (gs.screen) {
+    case 'title':
+      renderTitle(ctx, gs);
+      break;
     case 'intro':
       renderIntro(ctx, gs);
       break;
@@ -499,6 +505,10 @@ function handleClick(mx, my, gs) {
   Audio.click();
 
   switch (gs.screen) {
+    case 'title':
+      Audio.resume();
+      titleAdvance();
+      break;
     case 'intro':
       introAdvance();
       break;
@@ -704,7 +714,7 @@ function resetGame() {
     keys:{},
     gameOverReason: '',
   });
-  initIntro();
+  initTitle();
   initCharCreate();
   // Reset shelter UI
   shelterUI.activeMenu   = null;
@@ -717,5 +727,5 @@ function resetGame() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
-initIntro();
+initTitle();
 requestAnimationFrame(gameLoop);

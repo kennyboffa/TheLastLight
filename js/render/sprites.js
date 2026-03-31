@@ -33,7 +33,7 @@ let _walkSprite = null;  // { canvas, fw, fh } — populated on image load
     cx.putImageData(idata, 0, 0);
     _walkSprite = { canvas: c, fw, fh };
   };
-  img.src = 'assets/player_sprites.png';
+  img.src = 'Assets/player_sprites.png';
 })();
 
 // ── Character sprites ─────────────────────────────────────────────────────────

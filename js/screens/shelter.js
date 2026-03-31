@@ -8,13 +8,14 @@ const ROOM_GRID = [
 ];
 const MAIN_W = CFG.W - CFG.PANEL_W;  // 440
 
-// Compute room rect from grid col/row
+// Compute room rect from grid col/row — rooms fill full MAIN_W with no gaps
 function roomRect(col, row) {
-  const totalW = ROOM_GRID[0].length * CFG.ROOM_W + (ROOM_GRID[0].length - 1) * CFG.ROOM_GAP;
-  const startX = Math.floor((MAIN_W - totalW) / 2);
-  const x = startX + col * (CFG.ROOM_W + CFG.ROOM_GAP);
-  const y = CFG.SURFACE_H + 12 + row * (CFG.ROOM_H + CFG.ROOM_GAP);
-  return { x, y, w: CFG.ROOM_W, h: CFG.ROOM_H };
+  const cols = ROOM_GRID[0].length;
+  const baseW = Math.floor(MAIN_W / cols);
+  const w = col === cols - 1 ? MAIN_W - col * baseW : baseW;
+  const x = col * baseW;
+  const y = CFG.SURFACE_H + 12 + row * CFG.ROOM_H;
+  return { x, y, w, h: CFG.ROOM_H };
 }
 
 // ── Shelter action menus ───────────────────────────────────────────────────────
@@ -200,9 +201,7 @@ function renderShelter(ctx, gs) {
 
       if (room.unlocked) {
         drawRoomFurniture(ctx, roomId, r, room.level || 1, gs);
-        drawText(ctx, def.name, r.x + r.w/2, r.y + 12, C.textDim, 8, 'center', true);
       } else {
-        drawText(ctx, def.name, r.x + r.w/2, r.y + r.h/2 - 2, '#303035', 8, 'center', false);
         drawText(ctx, '[ BUILD ]', r.x + r.w/2, r.y + r.h/2 + 10, '#2a2a35', 7, 'center');
       }
 
@@ -269,7 +268,7 @@ function updateCharWander(gs) {
     if (who.isSleeping || who.task) return;  // busy chars stay put
     who.wanderTimer--;
     if (who.wanderTimer <= 0) {
-      who.shelterTargetX = randInt(10, 195);
+      who.shelterTargetX = randInt(10, Math.floor(MAIN_W / ROOM_GRID[0].length) - 10);
       who.wanderTimer    = randInt(150, 480);
     }
     const dx = who.shelterTargetX - who.shelterX;

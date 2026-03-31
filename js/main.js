@@ -15,15 +15,12 @@ function resizeCanvas() {
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
   const fitScale  = Math.min(ww / CFG.W, wh / CFG.H);
-  const userScale = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
+  SCALE = fitScale;
 
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
 
-  // Use exact fitScale (no integer floor-snap) so the game fills available
-  // space precisely. CSS image-rendering:pixelated keeps pixels crisp.
   const displayScale = fitScale;
-  SCALE = displayScale * userScale;
   canvas.style.width  = Math.round(CFG.W * displayScale) + 'px';
   canvas.style.height = Math.round(CFG.H * displayScale) + 'px';
   canvas.style.filter = 'saturate(0.7)';

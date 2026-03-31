@@ -21,23 +21,11 @@ function resizeCanvas() {
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
 
-  // On desktop (fitScale >= 1) snap to integer multiples for crisp pixel-art.
-  // On mobile (fitScale < 1) use the exact fit to fill the screen.
-  const displayScale = fitScale >= 1 ? Math.floor(fitScale) || 1 : fitScale;
-  canvas.style.width  = Math.round(CFG.W * displayScale) + 'px';
-  canvas.style.height = Math.round(CFG.H * displayScale) + 'px';
+  canvas.style.width  = Math.round(CFG.W * fitScale) + 'px';
+  canvas.style.height = Math.round(CFG.H * fitScale) + 'px';
   canvas.style.filter = 'saturate(0.7)';
-
-  // User zoom: CSS transform that scales from the BOTTOM so the bottom
-  // control bar always stays visible.  Overflow grows upward and is clipped
-  // by the body's overflow:hidden, hiding the top of the game content.
-  if (Math.abs(userScale - 1.0) > 0.001) {
-    canvas.style.transform       = `scale(${userScale})`;
-    canvas.style.transformOrigin = 'bottom center';
-  } else {
-    canvas.style.transform       = '';
-    canvas.style.transformOrigin = '';
-  }
+  canvas.style.transform       = '';
+  canvas.style.transformOrigin = '';
 }
 
 window.addEventListener('resize', resizeCanvas);

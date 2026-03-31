@@ -34,9 +34,9 @@ const CFG = {
 
   // ── Shelter layout ───────────────────────────────────────────────────────
   PANEL_W: 200,          // right stats/controls panel width
-  ROOM_W:  150,          // wider rooms (was 128)
-  ROOM_H:   86,          // taller rooms (was 68)
-  ROOM_GAP:   6,
+  ROOM_W:  150,          // kept for furniture offsets; layout uses dynamic width
+  ROOM_H:  121,          // fills available height: (414-130-30-12)/2
+  ROOM_GAP:  0,
   ROOM_COLS:  3,
   SURFACE_H: 130,        // height of surface scene at top of shelter view
 

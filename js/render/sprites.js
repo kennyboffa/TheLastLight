@@ -833,15 +833,6 @@ function drawRoomInterior(ctx, x, y, w, h, unlocked, selected) {
   const borderColor = selected ? '#6a8a6a' : (unlocked ? C.border2 : C.border);
   strokeRect(ctx, x, y, w, h, borderColor, selected ? 2 : 1);
 
-  // Top highlight line
-  if (unlocked) {
-    ctx.strokeStyle = C.wallLight;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(Math.round(x)+1, Math.round(y)+1);
-    ctx.lineTo(Math.round(x+w)-1, Math.round(y)+1);
-    ctx.stroke();
-  }
 }
 
 // ── Day / Night cycle helpers ─────────────────────────────────────────────────

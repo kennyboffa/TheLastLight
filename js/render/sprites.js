@@ -62,10 +62,10 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   // pose === 'front' → single idle frame (bunker, standing still)
   // pose === 'walk'  → walk cycle sheet  (bunker, wandering)
   // pose === 'run'   → run cycle sheet   (exploration, moving)
-  const _isSpritepose = (pose === 'front' || pose === 'walk' || pose === 'run');
+  const _isSpritepose = (pose === 'front' || pose === 'walk' || pose === 'run' || pose === 'back');
   if (_isSpritepose) {
     let _sheet, sx, sy;
-    if (pose === 'front' && _idleStaticSprite) {
+    if ((pose === 'front' || pose === 'back') && _idleStaticSprite) {
       _sheet = _idleStaticSprite;
       sx = 0; sy = 0;
     } else if (pose === 'walk' && _idleSprite) {

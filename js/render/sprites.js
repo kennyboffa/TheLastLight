@@ -10,9 +10,10 @@
 const _SPRITE_COLS          = 4;
 const _SPRITE_ROWS          = 4;
 const _SPRITE_TOTAL_FRAMES  = _SPRITE_COLS * _SPRITE_ROWS; // 16
-// Fraction of the frame height where the character's feet appear (measured from top).
+// Fraction of the frame height where feet appear (measured from top of frame).
 // Decrease if character floats above floor, increase if it sinks into the floor.
-const _SPRITE_FOOT_FRAC     = 0.72;
+const _SPRITE_FOOT_FRAC       = 0.72;  // player sprites
+const _CHILD_SPRITE_FOOT_FRAC = 0.91;  // Lily sprites (her frames have feet lower)
 
 let _idleStaticSprite = null; // single frame — bunker idle
 let _idleSprite       = null; // 4×4 sheet   — bunker walking
@@ -317,7 +318,7 @@ function drawChild(ctx, x, y, s, facing, animFrame, pose) {
     const sx    = (frame % sh.cols) * sh.fw;
     const sy    = Math.floor(frame / sh.cols) * sh.fh;
     const dw    = sh.fw, dh = sh.fh;
-    const yOff  = -Math.round(dh * _SPRITE_FOOT_FRAC);
+    const yOff  = -Math.round(dh * _CHILD_SPRITE_FOOT_FRAC);
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
     if (facing < 0) ctx.scale(-1, 1);
@@ -332,7 +333,7 @@ function drawChild(ctx, x, y, s, facing, animFrame, pose) {
     const sh   = _childIdleSprite;
     const dw   = sh.fw;
     const dh   = sh.fh;
-    const yOff = -Math.round(dh * _SPRITE_FOOT_FRAC);
+    const yOff = -Math.round(dh * _CHILD_SPRITE_FOOT_FRAC);
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
     if (facing < 0) ctx.scale(-1, 1);

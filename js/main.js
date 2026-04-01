@@ -15,11 +15,12 @@ function resizeCanvas() {
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
 
-  // Fill the screen at 1:1 aspect ratio; user can nudge with Display Scale setting
+  // Fill the screen at 1:1 aspect ratio; user can nudge with Display Scale setting.
+  // Cap so canvas height never exceeds viewport — keeps bottom menu buttons visible.
   const fitScale = Math.min(ww / CFG.W, wh / CFG.H);
   const userMult = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
-
-  SCALE = fitScale * userMult;
+  const maxScale = wh / CFG.H;  // never taller than viewport
+  SCALE = Math.min(fitScale * userMult, maxScale);
 
   canvas.width  = CFG.W;
   canvas.height = CFG.H;

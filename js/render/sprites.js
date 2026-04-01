@@ -1,40 +1,31 @@
 // sprites.js — Pixel art character and environment drawing
 'use strict';
 
-// ── Player walk sprite sheet ──────────────────────────────────────────────────
-// Save the player sprite sheet to:  assets/player_sprites.png
-// The sheet should have the walk cycle in the TOP ROW (7 frames, facing right).
-// Left movement is handled by mirroring.  The full sheet can have any number of
-// additional rows below — only row 0 is used for the walk animation.
-//
-// Adjust these if your sheet has a different layout:
-const _SPRITE_WALK_COLS = 7;   // frames in the top walk row
-const _SPRITE_TOTAL_ROWS = 7;  // total rows in the full sheet (used to compute frame height)
-                                // set to 1 if you crop the sheet to just the top row
+// ── Player sprite sheets ─────────────────────────────────────────────────────
+// player_sprites.png       — idle/walk cycle (used in shelter)
+// player_sprites_running.png — run cycle (used in exploration)
+// Both sheets: 4 columns × 4 rows = 16 frames, 64×64 each, 256×256 total.
+// Frames read left-to-right, top-to-bottom. All face right; left is mirrored.
 
-let _walkSprite = null;  // { canvas, fw, fh } — populated on image load
+const _SPRITE_COLS = 4;
+const _SPRITE_ROWS = 4;
+const _SPRITE_TOTAL_FRAMES = _SPRITE_COLS * _SPRITE_ROWS; // 16
 
-(function _loadPlayerSprite() {
+let _idleSprite = null;  // { img, fw, fh } — shelter idle/walk
+let _runSprite  = null;  // { img, fw, fh } — exploration running
+
+function _loadSpriteSheet(src, callback) {
   const img = new Image();
   img.onload = function () {
-    const fw = Math.floor(img.width  / _SPRITE_WALK_COLS);
-    const fh = Math.floor(img.height / _SPRITE_TOTAL_ROWS);
-    // Remove white/near-white background so the sprite renders transparently
-    const c  = document.createElement('canvas');
-    c.width  = img.width;
-    c.height = img.height;
-    const cx = c.getContext('2d');
-    cx.drawImage(img, 0, 0);
-    const idata = cx.getImageData(0, 0, c.width, c.height);
-    const d = idata.data;
-    for (let i = 0; i < d.length; i += 4) {
-      if (d[i] > 210 && d[i + 1] > 210 && d[i + 2] > 210) d[i + 3] = 0;
-    }
-    cx.putImageData(idata, 0, 0);
-    _walkSprite = { canvas: c, fw, fh };
+    const fw = Math.floor(img.width  / _SPRITE_COLS);
+    const fh = Math.floor(img.height / _SPRITE_ROWS);
+    callback({ img, fw, fh });
   };
-  img.src = 'Assets/player_sprites.png';
-})();
+  img.src = src;
+}
+
+_loadSpriteSheet('Assets/player_sprites.png',         function(s) { _idleSprite = s; });
+_loadSpriteSheet('Assets/player_sprites_running.png',  function(s) { _runSprite  = s; });
 
 // ── Character sprites ─────────────────────────────────────────────────────────
 // All sprites drawn at "natural" 1px = 1 logical px scale.
@@ -56,25 +47,28 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   // pose: 'front'(default) | 'side' | 'back' | 'sleep'
   pose = pose || 'front';
 
-  // ── Sprite-sheet path (when assets/player_sprites.png is loaded) ──────────
-  if (_walkSprite && (pose === 'front' || pose === 'side')) {
-    const frame   = pose === 'side' ? animFrame % _SPRITE_WALK_COLS : 0;
-    const sx      = frame * _walkSprite.fw;
-    const sy      = 0;  // top row only
-    const targetH = Math.round(25 * s);  // match pixel-art character height
-    const targetW = Math.round(_walkSprite.fw * targetH / _walkSprite.fh);
+  // ── Sprite-sheet rendering ──────────────────────────────────────────────────
+  // Use running sheet when moving (side pose), idle sheet otherwise
+  const _sheet = (pose === 'side') ? _runSprite : _idleSprite;
+  if (_sheet && (pose === 'front' || pose === 'side')) {
+    const frame   = animFrame % _SPRITE_TOTAL_FRAMES;
+    const col     = frame % _SPRITE_COLS;
+    const row     = Math.floor(frame / _SPRITE_COLS);
+    const sx      = col * _sheet.fw;
+    const sy      = row * _sheet.fh;
+    const targetH = Math.round(25 * s);
+    const targetW = Math.round(_sheet.fw * targetH / _sheet.fh);
 
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
     if (facing < 0) ctx.scale(-1, 1);
 
-    // Shadow underfoot
     _shadowOval(ctx, 7 * s, 2 * s);
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(_walkSprite.canvas,
-      sx, sy, _walkSprite.fw, _walkSprite.fh,
+    ctx.drawImage(_sheet.img,
+      sx, sy, _sheet.fw, _sheet.fh,
       -targetW / 2, -targetH, targetW, targetH);
     ctx.restore();
     return;

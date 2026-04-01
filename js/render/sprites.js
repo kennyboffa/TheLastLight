@@ -38,12 +38,24 @@ function _loadSpriteSheet(src, callback) {
 _loadSpriteSheet('Assets/player_sprites.png',          function(s) { _idleSprite = s; });
 _loadSpriteSheet('Assets/player_sprites_running.png',   function(s) { _runSprite  = s; });
 
-// ── Child (Lily) sprite ───────────────────────────────────────────────────────
+// ── Child (Lily) sprites ──────────────────────────────────────────────────────
+// lily_idle.png    — single 64×64 still frame
+// lily_walking.png — 128×128 sheet, 2×2 grid = 4 frames of 64×64
 let _childIdleSprite = null;
+let _childWalkSprite = null;
+
 (function() {
   const img = new Image();
   img.onload = function() { _childIdleSprite = { img, fw: img.width, fh: img.height }; };
   img.src = 'Assets/lily_idle.png';
+})();
+
+(function() {
+  const img = new Image();
+  img.onload = function() {
+    _childWalkSprite = { img, fw: Math.floor(img.width / 2), fh: Math.floor(img.height / 2), cols: 2, total: 4 };
+  };
+  img.src = 'Assets/lily_walking.png';
 })();
 
 // ── Item sprites (ground loot) ────────────────────────────────────────────────
@@ -298,7 +310,24 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
 function drawChild(ctx, x, y, s, facing, animFrame, pose) {
   pose = pose || 'front';
 
-  // Use Lily sprite for all non-sleep poses when loaded
+  // Use Lily walk sprite for 'walk' pose
+  if (pose === 'walk' && _childWalkSprite) {
+    const sh    = _childWalkSprite;
+    const frame = animFrame % sh.total;
+    const sx    = (frame % sh.cols) * sh.fw;
+    const sy    = Math.floor(frame / sh.cols) * sh.fh;
+    const dw    = sh.fw, dh = sh.fh;
+    const yOff  = -Math.round(dh * _SPRITE_FOOT_FRAC);
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    if (facing < 0) ctx.scale(-1, 1);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sh.img, sx, sy, dw, dh, -Math.round(dw / 2), yOff, dw, dh);
+    ctx.restore();
+    return;
+  }
+
+  // Use Lily idle sprite for all other non-sleep poses when loaded
   if (_childIdleSprite && pose !== 'sleep') {
     const sh   = _childIdleSprite;
     const dw   = sh.fw;

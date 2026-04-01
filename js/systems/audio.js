@@ -9,7 +9,7 @@ const Audio = (() => {
   // ── Volume levels (0–1) ──────────────────────────────────────────────────────
   let musicVol = 0.60;   // shelter & explore music master volume
   let sfxVol   = 0.80;   // all SFX (combat, loot, etc.)
-  let clickVol = 0.45;   // UI click sound (0 = silent)
+  let clickVol = 0.225;  // UI click sound (0 = silent)
 
   // ── Explore music nodes ───────────────────────────────────────────────────────
   let explMusicNodes      = [];
@@ -91,7 +91,7 @@ const Audio = (() => {
 
       explMasterGain = _addExplNode(ctx.createGain());
       explMasterGain.gain.setValueAtTime(0, t);
-      explMasterGain.gain.linearRampToValueAtTime(0.6 * musicVol, t + 4);
+      explMasterGain.gain.linearRampToValueAtTime(0.3 * musicVol, t + 4);
       explMasterGain.connect(ctx.destination);
 
       const osc1 = _addExplNode(ctx.createOscillator());
@@ -343,7 +343,7 @@ const Audio = (() => {
     musicVol = Math.max(0, Math.min(1, v));
     // Apply live to any running master gains
     if (explMasterGain) {
-      try { explMasterGain.gain.setTargetAtTime(0.6 * musicVol, ctx.currentTime, 0.1); } catch(e) {}
+      try { explMasterGain.gain.setTargetAtTime(0.3 * musicVol, ctx.currentTime, 0.1); } catch(e) {}
     }
     if (shltMasterGain) {
       try { shltMasterGain.gain.setTargetAtTime(0.45 * musicVol, ctx.currentTime, 0.1); } catch(e) {}

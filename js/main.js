@@ -14,15 +14,23 @@ function resizeCanvas() {
   const vp = window.visualViewport;
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
-  const fitScale  = Math.min(ww / CFG.W, wh / CFG.H);
-  SCALE = fitScale;
+
+  // Base scale fills the full screen (use max to cover, min to fit inside)
+  const fitScale = Math.min(ww / CFG.W, wh / CFG.H);
+
+  // Apply user-chosen scale multiplier from settings (default 1.0 = fill screen)
+  const userMult = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
+  // Clamp so canvas never exceeds the viewport
+  const maxMult  = Math.min(ww / (CFG.W * fitScale), wh / (CFG.H * fitScale));
+  const safeMult = Math.min(userMult, maxMult);
+
+  SCALE = fitScale * safeMult;
 
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
 
-  const displayScale = fitScale;
-  canvas.style.width  = Math.round(CFG.W * displayScale) + 'px';
-  canvas.style.height = Math.round(CFG.H * displayScale) + 'px';
+  canvas.style.width  = Math.round(CFG.W * SCALE) + 'px';
+  canvas.style.height = Math.round(CFG.H * SCALE) + 'px';
   canvas.style.filter = 'saturate(0.7)';
   canvas.style.transform       = '';
   canvas.style.transformOrigin = '';

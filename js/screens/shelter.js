@@ -18,6 +18,13 @@ function roomRect(col, row) {
   return { x, y, w, h: CFG.ROOM_H };
 }
 
+// ── Shelter zoom & pan ────────────────────────────────────────────────────────
+const SHELTER_ZOOM = 1.2;
+
+// Convert screen coords → bunker world coords
+function shelterW(sx) { return (sx + (shelterUI.scrollX || 0)) / SHELTER_ZOOM; }
+function shelterWY(sy) { return (sy + (shelterUI.scrollY || 0)) / SHELTER_ZOOM; }
+
 // ── Shelter action menus ───────────────────────────────────────────────────────
 
 let shelterUI = {
@@ -41,6 +48,9 @@ let shelterUI = {
   helpScroll: 0,
   diaryScroll: 0,
   otherScroll: 0,
+  // Pan / scroll state for the zoomed world view
+  scrollX: 0, scrollY: 0,
+  isDragging: false, dragLastX: 0, dragLastY: 0,
 };
 
 // ── Room furniture drawing ─────────────────────────────────────────────────────
@@ -152,6 +162,35 @@ function drawRoomFurniture(ctx, roomId, r, level, gs) {
 
 function renderShelter(ctx, gs) {
   const mx = gs.mouse.x, my = gs.mouse.y;
+  // World-space mouse coords (inside zoom/scroll transform)
+  const wmx = shelterW(mx), wmy = shelterWY(my);
+
+  // Handle drag-to-pan (update scroll each frame while mouse is down)
+  const inWorld = mx < MAIN_W && my < CFG.H - 30 && !shelterUI.activeMenu;
+  if (gs.mouse.down && inWorld) {
+    if (!shelterUI.isDragging) {
+      shelterUI.isDragging = true;
+      shelterUI.dragLastX  = mx;
+      shelterUI.dragLastY  = my;
+    } else {
+      const maxScrollX = MAIN_W * (SHELTER_ZOOM - 1);
+      const maxScrollY = CFG.H  * (SHELTER_ZOOM - 1);
+      shelterUI.scrollX = Math.max(0, Math.min(maxScrollX, shelterUI.scrollX - (mx - shelterUI.dragLastX)));
+      shelterUI.scrollY = Math.max(0, Math.min(maxScrollY, shelterUI.scrollY - (my - shelterUI.dragLastY)));
+      shelterUI.dragLastX = mx;
+      shelterUI.dragLastY = my;
+    }
+  } else {
+    shelterUI.isDragging = false;
+  }
+
+  // ── Zoomed world (surface + rooms + characters) ───────────────────────────
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, MAIN_W, CFG.H);
+  ctx.clip();
+  ctx.translate(-shelterUI.scrollX, -shelterUI.scrollY);
+  ctx.scale(SHELTER_ZOOM, SHELTER_ZOOM);
 
   // Background
   fillRect(ctx, 0, 0, MAIN_W, CFG.H, C.bg);
@@ -160,22 +199,11 @@ function renderShelter(ctx, gs) {
   drawSurface(ctx, gs.day * 30, gs.time);
   drawHatch(ctx, MAIN_W / 2, CFG.SURFACE_H - 2);
 
-  // Distant background drone near rooftop level
+  // Distant background drone
   drawDistantDrone(ctx, gs);
 
   // Weather overlay on surface
   drawShelterWeather(ctx, gs);
-
-  // Time speed buttons — top-right of surface area, next to the day/status panel
-  {
-    const ts  = gs.timeScale || 1;
-    const spw = 26, sph = 16, spy = 4;
-    const sp4x = MAIN_W - 4  - spw;
-    const sp2x = MAIN_W - 4  - spw * 2 - 3;
-    drawButton(ctx, sp2x, spy, spw, sph, '2x', hitTest(mx, my, sp2x, spy, spw, sph), ts === 2);
-    drawButton(ctx, sp4x, spy, spw, sph, '4x', hitTest(mx, my, sp4x, spy, spw, sph), ts === 4);
-    gs._timeSpeedBtns = { x2:{x:sp2x,y:spy,w:spw,h:sph}, x4:{x:sp4x,y:spy,w:spw,h:sph} };
-  }
 
   // Drone patrol above shelter
   drawDronePatrol(ctx, gs);
@@ -184,7 +212,6 @@ function renderShelter(ctx, gs) {
   drawEarth(ctx, 0, CFG.SURFACE_H, MAIN_W, CFG.H - CFG.SURFACE_H);
 
   // Shaft from hatch to first room
-  const mainRect = roomRect(0, 0);
   fillRect(ctx, MAIN_W/2 - 6, CFG.SURFACE_H - 2, 12, 14, C.metal);
 
   // Draw rooms
@@ -195,7 +222,7 @@ function renderShelter(ctx, gs) {
       const def    = ROOM_DEFS[roomId];
       const r      = roomRect(col, row);
       const sel    = shelterUI.selectedRoom === roomId;
-      const hov    = !shelterUI.activeMenu && hitTest(mx, my, r.x, r.y, r.w, r.h);
+      const hov    = !shelterUI.activeMenu && hitTest(wmx, wmy, r.x, r.y, r.w, r.h);
 
       drawRoomInterior(ctx, r.x, r.y, r.w, r.h, room.unlocked, sel || hov);
 
@@ -205,14 +232,12 @@ function renderShelter(ctx, gs) {
         drawText(ctx, '[ BUILD ]', r.x + r.w/2, r.y + r.h/2 + 10, '#2a2a35', 7, 'center');
       }
 
-      // Building progress bar
       if (room.building) {
         const prog = gs.parent.taskProgress / gs.parent.taskDuration;
         drawStatBar(ctx, r.x + 4, r.y + r.h - 10, r.w - 8, 5, prog * 100, 100, C.textGood);
         drawText(ctx, 'BUILDING...', r.x + r.w/2, r.y + r.h - 14, C.textWarn, 7, 'center');
       }
 
-      // Shaft/connector between rows
       if (row === 0 && col === 0 && ROOM_GRID.length > 1) {
         const lowerRect = roomRect(0, 1);
         fillRect(ctx, r.x + r.w/2 - 5, r.y + r.h, 10, lowerRect.y - (r.y + r.h), C.metal);
@@ -220,7 +245,7 @@ function renderShelter(ctx, gs) {
     }
   }
 
-  // Connectors between columns (same row)
+  // Connectors between columns
   for (let row = 0; row < ROOM_GRID.length; row++) {
     for (let col = 0; col < ROOM_GRID[row].length - 1; col++) {
       const r1 = roomRect(col, row);
@@ -229,8 +254,23 @@ function renderShelter(ctx, gs) {
     }
   }
 
-  // Characters in main room
+  // Characters in rooms
   drawShelterCharacters(ctx, gs);
+
+  ctx.restore();  // end zoom/scroll transform
+
+  // ── Screen-space UI (not affected by pan/zoom) ────────────────────────────
+
+  // Time speed buttons — top-right of world, drawn in screen coords
+  {
+    const ts  = gs.timeScale || 1;
+    const spw = 26, sph = 16, spy = 4;
+    const sp4x = MAIN_W - 4  - spw;
+    const sp2x = MAIN_W - 4  - spw * 2 - 3;
+    drawButton(ctx, sp2x, spy, spw, sph, '2x', hitTest(mx, my, sp2x, spy, spw, sph), ts === 2);
+    drawButton(ctx, sp4x, spy, spw, sph, '4x', hitTest(mx, my, sp4x, spy, spw, sph), ts === 4);
+    gs._timeSpeedBtns = { x2:{x:sp2x,y:spy,w:spw,h:sph}, x4:{x:sp4x,y:spy,w:spw,h:sph} };
+  }
 
   // Right stats panel
   drawStatsPanel(ctx, gs);
@@ -1415,6 +1455,8 @@ function drawSettingsMenu(ctx, gs, mx, my) {
 function shelterClick(mx, my, gs) {
   const M    = shelterUI;
   const barY = CFG.H - 30;
+  // World-space coords for hitting elements inside the zoom/scroll transform
+  const wx = shelterW(mx), wy = shelterWY(my);
 
   // Close menu on outside click
   if (M.activeMenu) {
@@ -1422,7 +1464,7 @@ function shelterClick(mx, my, gs) {
     return;
   }
 
-  // Time speed buttons (check before CTRL_BUTTONS)
+  // Time speed buttons — screen space (drawn outside zoom transform)
   if (gs._timeSpeedBtns) {
     const tb = gs._timeSpeedBtns;
     if (hitTest(mx, my, tb.x2.x, tb.x2.y, tb.x2.w, tb.x2.h)) {
@@ -1433,7 +1475,7 @@ function shelterClick(mx, my, gs) {
     }
   }
 
-  // Bottom control bar
+  // Bottom control bar — screen space
   for (const btn of CTRL_BUTTONS) {
     let bx = 6;
     for (const b of CTRL_BUTTONS) {
@@ -1446,7 +1488,7 @@ function shelterClick(mx, my, gs) {
     }
   }
 
-  // Parent / child stat panel click (right-side bar)
+  // Parent / child stat panel click (right-side bar — screen space)
   for (const [id, key] of [['parent', '_parentStatBounds'], ['child', '_childStatBounds']]) {
     const b = gs[key];
     if (b && hitTest(mx, my, b.x, b.y, b.w, b.h)) {
@@ -1458,7 +1500,7 @@ function shelterClick(mx, my, gs) {
     }
   }
 
-  // Survivor stat panel click (right-side bar)
+  // Survivor stat panel click (right-side bar — screen space)
   if (gs._survivorStatBounds) {
     for (const bound of gs._survivorStatBounds) {
       if (hitTest(mx, my, bound.x, bound.y, bound.w, bound.h)) {
@@ -1471,29 +1513,32 @@ function shelterClick(mx, my, gs) {
     }
   }
 
-  // Character click (check before room clicks)
+  // Character click — world space (drawn inside zoom transform)
   if (GS._charHitBounds) {
     for (const bound of GS._charHitBounds) {
-      if (hitTest(mx, my, bound.x, bound.y, bound.w, bound.h)) {
+      if (hitTest(wx, wy, bound.x, bound.y, bound.w, bound.h)) {
         M.selectedChar = bound.id;
         M.activeMenu   = 'char';
-        M.charPanelX   = clamp(bound.x - 60, 2, MAIN_W - 188);
-        M.charPanelY   = clamp(bound.y - 220, 2, CFG.H - 260);
+        // Convert world panel position back to screen space for placement
+        const screenBX = bound.x * SHELTER_ZOOM - shelterUI.scrollX;
+        M.charPanelX   = clamp(screenBX - 60, 2, MAIN_W - 188);
+        M.charPanelY   = clamp(wy - 220, 2, CFG.H - 260);
         return;
       }
     }
   }
 
-  // Room click
+  // Room click — world space
   for (let row = 0; row < ROOM_GRID.length; row++) {
     for (let col = 0; col < ROOM_GRID[row].length; col++) {
       const roomId = ROOM_GRID[row][col];
       const r      = roomRect(col, row);
-      if (hitTest(mx, my, r.x, r.y, r.w, r.h)) {
+      if (hitTest(wx, wy, r.x, r.y, r.w, r.h)) {
         M.selectedRoom = roomId;
         M.activeMenu   = 'room';
-        M.menuX        = r.x;
-        M.menuY        = r.y - 10;
+        // Menu positioned in screen space
+        M.menuX        = clamp(r.x * SHELTER_ZOOM - shelterUI.scrollX, 2, MAIN_W - 214);
+        M.menuY        = clamp(r.y * SHELTER_ZOOM - shelterUI.scrollY - 10, 2, CFG.H - 210);
         return;
       }
     }

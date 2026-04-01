@@ -10,9 +10,9 @@
 const _SPRITE_COLS          = 4;
 const _SPRITE_ROWS          = 4;
 const _SPRITE_TOTAL_FRAMES  = _SPRITE_COLS * _SPRITE_ROWS; // 16
-// Fraction of frame height at which the character's feet sit.
-// Increase if character floats, decrease if it sinks into the floor.
-const _SPRITE_FOOT_FRAC     = 0.91;
+// Fraction of the frame height where the character's feet appear (measured from top).
+// Decrease if character floats above floor, increase if it sinks into the floor.
+const _SPRITE_FOOT_FRAC     = 0.72;
 
 let _idleStaticSprite = null; // single frame — bunker idle
 let _idleSprite       = null; // 4×4 sheet   — bunker walking

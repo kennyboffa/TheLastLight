@@ -15,16 +15,11 @@ function resizeCanvas() {
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
 
-  // Base scale fills the full screen (use max to cover, min to fit inside)
+  // Fill the screen at 1:1 aspect ratio; user can nudge with Display Scale setting
   const fitScale = Math.min(ww / CFG.W, wh / CFG.H);
-
-  // Apply user-chosen scale multiplier from settings (default 1.0 = fill screen)
   const userMult = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
-  // Clamp so canvas never exceeds the viewport
-  const maxMult  = Math.min(ww / (CFG.W * fitScale), wh / (CFG.H * fitScale));
-  const safeMult = Math.min(userMult, maxMult);
 
-  SCALE = fitScale * safeMult;
+  SCALE = fitScale * userMult;
 
   canvas.width  = CFG.W;
   canvas.height = CFG.H;

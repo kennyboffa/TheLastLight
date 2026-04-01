@@ -38,6 +38,44 @@ function _loadSpriteSheet(src, callback) {
 _loadSpriteSheet('Assets/player_sprites.png',          function(s) { _idleSprite = s; });
 _loadSpriteSheet('Assets/player_sprites_running.png',   function(s) { _runSprite  = s; });
 
+// ── Child (Lily) sprite ───────────────────────────────────────────────────────
+let _childIdleSprite = null;
+(function() {
+  const img = new Image();
+  img.onload = function() { _childIdleSprite = { img, fw: img.width, fh: img.height }; };
+  img.src = 'Assets/lily_idle.png';
+})();
+
+// ── Item sprites (ground loot) ────────────────────────────────────────────────
+// Multiple variants per item id — variant chosen by world-x seed so it's stable.
+const _itemSpriteMap = {};  // itemId → [img, img, ...]
+
+function _loadItemVariants(id, filenames) {
+  _itemSpriteMap[id] = [];
+  filenames.forEach(function(filename) {
+    const img = new Image();
+    img.onload = function() { _itemSpriteMap[id].push(img); };
+    img.src = 'Assets/' + filename;
+  });
+}
+
+_loadItemVariants('mushroom', ['mushroom_1.png', 'mushroom_2.png']);
+_loadItemVariants('wood',     ['wood.png', 'wood_2.png', 'wood-1.png.png']);
+
+// Draw a ground item sprite. Returns true if a sprite was drawn, false if no sprite exists.
+// wx/wy: world position. seed: integer for stable variant selection (use item.wx).
+function drawGroundItem(ctx, id, wx, wy, seed) {
+  const variants = _itemSpriteMap[id];
+  if (!variants || variants.length === 0) return false;
+  const img = variants[Math.abs(Math.round(seed)) % variants.length];
+  if (!img || !img.complete || !img.naturalWidth) return false;
+  const size = 22;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, Math.round(wx - size / 2), Math.round(wy - size), size, size);
+  return true;
+}
+
 // ── Character sprites ─────────────────────────────────────────────────────────
 // All sprites drawn at "natural" 1px = 1 logical px scale.
 // Caller passes ctx with appropriate transform/scale.
@@ -262,6 +300,23 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
 
 function drawChild(ctx, x, y, s, facing, animFrame, pose) {
   pose = pose || 'front';
+
+  // Use Lily sprite for all non-sleep poses when loaded
+  if (_childIdleSprite && pose !== 'sleep') {
+    const sh = _childIdleSprite;
+    const targetH = Math.round(22 * s);  // slightly shorter than parent
+    const targetW = Math.round(sh.fw * targetH / sh.fh);
+    const yOff    = -Math.round(targetH * _SPRITE_FOOT_FRAC);
+    ctx.save();
+    ctx.translate(Math.round(x), Math.round(y));
+    if (facing < 0) ctx.scale(-1, 1);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(sh.img, 0, 0, sh.fw, sh.fh, -targetW / 2, yOff, targetW, targetH);
+    ctx.restore();
+    return;
+  }
+
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }

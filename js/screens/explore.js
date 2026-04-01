@@ -1030,8 +1030,10 @@ function renderOutdoor(ctx, gs, es) {
     const def = getItemDef(item.id);
     if (!def) continue;
     const sx = item.wx, sy = GROUND_Y - 6;
-    fillRect(ctx, sx - 4, sy - 4, 8, 8, itemTypeColor(def.type), 0.9);
-    strokeRect(ctx, sx - 4, sy - 4, 8, 8, C.border2);
+    if (!drawGroundItem(ctx, item.id, sx, GROUND_Y, item.wx)) {
+      fillRect(ctx, sx - 4, sy - 4, 8, 8, itemTypeColor(def.type), 0.9);
+      strokeRect(ctx, sx - 4, sy - 4, 8, 8, C.border2);
+    }
     if (item.qty > 1) drawText(ctx, String(item.qty), sx + 5, sy - 2, C.textDim, 6);
     if (Math.abs(es.px - item.wx) < 30) {
       drawText(ctx, def.name, sx, sy - 12, C.textBright, 7, 'center');

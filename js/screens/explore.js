@@ -1054,7 +1054,7 @@ function renderOutdoor(ctx, gs, es) {
 
   // Player
   const _outSearching = es.containers.some(c => c.searching);
-  const _outPose = Math.abs(es.velX) > 0.1 ? 'side' : (_outSearching ? 'back' : 'front');
+  const _outPose = Math.abs(es.velX) > 0.1 ? 'run' : (_outSearching ? 'back' : 'front');
   drawParent(ctx, es.px, PLAYER_FOOT, 2, es.facing, es.animFrame, gs.parent.gender, _outPose);
 
   // Companion following player
@@ -1155,7 +1155,7 @@ function renderBuildingInterior(ctx, gs, es) {
 
   // Player
   const _biSearching = fl.containers.some(c => c.searching);
-  const _biPose = Math.abs(bi.velX) > 0.1 ? 'side' : (_biSearching ? 'back' : 'front');
+  const _biPose = Math.abs(bi.velX) > 0.1 ? 'run' : (_biSearching ? 'back' : 'front');
   drawParent(ctx, bi.px, PLAYER_FOOT, 2, bi.facing, bi.animFrame || 0, gs.parent.gender, _biPose);
 
   // Companion in building

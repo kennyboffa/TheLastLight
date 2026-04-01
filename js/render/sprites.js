@@ -2,17 +2,21 @@
 'use strict';
 
 // ── Player sprite sheets ─────────────────────────────────────────────────────
-// player_sprites.png       — idle/walk cycle (used in shelter)
-// player_sprites_running.png — run cycle (used in exploration)
-// Both sheets: 4 columns × 4 rows = 16 frames, 64×64 each, 256×256 total.
-// Frames read left-to-right, top-to-bottom. All face right; left is mirrored.
+// player_sprite_idle.png         — single 64×64 still frame (bunker, not moving)
+// player_sprites.png             — 4×4 walk cycle, 64×64 each (bunker, moving)
+// player_sprites_running.png     — 4×4 run cycle,  64×64 each (exploration, moving)
+// Frames read left→right, top→bottom. All face right; left is auto-mirrored.
 
-const _SPRITE_COLS = 4;
-const _SPRITE_ROWS = 4;
-const _SPRITE_TOTAL_FRAMES = _SPRITE_COLS * _SPRITE_ROWS; // 16
+const _SPRITE_COLS          = 4;
+const _SPRITE_ROWS          = 4;
+const _SPRITE_TOTAL_FRAMES  = _SPRITE_COLS * _SPRITE_ROWS; // 16
+// Fraction of frame height at which the character's feet sit.
+// Increase if character floats, decrease if it sinks into the floor.
+const _SPRITE_FOOT_FRAC     = 0.91;
 
-let _idleSprite = null;  // { img, fw, fh } — shelter idle/walk
-let _runSprite  = null;  // { img, fw, fh } — exploration running
+let _idleStaticSprite = null; // single frame — bunker idle
+let _idleSprite       = null; // 4×4 sheet   — bunker walking
+let _runSprite        = null; // 4×4 sheet   — exploration running
 
 function _loadSpriteSheet(src, callback) {
   const img = new Image();
@@ -24,8 +28,15 @@ function _loadSpriteSheet(src, callback) {
   img.src = src;
 }
 
-_loadSpriteSheet('Assets/player_sprites.png',         function(s) { _idleSprite = s; });
-_loadSpriteSheet('Assets/player_sprites_running.png',  function(s) { _runSprite  = s; });
+// Single idle frame — it's a 64×64 image treated as a 1×1 grid
+(function() {
+  const img = new Image();
+  img.onload = function () { _idleStaticSprite = { img, fw: img.width, fh: img.height }; };
+  img.src = 'Assets/player_sprite_idle.png';
+})();
+
+_loadSpriteSheet('Assets/player_sprites.png',          function(s) { _idleSprite = s; });
+_loadSpriteSheet('Assets/player_sprites_running.png',   function(s) { _runSprite  = s; });
 
 // ── Character sprites ─────────────────────────────────────────────────────────
 // All sprites drawn at "natural" 1px = 1 logical px scale.
@@ -48,30 +59,41 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   pose = pose || 'front';
 
   // ── Sprite-sheet rendering ──────────────────────────────────────────────────
-  // Use running sheet when moving (side pose), idle sheet otherwise
-  const _sheet = (pose === 'side') ? _runSprite : _idleSprite;
-  if (_sheet && (pose === 'front' || pose === 'side')) {
-    const frame   = animFrame % _SPRITE_TOTAL_FRAMES;
-    const col     = frame % _SPRITE_COLS;
-    const row     = Math.floor(frame / _SPRITE_COLS);
-    const sx      = col * _sheet.fw;
-    const sy      = row * _sheet.fh;
-    const targetH = Math.round(25 * s);
-    const targetW = Math.round(_sheet.fw * targetH / _sheet.fh);
+  // pose === 'front' → single idle frame (bunker, standing still)
+  // pose === 'walk'  → walk cycle sheet  (bunker, wandering)
+  // pose === 'run'   → run cycle sheet   (exploration, moving)
+  const _isSpritepose = (pose === 'front' || pose === 'walk' || pose === 'run');
+  if (_isSpritepose) {
+    let _sheet, sx, sy;
+    if (pose === 'front' && _idleStaticSprite) {
+      _sheet = _idleStaticSprite;
+      sx = 0; sy = 0;
+    } else if (pose === 'walk' && _idleSprite) {
+      _sheet = _idleSprite;
+      const frame = animFrame % _SPRITE_TOTAL_FRAMES;
+      sx = (frame % _SPRITE_COLS) * _sheet.fw;
+      sy = Math.floor(frame / _SPRITE_COLS) * _sheet.fh;
+    } else if (pose === 'run' && _runSprite) {
+      _sheet = _runSprite;
+      const frame = animFrame % _SPRITE_TOTAL_FRAMES;
+      sx = (frame % _SPRITE_COLS) * _sheet.fw;
+      sy = Math.floor(frame / _SPRITE_COLS) * _sheet.fh;
+    }
+    if (_sheet) {
+      const targetH = Math.round(25 * s);
+      const targetW = Math.round(_sheet.fw * targetH / _sheet.fh);
+      const yOff    = -Math.round(targetH * _SPRITE_FOOT_FRAC);
 
-    ctx.save();
-    ctx.translate(Math.round(x), Math.round(y));
-    if (facing < 0) ctx.scale(-1, 1);
-
-    _shadowOval(ctx, 7 * s, 2 * s);
-
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(_sheet.img,
-      sx, sy, _sheet.fw, _sheet.fh,
-      -targetW / 2, -targetH, targetW, targetH);
-    ctx.restore();
-    return;
+      ctx.save();
+      ctx.translate(Math.round(x), Math.round(y));
+      if (facing < 0) ctx.scale(-1, 1);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(_sheet.img, sx, sy, _sheet.fw, _sheet.fh,
+        -targetW / 2, yOff, targetW, targetH);
+      ctx.restore();
+      return;
+    }
   }
 
   ctx.save();

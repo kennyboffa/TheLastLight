@@ -291,7 +291,7 @@ function drawShelterCharacters(ctx, gs) {
   const p     = gs.parent;
   const ch    = gs.child;
   const mainR = roomRect(0, 0);
-  const groundY = mainR.y + mainR.h - 12;
+  const groundY = mainR.y + mainR.h - 4;
 
   // Animate
   p.animTimer++;
@@ -314,7 +314,8 @@ function drawShelterCharacters(ctx, gs) {
   // ── Parent ──────────────────────────────────────────────────────────────────
   if (!p.isExploring) {
     const pStandX = Math.round(p.shelterX !== undefined ? p.shelterX : 28);
-    let drawPX = pStandX, drawPY = groundY, pPose = 'front';
+    const pMoving = Math.abs((p.shelterTargetX || 0) - (p.shelterX || 0)) > 0.5;
+    let drawPX = pStandX, drawPY = groundY, pPose = pMoving ? 'walk' : 'front';
     if (p.isSleeping && _bedSlot < BED_POSITIONS.length) {
       const bed = BED_POSITIONS[_bedSlot++];
       drawPX = bed.x; drawPY = bed.y; pPose = 'sleep';
@@ -348,7 +349,8 @@ function drawShelterCharacters(ctx, gs) {
 
   // ── Child ───────────────────────────────────────────────────────────────────
   const cStandX = Math.round(ch.shelterX !== undefined ? ch.shelterX : 52);
-  let drawCX = cStandX, drawCY = groundY, chPose = 'front';
+  const chMoving = Math.abs((ch.shelterTargetX || 0) - (ch.shelterX || 0)) > 0.5;
+  let drawCX = cStandX, drawCY = groundY, chPose = chMoving ? 'walk' : 'front';
   if (ch.isSleeping && _bedSlot < BED_POSITIONS.length) {
     const bed = BED_POSITIONS[_bedSlot++];
     drawCX = bed.x; drawCY = bed.y; chPose = 'sleep';

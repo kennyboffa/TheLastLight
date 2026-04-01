@@ -61,6 +61,7 @@ function _loadItemVariants(id, filenames) {
 
 _loadItemVariants('mushroom', ['mushroom_1.png', 'mushroom_2.png']);
 _loadItemVariants('wood',     ['wood.png', 'wood_2.png', 'wood-1.png.png']);
+_loadItemVariants('rope',     ['rope.png']);
 
 // Draw a ground item sprite. Returns true if a sprite was drawn, false if no sprite exists.
 // wx/wy: world position. seed: integer for stable variant selection (use item.wx).

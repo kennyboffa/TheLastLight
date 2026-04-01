@@ -69,10 +69,8 @@ function drawGroundItem(ctx, id, wx, wy, seed) {
   if (!variants || variants.length === 0) return false;
   const img = variants[Math.abs(Math.round(seed)) % variants.length];
   if (!img || !img.complete || !img.naturalWidth) return false;
-  const size = 22;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(img, Math.round(wx - size / 2), Math.round(wy - size), size, size);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, Math.round(wx - img.width / 2), Math.round(wy - img.height));
   return true;
 }
 
@@ -118,17 +116,15 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
       sy = Math.floor(frame / _SPRITE_COLS) * _sheet.fh;
     }
     if (_sheet) {
-      const targetH = Math.round(25 * s);
-      const targetW = Math.round(_sheet.fw * targetH / _sheet.fh);
-      const yOff    = -Math.round(targetH * _SPRITE_FOOT_FRAC);
+      const dw   = _sheet.fw;
+      const dh   = _sheet.fh;
+      const yOff = -Math.round(dh * _SPRITE_FOOT_FRAC);
 
       ctx.save();
       ctx.translate(Math.round(x), Math.round(y));
       if (facing < 0) ctx.scale(-1, 1);
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(_sheet.img, sx, sy, _sheet.fw, _sheet.fh,
-        -targetW / 2, yOff, targetW, targetH);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(_sheet.img, sx, sy, dw, dh, -Math.round(dw / 2), yOff, dw, dh);
       ctx.restore();
       return;
     }
@@ -303,16 +299,15 @@ function drawChild(ctx, x, y, s, facing, animFrame, pose) {
 
   // Use Lily sprite for all non-sleep poses when loaded
   if (_childIdleSprite && pose !== 'sleep') {
-    const sh = _childIdleSprite;
-    const targetH = Math.round(22 * s);  // slightly shorter than parent
-    const targetW = Math.round(sh.fw * targetH / sh.fh);
-    const yOff    = -Math.round(targetH * _SPRITE_FOOT_FRAC);
+    const sh   = _childIdleSprite;
+    const dw   = sh.fw;
+    const dh   = sh.fh;
+    const yOff = -Math.round(dh * _SPRITE_FOOT_FRAC);
     ctx.save();
     ctx.translate(Math.round(x), Math.round(y));
     if (facing < 0) ctx.scale(-1, 1);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(sh.img, 0, 0, sh.fw, sh.fh, -targetW / 2, yOff, targetW, targetH);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sh.img, 0, 0, dw, dh, -Math.round(dw / 2), yOff, dw, dh);
     ctx.restore();
     return;
   }

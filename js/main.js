@@ -17,35 +17,38 @@ function resizeCanvas() {
   const userMult = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
   SCALE = fitScale * userMult;
 
-  canvas.width  = CFG.W;
-  canvas.height = CFG.H;
-
   const cssW = Math.round(CFG.W * SCALE);
   const cssH = Math.round(CFG.H * SCALE);
+
+  canvas.width  = CFG.W;
+  canvas.height = CFG.H;
   canvas.style.width  = cssW + 'px';
   canvas.style.height = cssH + 'px';
   canvas.style.filter = 'saturate(0.7)';
   canvas.style.transform       = '';
   canvas.style.transformOrigin = '';
 
-  // When canvas is larger than viewport, switch to scrollable layout so
-  // the user can drag/scroll to see the whole game.
   const gameWrap = document.getElementById('game-wrap');
   if (cssW > ww || cssH > wh) {
+    // Canvas larger than viewport — let html/body grow so browser scroll works
+    document.documentElement.style.height = 'auto';
+    document.documentElement.style.overflow = 'auto';
+    document.body.style.height    = 'auto';
     document.body.style.overflow  = 'auto';
     if (gameWrap) {
-      gameWrap.style.alignItems      = 'flex-start';
-      gameWrap.style.justifyContent  = 'flex-start';
-      gameWrap.style.minWidth        = cssW + 'px';
-      gameWrap.style.minHeight       = cssH + 'px';
+      gameWrap.style.height         = 'auto';
+      gameWrap.style.alignItems     = 'flex-start';
+      gameWrap.style.justifyContent = 'flex-start';
     }
   } else {
-    document.body.style.overflow  = 'hidden';
+    document.documentElement.style.height   = '100%';
+    document.documentElement.style.overflow = '';
+    document.body.style.height   = '100%';
+    document.body.style.overflow = 'hidden';
     if (gameWrap) {
-      gameWrap.style.alignItems      = 'center';
-      gameWrap.style.justifyContent  = 'center';
-      gameWrap.style.minWidth        = '';
-      gameWrap.style.minHeight       = '';
+      gameWrap.style.height         = '100%';
+      gameWrap.style.alignItems     = 'center';
+      gameWrap.style.justifyContent = 'center';
     }
   }
 }

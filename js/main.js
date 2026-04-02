@@ -8,7 +8,33 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.23';
+const GAME_VERSION = 'v0.24';
+
+// View pan state — used when Display Scale > 1 to let user reach clipped edges
+let _viewPanX = 0, _viewPanY = 0;
+let _prevUserMult = 1;
+
+function _applyCanvasTransform(userMult, ww, wh, fitScale) {
+  const cssW = CFG.W * fitScale;
+  const cssH = CFG.H * fitScale;
+  const overflowX = Math.max(0, cssW * userMult - ww);
+  const overflowY = Math.max(0, cssH * userMult - wh);
+
+  // When scale changes, reset pan: push canvas up so the bottom (menus) is visible.
+  if (userMult !== _prevUserMult) {
+    _viewPanX = 0;
+    // Negative panY shifts canvas visually upward → bottom of canvas stays visible.
+    _viewPanY = overflowY > 0 ? -overflowY / 2 : 0;
+    _prevUserMult = userMult;
+  }
+
+  // Clamp pan so every edge is reachable but nothing goes beyond the viewport.
+  _viewPanX = Math.max(-overflowX / 2, Math.min(overflowX / 2, _viewPanX));
+  _viewPanY = Math.max(-overflowY / 2, Math.min(overflowY / 2, _viewPanY));
+
+  canvas.style.transform       = `translate(${_viewPanX}px, ${_viewPanY}px) scale(${userMult})`;
+  canvas.style.transformOrigin = 'center center';
+}
 
 function resizeCanvas() {
   const vp = window.visualViewport;
@@ -25,16 +51,12 @@ function resizeCanvas() {
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
 
-  // Size canvas to fill screen normally, then zoom via CSS transform.
-  // Keeps the canvas centered and all menus always on-screen.
-  // Edges clip when zoomed past the viewport boundary (acceptable behaviour).
   canvas.style.width  = Math.round(CFG.W * fitScale) + 'px';
   canvas.style.height = Math.round(CFG.H * fitScale) + 'px';
-  canvas.style.transform       = `scale(${userMult})`;
-  canvas.style.transformOrigin = 'center center';
-  canvas.style.filter          = 'saturate(0.7)';
+  canvas.style.filter = 'saturate(0.7)';
 
-  // Body/html stay as normal fixed layout — no overflow scrolling needed
+  _applyCanvasTransform(userMult, ww, wh, fitScale);
+
   const gameWrap = document.getElementById('game-wrap');
   document.documentElement.style.height   = '100%';
   document.documentElement.style.overflow = '';
@@ -107,10 +129,23 @@ function _isMobileBtn(x, y) {
 }
 
 let _touchStartX = 0, _touchStartY = 0;
+// Two-finger pan tracking
+let _panTouchLastX = 0, _panTouchLastY = 0;
+let _isPanningView = false;
 
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
+
+  // Two-finger gesture: set up pan tracking, suppress game input
+  if (e.touches.length >= 2) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    _panTouchLastX = (t0.clientX + t1.clientX) / 2;
+    _panTouchLastY = (t0.clientY + t1.clientY) / 2;
+    _isPanningView = false;
+    return;
+  }
+
   const firstT = e.changedTouches[0];
   _touchLastY  = (firstT.clientY - rect.top)  / SCALE;
   _touchStartX = (firstT.clientX - rect.left) / SCALE;
@@ -137,8 +172,35 @@ let _touchLastY  = 0;
 
 canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
-  const t = e.touches[0];
   const rect = canvas.getBoundingClientRect();
+
+  // Two-finger view pan (works when Display Scale > 1)
+  if (e.touches.length >= 2) {
+    const userMult = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const midX = (t0.clientX + t1.clientX) / 2;
+    const midY = (t0.clientY + t1.clientY) / 2;
+    if (userMult > 1) {
+      _viewPanX += midX - _panTouchLastX;
+      _viewPanY += midY - _panTouchLastY;
+      const vp = window.visualViewport;
+      const ww = vp ? vp.width  : window.innerWidth;
+      const wh = vp ? vp.height : window.innerHeight;
+      const fitScale = Math.min(ww / CFG.W, wh / CFG.H);
+      const overflowX = Math.max(0, CFG.W * fitScale * userMult - ww);
+      const overflowY = Math.max(0, CFG.H * fitScale * userMult - wh);
+      _viewPanX = Math.max(-overflowX / 2, Math.min(overflowX / 2, _viewPanX));
+      _viewPanY = Math.max(-overflowY / 2, Math.min(overflowY / 2, _viewPanY));
+      canvas.style.transform = `translate(${_viewPanX}px, ${_viewPanY}px) scale(${userMult})`;
+    }
+    _panTouchLastX = midX;
+    _panTouchLastY = midY;
+    _isPanningView = true;
+    return;
+  }
+  _isPanningView = false;
+
+  const t = e.touches[0];
   const cy = (t.clientY - rect.top) / SCALE;
   GS.mouse.x = (t.clientX - rect.left) / SCALE;
   GS.mouse.y = cy;
@@ -166,6 +228,9 @@ canvas.addEventListener('touchend', (e) => {
   e.preventDefault();
   Audio.init();    // initialise on first touch gesture
   Audio.resume();  // iOS AudioContext starts suspended
+  // End two-finger pan
+  if (e.touches.length < 2) _isPanningView = false;
+  if (_isPanningView) return;  // lifted one finger mid-pan, don't fire game click
   const rect = canvas.getBoundingClientRect();
 
   // If a screen transition happened while a D-pad button was held, clear it.

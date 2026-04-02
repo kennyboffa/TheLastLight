@@ -99,6 +99,61 @@ _loadItemVariants('mushroom', ['mushroom_1.png', 'mushroom_2.png']);
 _loadItemVariants('wood',     ['wood.png', 'wood_2.png', 'wood-1.png.png']);
 _loadItemVariants('rope',     ['rope.png']);
 
+// ── Environment sprites (exploration world) ───────────────────────────────────
+const _envSpr = {};
+(function() {
+  const files = {
+    tree_1: 'Tree_1.png', tree_2: 'Tree_2.png', tree_3: 'Tree_3.png',
+    large_tree: 'Large_Tree.png', dead_tree: 'Dead_Tree.png',
+    bush: 'Bush.png', bush_berry: 'Bush_Berry.png',
+    grass_1: 'Grass_1.png', grass_2: 'Grass_2.png',
+    bones_1: 'Bones_1.png', bones_2: 'Bones_2.png',
+    trash: 'Trash.png',
+    crate: 'conatiner_crate.png', box: 'container_box.png',
+    chest: 'container_chest.png', locker: 'container_locker.png',
+    survivor_1: 'survivor_1.png', survivor_2: 'survivor_2.png',
+  };
+  for (const [key, file] of Object.entries(files)) {
+    const img = new Image();
+    img.onload = function() { _envSpr[key] = img; };
+    img.src = 'Assets/' + file;
+  }
+})();
+
+/**
+ * Draw an environment sprite centred horizontally, bottom-aligned to groundY.
+ * Returns true if sprite was drawn, false if not yet loaded (caller can fall back).
+ */
+function drawEnvSprite(ctx, key, cx, groundY, drawW, drawH) {
+  const img = _envSpr[key];
+  if (!img || !img.complete || !img.naturalWidth) return false;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, Math.round(cx - drawW / 2), Math.round(groundY - drawH), drawW, drawH);
+  return true;
+}
+
+/** Stable variant index from a world x position (avoids flickering per frame). */
+function _envVariant(wx, count) {
+  return Math.abs(Math.floor(wx * 17 + wx / 7)) % count;
+}
+
+// ── Survivor sprites ──────────────────────────────────────────────────────────
+/** Draw a survivor using sprite sheet; returns true on success. */
+function drawSurvivorSprite(ctx, x, y, s, facing, idx) {
+  const key = (idx % 2 === 0) ? 'survivor_1' : 'survivor_2';
+  const img = _envSpr[key];
+  if (!img || !img.complete || !img.naturalWidth) return false;
+  const drawH = Math.round(s * 28);
+  const drawW = Math.round(img.width * drawH / img.height);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(Math.round(x), Math.round(y));
+  if (facing < 0) ctx.scale(-1, 1);
+  ctx.drawImage(img, -Math.round(drawW / 2), -drawH, drawW, drawH);
+  ctx.restore();
+  return true;
+}
+
 // Draw a ground item sprite. Returns true if a sprite was drawn, false if no sprite exists.
 // wx/wy: world position. seed: integer for stable variant selection (use item.wx).
 function drawGroundItem(ctx, id, wx, wy, seed) {
@@ -147,13 +202,7 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
       sx = (frame % _SPRITE_COLS) * _sheet.fw;
       sy = Math.floor(frame / _SPRITE_COLS) * _sheet.fh;
     } else if (pose === 'run') {
-      if (_mainSprite) {
-        // Use row 0 of the main character sheet (unarmed walk/run, 5 frames)
-        _sheet = _mainSprite;
-        const frame = animFrame % _MAIN_COLS;
-        sx = frame * _sheet.fw;
-        sy = 0; // row 0
-      } else if (_runSprite) {
+      if (_runSprite) {
         _sheet = _runSprite;
         const frame = animFrame % _SPRITE_TOTAL_FRAMES;
         sx = (frame % _SPRITE_COLS) * _sheet.fw;
@@ -479,6 +528,8 @@ function drawChild(ctx, x, y, s, facing, animFrame, pose) {
 
 function drawSurvivor(ctx, x, y, s, facing, animFrame, idx, pose) {
   pose = pose || 'front';
+  // Use sprite if available (front / side / back all use the same standing sprite)
+  if (drawSurvivorSprite(ctx, x, y, s, facing, idx)) return;
   const clothColors  = ['#2a3828','#282a38','#382820','#283030'];
   const clothHiColor = ['#3a4e38','#383a4e','#4e3830','#384040'];
   const hairColors   = ['#201808','#101020','#301810','#102018'];

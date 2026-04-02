@@ -1339,9 +1339,11 @@ function drawExploreTent(ctx, cx, groundY, w, h, label) {
 }
 
 function drawExploreTree(ctx, x, groundY) {
-  // Trunk
+  const v = _envVariant(x, 3);
+  const key = ['tree_1','tree_2','tree_3'][v];
+  if (drawEnvSprite(ctx, key, x, groundY, 52, 90)) return;
+  // Fallback procedural
   fillRect(ctx, x - 3, groundY - 30, 6, 30, '#3a2810');
-  // Dark canopy layers
   ctx.fillStyle = '#18380e';
   ctx.beginPath(); ctx.moveTo(x, groundY - 88); ctx.lineTo(x - 18, groundY - 48); ctx.lineTo(x + 18, groundY - 48); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#1e4810';
@@ -1351,6 +1353,7 @@ function drawExploreTree(ctx, x, groundY) {
 }
 
 function drawExploreBush(ctx, x, groundY) {
+  if (drawEnvSprite(ctx, 'bush', x, groundY, 46, 30)) return;
   ctx.save();
   ctx.fillStyle = '#1a3a0e';
   ctx.beginPath();
@@ -1366,6 +1369,8 @@ function drawExploreBush(ctx, x, groundY) {
 }
 
 function drawExploreGrass(ctx, x, groundY) {
+  const key = _envVariant(x, 2) === 0 ? 'grass_1' : 'grass_2';
+  if (drawEnvSprite(ctx, key, x, groundY, 50, 18)) return;
   ctx.save();
   ctx.strokeStyle = '#1e3a10';
   ctx.lineWidth = 1;
@@ -1380,26 +1385,22 @@ function drawExploreGrass(ctx, x, groundY) {
 }
 
 function drawExploreBones(ctx, x, groundY) {
+  const key = _envVariant(x, 2) === 0 ? 'bones_1' : 'bones_2';
+  if (drawEnvSprite(ctx, key, x, groundY, 34, 16)) return;
   ctx.save();
   ctx.globalAlpha = 0.75;
-  // Skull
   fillRect(ctx, x - 4, groundY - 10, 8, 7, '#a89878');
   fillRect(ctx, x - 2, groundY - 3,  4, 4, '#a89878');
-  // Eye sockets
   fillRect(ctx, x - 3, groundY - 9, 2, 2, '#1a1a1a');
   fillRect(ctx, x + 1, groundY - 9, 2, 2, '#1a1a1a');
-  // Ribs / scattered bones
-  for (let i = 0; i < 3; i++) {
-    fillRect(ctx, x + 6 + i * 5, groundY - 6 + i, 12, 2, '#9a8868');
-  }
+  for (let i = 0; i < 3; i++) fillRect(ctx, x + 6 + i * 5, groundY - 6 + i, 12, 2, '#9a8868');
   fillRect(ctx, x + 6, groundY - 2, 18, 2, '#9a8868');
   ctx.restore();
 }
 
 function drawExploreTallTree(ctx, x, groundY) {
-  // Tall conifer / dark pine
+  if (drawEnvSprite(ctx, 'large_tree', x, groundY, 58, 130)) return;
   fillRect(ctx, x - 3, groundY - 50, 6, 50, '#221508');
-  fillRect(ctx, x - 2, groundY - 50, 3, 50, '#2e1c0a', 0.5); // bark highlight
   ctx.fillStyle = '#0a1e06';
   ctx.beginPath(); ctx.moveTo(x, groundY-128); ctx.lineTo(x-10, groundY-96); ctx.lineTo(x+10, groundY-96); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#0e2608';
@@ -1408,45 +1409,26 @@ function drawExploreTallTree(ctx, x, groundY) {
   ctx.beginPath(); ctx.moveTo(x, groundY-86); ctx.lineTo(x-18, groundY-46); ctx.lineTo(x+18, groundY-46); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#16320e';
   ctx.beginPath(); ctx.moveTo(x, groundY-64); ctx.lineTo(x-22, groundY-28); ctx.lineTo(x+22, groundY-28); ctx.closePath(); ctx.fill();
-  // snow/highlight on top branch tips
-  ctx.fillStyle = '#1e4816';
-  ctx.beginPath(); ctx.moveTo(x, groundY-130); ctx.lineTo(x-4, groundY-122); ctx.lineTo(x+4, groundY-122); ctx.closePath(); ctx.fill();
 }
 
 function drawExploreDeadTree(ctx, x, groundY) {
-  // Bare dead tree — dark twisted silhouette
+  if (drawEnvSprite(ctx, 'dead_tree', x, groundY, 54, 115)) return;
   fillRect(ctx, x - 3, groundY - 55, 6, 55, '#1e1208');
-  fillRect(ctx, x - 2, groundY - 55, 2, 55, '#2a1a0a', 0.4);
   ctx.save();
-  ctx.strokeStyle = '#221408';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#221408'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(x - 1, groundY - 40); ctx.lineTo(x - 24, groundY - 68); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x + 1, groundY - 36); ctx.lineTo(x + 20, groundY - 60); ctx.stroke();
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(x - 24, groundY - 68); ctx.lineTo(x - 34, groundY - 58); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x - 24, groundY - 68); ctx.lineTo(x - 20, groundY - 80); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + 20, groundY - 60); ctx.lineTo(x + 28, groundY - 50); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + 20, groundY - 60); ctx.lineTo(x + 16, groundY - 72); ctx.stroke();
   ctx.restore();
 }
 
 function drawExploreWideBush(ctx, x, groundY) {
-  // Wider, more spreading dark bush
+  if (drawEnvSprite(ctx, 'bush_berry', x, groundY, 60, 32)) return;
   ctx.save();
   ctx.fillStyle = '#0e2008';
   ctx.beginPath();
   ctx.arc(x,      groundY - 12, 18, Math.PI, 0);
   ctx.arc(x - 16, groundY - 8,  12, Math.PI, 0);
   ctx.arc(x + 16, groundY - 8,  12, Math.PI, 0);
-  ctx.fill();
-  ctx.fillStyle = '#162e0e';
-  ctx.beginPath();
-  ctx.arc(x - 6, groundY - 18, 9, Math.PI, 0);
-  ctx.arc(x + 6, groundY - 18, 9, Math.PI, 0);
-  ctx.fill();
-  ctx.fillStyle = '#1e3a14';
-  ctx.beginPath();
-  ctx.arc(x, groundY - 20, 6, Math.PI, 0);
   ctx.fill();
   ctx.restore();
 }
@@ -1481,7 +1463,7 @@ function drawExploreCarWreck(ctx, x, groundY) {
 }
 
 function drawExploreDebrisPile(ctx, x, groundY) {
-  // Rubble, broken concrete, trash scatter
+  if (drawEnvSprite(ctx, 'trash', x, groundY, 44, 20)) return;
   ctx.save();
   ctx.globalAlpha = 0.75;
   const pieces = [
@@ -1550,14 +1532,31 @@ function drawExploreCabin(ctx, bx, by, bw, bh, label) {
 }
 
 function drawExploreContainer(ctx, wx, groundY, type, highlighted) {
+  // Sprite mapping per container type
+  const spriteKey = (type === 'locker' || type === 'cabinet') ? 'locker'
+                  : (type === 'chest') ? 'chest'
+                  : (type === 'crate') ? 'crate'
+                  : 'box';
+  const sprW = (type === 'locker' || type === 'cabinet') ? 20 : (type === 'chest') ? 30 : 26;
+  const sprH = (type === 'locker' || type === 'cabinet') ? 40 : (type === 'chest') ? 22 : 24;
+  if (highlighted) {
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    fillRect(ctx, wx - sprW / 2 - 2, groundY - sprH - 2, sprW + 4, sprH + 2, '#a08840');
+    ctx.restore();
+  }
+  if (drawEnvSprite(ctx, spriteKey, wx, groundY, sprW, sprH)) {
+    drawText(ctx, type, wx, groundY - sprH - 4, C.textDim, 6, 'center');
+    return;
+  }
+  // Fallback procedural
   const h  = type === 'locker' || type === 'cabinet' ? 32 : type === 'chest' ? 16 : 20;
   const w  = type === 'locker' || type === 'cabinet' ? 14 : type === 'chest' ? 24 : 18;
   const bg = highlighted ? '#28241a' : '#181410';
   const br = highlighted ? '#8a7840' : '#403c28';
   fillRect(ctx, wx - w / 2, groundY - h, w, h, bg);
   strokeRect(ctx, wx - w / 2, groundY - h, w, h, br);
-  const icon = { locker:'▪', cabinet:'▪', chest:'▬', crate:'▦',
-                 shelf:'≡', barrel:'○', bag:'◇' }[type] || '▪';
+  const icon = { locker:'▪', cabinet:'▪', chest:'▬', crate:'▦', shelf:'≡', barrel:'○', bag:'◇' }[type] || '▪';
   drawText(ctx, icon, wx, groundY - h / 2 - 1, '#6a6040', 6, 'center');
   drawText(ctx, type, wx, groundY - h - 4, C.textDim, 5, 'center');
 }

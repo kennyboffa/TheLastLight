@@ -1586,9 +1586,20 @@ function handleControlBtn(id, gs, mx, my) {
     case 'mute':
       Audio.toggle();
       break;
-    case 'endday':
+    case 'endday': {
+      // Simulate hunger/thirst for the hours left in the day (resting rate 0.45×).
+      const hoursLeft = Math.max(0, (CFG.DAY_END - gs.time) / 60);
+      if (hoursLeft > 0) {
+        const dm = typeof diffMult === 'function' ? diffMult(gs) : 1;
+        const chars = [gs.parent, gs.child, ...(gs.survivors || []).filter(s => !s.onMission)];
+        for (const who of chars) {
+          who.hunger = clamp(who.hunger + CFG.HUNGER_PER_HOUR * 0.45 * dm * hoursLeft, 0, 100);
+          who.thirst = clamp(who.thirst + CFG.THIRST_PER_HOUR * 0.45 * dm * hoursLeft, 0, 100);
+        }
+      }
       startDayTransition(gs);
       break;
+    }
     case 'save':
       saveGame(gs);
       break;

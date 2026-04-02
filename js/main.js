@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.24';
+const GAME_VERSION = 'v0.25';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -730,6 +730,14 @@ function resolveMission(gs, m) {
     addLog(`${m.survivorName} returned injured from ${m.locName}.`, 'warn');
   } else {
     addLog(`${m.survivorName} returned from ${m.locName}.`, 'good');
+  }
+
+  // Randomise stats to reflect time spent in the field
+  if (survivor) {
+    survivor.hunger    = clamp(randInt(45, 85), 0, 100);
+    survivor.thirst    = clamp(randInt(50, 90), 0, 100);
+    survivor.tiredness = clamp(randInt(55, 95), 0, 100);
+    survivor.depression = clamp(survivor.depression + randInt(-5, 15), 0, 100);
   }
 
   // Add loot to shelter storage

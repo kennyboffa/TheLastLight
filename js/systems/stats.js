@@ -521,6 +521,16 @@ function advanceDay(gs) {
     giveXP(s, 5, gs);
   }
 
+  // Overnight hunger/thirst (DAY_END 23:00 → DAY_START 6:00 = 7 h of sleep)
+  // Everyone is resting so rate is 0.3× the normal per-hour value.
+  const overnightHrs = (CFG.DAY_START + 1440 - CFG.DAY_END) / 60; // ~7 h
+  const dm = diffMult(gs);
+  const oChars = [gs.parent, gs.child, ...(gs.survivors || []).filter(s => !s.onMission)];
+  for (const who of oChars) {
+    who.hunger = clamp(who.hunger + CFG.HUNGER_PER_HOUR * 0.3 * dm * overnightHrs, 0, 100);
+    who.thirst = clamp(who.thirst + CFG.THIRST_PER_HOUR * 0.3 * dm * overnightHrs, 0, 100);
+  }
+
   // Check if rain should start today
   maybeStartRain(gs);
 

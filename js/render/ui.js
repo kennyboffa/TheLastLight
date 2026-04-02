@@ -58,15 +58,13 @@ function drawStatsPanel(ctx, gs) {
     for (const s of gs.survivors) {
       const rowStartY = y;
       if (s.onMission) {
-        ctx.save();
-        ctx.globalAlpha = 0.38;
-        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, C.textDim, 8);
+        // Stats hidden while away — just show name and status
+        drawText(ctx, s.name, x + 8, y + 8, '#505060', 8);
         y += 10;
-        y = drawPersonStats(ctx, s, x + 8, y, w - 16, true);
-        ctx.globalAlpha = 1;
-        ctx.restore();
-        drawText(ctx, 'ON MISSION', x + w / 2, y + 3, '#4a6a8a', 7, 'center');
-        y += 8;
+        drawText(ctx, 'ON MISSION', x + w / 2, y + 4, '#3a5a78', 7, 'center');
+        y += 12;
+        gs._survivorStatBounds.push({ id: s.id, x, y: rowStartY, w, h: y - rowStartY });
+        continue;
       } else {
         const isSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === s.id;
         if (isSel) fillRect(ctx, x + 4, y, w - 8, 8, '#1a2a1a');

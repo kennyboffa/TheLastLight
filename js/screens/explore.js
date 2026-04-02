@@ -5,14 +5,18 @@ const GROUND_Y    = 276;
 const PLAYER_FOOT = GROUND_Y;
 const BUILDING_W  = 900;   // interior width of each building floor
 
+// World zoom — game world is rendered at this scale; HUD/buttons are drawn
+// AFTER ctx.restore() so they stay at 1× and never get clipped or scrolled.
+const EXPLORE_VIEW_ZOOM = 1.15;
+
 let exploreState = null;
 let fogCanvas    = null;   // offscreen canvas for fog of war
 
 // ── Mobile D-pad button rects ─────────────────────────────────────────────────
 const _MOBILE_BTNS = {
-  left:   { x: 10,  y: 290, w: 40, h: 30 },
-  right:  { x: 56,  y: 290, w: 40, h: 30 },
-  action: { x: 546, y: 290, w: 44, h: 30 },
+  left:   { x: 8,   y: 272, w: 60, h: 44 },
+  right:  { x: 74,  y: 272, w: 60, h: 44 },
+  action: { x: 526, y: 272, w: 66, h: 44 },
 };
 
 // ── Fog of war ────────────────────────────────────────────────────────────────
@@ -944,6 +948,11 @@ function renderExplore(ctx, gs) {
 
 function renderOutdoor(ctx, gs, es) {
   const loc = es.location;
+  const vz  = EXPLORE_VIEW_ZOOM;
+
+  // Outer zoom — scales game world 1.15×; HUD drawn after this restore stays 1×.
+  ctx.save();
+  ctx.scale(vz, vz);
 
   drawExploreBackground(ctx, es.scrollX, null, CFG.H, gs.time, loc.bgTheme);
   fillRect(ctx, 0, GROUND_Y, CFG.W, CFG.H - GROUND_Y, C.ground);
@@ -1068,13 +1077,13 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
-  ctx.restore();
+  ctx.restore(); // end world translate
+  ctx.restore(); // end view zoom
 
-  // Fog of war (drawn over world, not over HUD)
-  const playerScreenX = es.px - es.scrollX;
-  renderFog(ctx, playerScreenX, PLAYER_FOOT - 12, gs, false);
+  // Fog — centred on player's scaled screen position (drawn at 1× after zoom restore)
+  renderFog(ctx, (es.px - es.scrollX) * vz, PLAYER_FOOT * vz - 12, gs, false);
 
-  // Weather overlay
+  // Weather overlay (1×, over everything)
   drawExploreWeather(ctx, gs);
 }
 
@@ -1082,6 +1091,10 @@ function renderBuildingInterior(ctx, gs, es) {
   const bi  = es.building;
   const bld = es.buildings[bi.bldgIdx];
   const fl  = bld.floors[bi.floorIdx];
+  const vz  = EXPLORE_VIEW_ZOOM;
+
+  ctx.save();
+  ctx.scale(vz, vz);
 
   // Indoor background
   fillRect(ctx, 0, 0, CFG.W, CFG.H, '#0c0c14');
@@ -1168,11 +1181,11 @@ function renderBuildingInterior(ctx, gs, es) {
     }
   }
 
-  ctx.restore();
+  ctx.restore(); // end world translate
+  ctx.restore(); // end view zoom
 
   // Indoor fog (tighter radius)
-  const playerScreenX = bi.px - bi.scrollX;
-  renderFog(ctx, playerScreenX, PLAYER_FOOT - 12, gs, true);
+  renderFog(ctx, (bi.px - bi.scrollX) * vz, PLAYER_FOOT * vz - 12, gs, true);
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
@@ -1182,15 +1195,15 @@ function drawExploreHUD(ctx, gs, es) {
   const mx = gs.mouse.x, my = gs.mouse.y;
 
   // Location / zone info panel + clock
-  drawPanel(ctx, 6, 6, 240, 30, C.panelBg);
-  drawText(ctx, loc.name, 12, 18, C.text, 8);
+  drawPanel(ctx, 6, 6, 258, 34, C.panelBg);
+  drawText(ctx, loc.name, 12, 20, C.text, 10);
   if (es.building) {
     const bi  = es.building;
     const bld = es.buildings[bi.bldgIdx];
-    drawText(ctx, `${bld.label} — Floor ${bi.floorIdx + 1}`, 12, 30, C.textDim, 7);
+    drawText(ctx, `${bld.label} — Floor ${bi.floorIdx + 1}`, 12, 32, C.textDim, 9);
   } else {
     const curZone = loc.zones.find(z => es.px >= z.x && es.px < z.x + z.w);
-    if (curZone) drawText(ctx, curZone.name, 12, 30, C.textDim, 7);
+    if (curZone) drawText(ctx, curZone.name, 12, 32, C.textDim, 9);
   }
 
   // Player full status bars below location panel
@@ -1198,8 +1211,8 @@ function drawExploreHUD(ctx, gs, es) {
   const hpPct = p.health / p.maxHealth;
   const hpColor = hpPct > 0.6 ? '#3a8a3a' : hpPct > 0.3 ? '#aa6020' : '#cc2020';
   const dColor  = p.depression > 70 ? '#9944dd' : C.depression;
-  drawPanel(ctx, 6, 39, 180, 68, C.panelBg);
-  // Five compact stat bars
+  drawPanel(ctx, 6, 43, 196, 82, C.panelBg);
+  // Five stat bars with bigger text and taller bars
   const STATS = [
     { label:'HP',    val: p.health,    max: p.maxHealth, color: hpColor },
     { label:'Food',  val: 100 - p.hunger,  max: 100, color: C.hunger },
@@ -1207,43 +1220,43 @@ function drawExploreHUD(ctx, gs, es) {
     { label:'Rest',  val: 100 - p.tiredness, max: 100, color: C.tiredness },
     { label:'Mood',  val: 100 - p.depression, max: 100, color: dColor },
   ];
-  let sy = 43;
+  let sy = 47;
   for (const st of STATS) {
-    drawText(ctx, st.label, 10, sy + 6, C.textDim, 6, 'left');
-    drawStatBar(ctx, 36, sy, 100, 5, st.val, st.max, st.color, null, false);
-    sy += 12;
+    drawText(ctx, st.label, 10, sy + 7, C.textDim, 8, 'left');
+    drawStatBar(ctx, 40, sy, 110, 7, st.val, st.max, st.color, null, false);
+    sy += 15;
   }
-  if (p.wounded) drawText(ctx, 'WOUNDED', 148, 96, '#cc3030', 6, 'right');
+  if (p.wounded) drawText(ctx, 'WOUNDED', 162, 118, '#cc3030', 8, 'right');
 
   // Mini log strip — last 2 messages below the status bars
   if (gs.log && gs.log.length > 0) {
     const logEntries = gs.log.slice(0, 2);
     const LOG_COLS = { danger:'#cc4444', good:'#44aa55', warn:'#cc8830', info:'#7090c0' };
-    drawPanel(ctx, 6, 110, 180, 4 + logEntries.length * 10, C.panelBg);
-    let ly = 119;
+    drawPanel(ctx, 6, 128, 196, 5 + logEntries.length * 12, C.panelBg);
+    let ly = 138;
     for (const entry of logEntries) {
-      drawText(ctx, entry.text, 11, ly, LOG_COLS[entry.type] || C.textDim, 6);
-      ly += 10;
+      drawText(ctx, entry.text, 11, ly, LOG_COLS[entry.type] || C.textDim, 8);
+      ly += 12;
     }
   }
 
   // Clock display (top-right of HUD)
   const timeStr = formatTime(gs.time);
   const timeWarnColor = gs.time >= 20 * 60 ? (gs.time >= 22 * 60 ? '#cc2828' : '#cc7020') : C.textBright;
-  drawPanel(ctx, CFG.W - 72, 6, 66, 20, C.panelBg);
-  drawText(ctx, timeStr, CFG.W - 39, 19, timeWarnColor, 10, 'center', true);
+  drawPanel(ctx, CFG.W - 84, 6, 78, 26, C.panelBg);
+  drawText(ctx, timeStr, CFG.W - 45, 23, timeWarnColor, 13, 'center', true);
 
   // Pick-up hint
   if (!es.building) {
     const nearLoot = es.loot.find(item => !item.taken && Math.abs(es.px - item.wx) < 25);
     if (nearLoot) {
       const def = getItemDef(nearLoot.id);
-      drawPanel(ctx, CFG.W / 2 - 70, CFG.H - 50, 140, 14, C.panelBg, C.border);
-      drawText(ctx, `[E] ${def?.name || nearLoot.id}`, CFG.W / 2, CFG.H - 40, C.textDim, 7, 'center');
+      drawPanel(ctx, CFG.W / 2 - 84, CFG.H - 52, 168, 18, C.panelBg, C.border);
+      drawText(ctx, `[E] ${def?.name || nearLoot.id}`, CFG.W / 2, CFG.H - 39, C.textDim, 9, 'center');
     }
     if (es.showReturnPrompt) {
-      drawPanel(ctx, CFG.W / 2 - 80, CFG.H - 50, 160, 14, C.panelBg, C.border);
-      drawText(ctx, '[E] Return to shelter', CFG.W / 2, CFG.H - 40, C.textDim, 7, 'center');
+      drawPanel(ctx, CFG.W / 2 - 94, CFG.H - 52, 188, 18, C.panelBg, C.border);
+      drawText(ctx, '[E] Return to shelter', CFG.W / 2, CFG.H - 39, C.textDim, 9, 'center');
     }
   }
 
@@ -1251,7 +1264,7 @@ function drawExploreHUD(ctx, gs, es) {
   const wt    = calcWeight(gs.parent.inventory).toFixed(1);
   const maxWt = parentMaxCarry().toFixed(1);
   const wtCol = parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : C.textDim;
-  drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 38, wtCol, 8);
+  drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 36, wtCol, 9);
 
   // Night run warning
   const nf = nightFactor(gs.time);
@@ -1268,8 +1281,8 @@ function drawExploreHUD(ctx, gs, es) {
 
   // Return Home button — only visible at the area edges, not inside a building
   if (es.showReturnPrompt && !es.building) {
-    const retBtnY = CFG.H - 30;
-    drawButton(ctx, 6, retBtnY, 96, 20, 'Return Home', hitTest(mx, my, 6, retBtnY, 96, 20));
+    const retBtnY = CFG.H - 34;
+    drawButton(ctx, 6, retBtnY, 112, 26, 'Return Home', hitTest(mx, my, 6, retBtnY, 112, 26));
   }
 
   // ── Mobile D-pad (always visible; only meaningful on touch devices) ──────────
@@ -1284,10 +1297,10 @@ function drawExploreHUD(ctx, gs, es) {
   drawButton(ctx, MB.action.x, MB.action.y, MB.action.w, MB.action.h, '[E]', actHov);
 
   // INV button (top-right, below clock panel)
-  const invBtnX = CFG.W - 50, invBtnY = 28;
-  const invHov = hitTest(mx, my, invBtnX, invBtnY, 40, 18);
-  drawButton(ctx, invBtnX, invBtnY, 40, 18, 'INV', invHov, es.invOpen);
-  gs._exploreInvBtn = { x: invBtnX, y: invBtnY, w: 40, h: 18 };
+  const invBtnX = CFG.W - 60, invBtnY = 34;
+  const invHov = hitTest(mx, my, invBtnX, invBtnY, 50, 22);
+  drawButton(ctx, invBtnX, invBtnY, 50, 22, 'INV', invHov, es.invOpen);
+  gs._exploreInvBtn = { x: invBtnX, y: invBtnY, w: 50, h: 22 };
 }
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────

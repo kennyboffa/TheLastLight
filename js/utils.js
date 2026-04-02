@@ -141,7 +141,7 @@ function drawButton(ctx, x, y, w, h, label, hovered, active, disabled) {
   const txtColor = disabled ? C.textDim : hovered ? C.textBright : C.btnText;
   fillRect(ctx, x, y, w, h, bg);
   strokeRect(ctx, x, y, w, h, border);
-  ctx.font = '9px monospace';
+  ctx.font = '11px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = txtColor;

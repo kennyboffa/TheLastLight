@@ -17,41 +17,33 @@ function resizeCanvas() {
 
   const fitScale = Math.min(ww / CFG.W, wh / CFG.H);
   const userMult = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
-  SCALE = fitScale * userMult;
 
-  const cssW = Math.round(CFG.W * SCALE);
-  const cssH = Math.round(CFG.H * SCALE);
+  // SCALE used for canvas↔screen coord mapping. getBoundingClientRect() returns
+  // post-transform bounds, so this stays correct when CSS transform is applied.
+  SCALE = fitScale * userMult;
 
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
-  canvas.style.width  = cssW + 'px';
-  canvas.style.height = cssH + 'px';
-  canvas.style.filter = 'saturate(0.7)';
-  canvas.style.transform       = '';
-  canvas.style.transformOrigin = '';
 
+  // Size canvas to fill the screen normally, then zoom via CSS transform.
+  // This keeps the canvas centered and all menus always on-screen —
+  // edges clip when zoomed past the viewport (expected/acceptable).
+  canvas.style.width  = Math.round(CFG.W * fitScale) + 'px';
+  canvas.style.height = Math.round(CFG.H * fitScale) + 'px';
+  canvas.style.transform       = `scale(${userMult})`;
+  canvas.style.transformOrigin = 'center center';
+  canvas.style.filter          = 'saturate(0.7)';
+
+  // Body/html always stay as normal fixed layout — no overflow scrolling
   const gameWrap = document.getElementById('game-wrap');
-  if (cssW > ww || cssH > wh) {
-    // Canvas larger than viewport — let html/body grow so browser scroll works
-    document.documentElement.style.height = 'auto';
-    document.documentElement.style.overflow = 'auto';
-    document.body.style.height    = 'auto';
-    document.body.style.overflow  = 'auto';
-    if (gameWrap) {
-      gameWrap.style.height         = 'auto';
-      gameWrap.style.alignItems     = 'flex-start';
-      gameWrap.style.justifyContent = 'flex-start';
-    }
-  } else {
-    document.documentElement.style.height   = '100%';
-    document.documentElement.style.overflow = '';
-    document.body.style.height   = '100%';
-    document.body.style.overflow = 'hidden';
-    if (gameWrap) {
-      gameWrap.style.height         = '100%';
-      gameWrap.style.alignItems     = 'center';
-      gameWrap.style.justifyContent = 'center';
-    }
+  document.documentElement.style.height   = '100%';
+  document.documentElement.style.overflow = '';
+  document.body.style.height   = '100%';
+  document.body.style.overflow = 'hidden';
+  if (gameWrap) {
+    gameWrap.style.height         = '100%';
+    gameWrap.style.alignItems     = 'center';
+    gameWrap.style.justifyContent = 'center';
   }
 }
 

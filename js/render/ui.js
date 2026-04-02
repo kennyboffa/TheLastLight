@@ -15,11 +15,11 @@ function drawStatsPanel(ctx, gs) {
   let y = 8;
 
   // Day / Time
-  drawText(ctx, `DAY ${gs.day}`, x + w/2, y + 11, C.textBright, 12, 'center', true);
-  y += 16;
+  drawText(ctx, `DAY ${gs.day}`, x + w/2, y + 13, C.textBright, 14, 'center', true);
+  y += 18;
   const timeStr = formatTime(gs.time);
-  drawText(ctx, timeStr, x + w/2, y + 10, C.textDim, 10, 'center');
-  y += 14;
+  drawText(ctx, timeStr, x + w/2, y + 11, C.textDim, 12, 'center');
+  y += 15;
   drawDivider(ctx, x + 6, y, w - 12, C.border2);
   y += 6;
 
@@ -28,8 +28,8 @@ function drawStatsPanel(ctx, gs) {
   const pRowStart = y;
   const isPSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === 'parent';
   if (isPSel) fillRect(ctx, x + 4, y, w - 8, 8, '#1a1a2a');
-  drawText(ctx, gs.parent.name.toUpperCase() + ' (' + parentTitle() + ')', x + 8, y + 8, isPSel ? '#aaaaff' : C.text, 8, 'left', true);
-  drawText(ctx, `Lv.${pLvl}`, x + w - 8, y + 8, '#d4aa40', 7, 'right', true);
+  drawText(ctx, gs.parent.name.toUpperCase() + ' (' + parentTitle() + ')', x + 8, y + 9, isPSel ? '#aaaaff' : C.text, 10, 'left', true);
+  drawText(ctx, `Lv.${pLvl}`, x + w - 8, y + 9, '#d4aa40', 9, 'right', true);
   y += 12;
 
   y = drawPersonStats(ctx, gs.parent, x + 8, y, w - 16);
@@ -43,8 +43,8 @@ function drawStatsPanel(ctx, gs) {
   const chRowStart = y;
   const isCSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === 'child';
   if (isCSel) fillRect(ctx, x + 4, y, w - 8, 8, '#2a1a2a');
-  drawText(ctx, gs.child.name.toUpperCase() + ' (Child)', x + 8, y + 8, isCSel ? '#ffaaff' : '#a0809a', 8, 'left', true);
-  drawText(ctx, `Lv.${chLvl}`, x + w - 8, y + 8, '#d4aa40', 7, 'right', true);
+  drawText(ctx, gs.child.name.toUpperCase() + ' (Child)', x + 8, y + 9, isCSel ? '#ffaaff' : '#a0809a', 10, 'left', true);
+  drawText(ctx, `Lv.${chLvl}`, x + w - 8, y + 9, '#d4aa40', 9, 'right', true);
   y += 12;
   y = drawPersonStats(ctx, gs.child, x + 8, y, w - 16);
   y += 4;
@@ -59,16 +59,16 @@ function drawStatsPanel(ctx, gs) {
       const rowStartY = y;
       if (s.onMission) {
         // Stats hidden while away — just show name and status
-        drawText(ctx, s.name, x + 8, y + 8, '#505060', 8);
-        y += 10;
-        drawText(ctx, 'ON MISSION', x + w / 2, y + 4, '#3a5a78', 7, 'center');
+        drawText(ctx, s.name, x + 8, y + 9, '#505060', 10);
         y += 12;
+        drawText(ctx, 'ON MISSION', x + w / 2, y + 5, '#3a5a78', 9, 'center');
+        y += 14;
         gs._survivorStatBounds.push({ id: s.id, x, y: rowStartY, w, h: y - rowStartY });
         continue;
       } else {
         const isSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === s.id;
         if (isSel) fillRect(ctx, x + 4, y, w - 8, 8, '#1a2a1a');
-        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, isSel ? '#aaffaa' : C.textDim, 8);
+        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 9, isSel ? '#aaffaa' : C.textDim, 10);
         y += 10;
         y = drawPersonStats(ctx, s, x + 8, y, w - 16, true);
         y += 3;
@@ -92,7 +92,7 @@ function drawStatsPanel(ctx, gs) {
   // ── SUPPLIES mini-panel ───────────────────────────────────────────────────
   const suppliesY = h - 112;
   drawDivider(ctx, x + 6, suppliesY - 4, w - 12, C.border2);
-  drawText(ctx, 'SUPPLIES', x + 8, suppliesY + 8, C.textDim, 7, 'left', true);
+  drawText(ctx, 'SUPPLIES', x + 8, suppliesY + 9, C.textDim, 9, 'left', true);
 
   // Count food items
   const foodIds = ['canned_beans','canned_soup','canned_meat','canned_fruit','energy_bar',
@@ -105,23 +105,23 @@ function drawStatsPanel(ctx, gs) {
   const foodColor  = totalFood  > 10 ? '#3aaa50' : totalFood  >= 5 ? '#cc8830' : '#cc2828';
   const waterColor = totalWater > 10 ? '#2878cc' : totalWater >= 5 ? '#cc8830' : '#cc2828';
 
-  drawText(ctx, `Food: ${totalFood}`, x + 8,       suppliesY + 20, foodColor,  8, 'left');
-  drawText(ctx, `Water: ${totalWater}`, x + w / 2, suppliesY + 20, waterColor, 8, 'left');
+  drawText(ctx, `Food: ${totalFood}`, x + 8,       suppliesY + 22, foodColor,  9, 'left');
+  drawText(ctx, `Water: ${totalWater}`, x + w / 2, suppliesY + 22, waterColor, 9, 'left');
 
   // ── Suspicion meter ────────────────────────────────────────────────────────
   const suspY = h - 80;
   drawDivider(ctx, x + 6, suspY - 6, w - 12, C.border2);
-  drawText(ctx, 'AI SUSPICION', x + 8, suspY + 8, gs.suspicion > 70 ? C.textDanger : C.textDim, 8, 'left', true);
+  drawText(ctx, 'AI SUSPICION', x + 8, suspY + 10, gs.suspicion > 70 ? C.textDanger : C.textDim, 10, 'left', true);
   const suspColor = gs.suspicion < 40 ? '#2a6a2a' : gs.suspicion < 70 ? '#8a6a10' : '#aa2020';
-  drawStatBar(ctx, x+8, suspY + 10, w - 16, 9, gs.suspicion, 100, suspColor, null);
+  drawStatBar(ctx, x+8, suspY + 12, w - 16, 10, gs.suspicion, 100, suspColor, null);
   const suspLabel = gs.suspicion < 30 ? 'LOW' : gs.suspicion < 60 ? 'MODERATE' : gs.suspicion < 85 ? 'HIGH' : 'CRITICAL';
-  drawText(ctx, suspLabel, x + w/2, suspY + 10 + 7, C.textDim, 7, 'center');
+  drawText(ctx, suspLabel, x + w/2, suspY + 12 + 8, C.textDim, 8, 'center');
 }
 
 function drawPersonStats(ctx, person, x, y, w, compact) {
-  const bh  = compact ? 5 : 6;
-  const gap = compact ? 8 : 9;
-  const lblW = 32; // width reserved for stat label to left of bar
+  const bh  = compact ? 7 : 8;
+  const gap = compact ? 11 : 12;
+  const lblW = 36;
 
   const hpPct   = person.health / person.maxHealth;
   const hpColor = hpPct > 0.6 ? C.hp : hpPct > 0.3 ? '#cc6020' : '#dd1010';
@@ -136,7 +136,7 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
   ];
 
   for (const s of stats) {
-    drawText(ctx, s.label, x + lblW - 2, y + bh, C.textDim, 6, 'right');
+    drawText(ctx, s.label, x + lblW - 2, y + bh, C.textDim, 8, 'right');
     drawStatBar(ctx, x + lblW, y, w - lblW, bh, s.value, s.max, s.color, null, true);
     y += gap;
   }
@@ -168,8 +168,8 @@ function drawNotifications(ctx, gs, startX, startY, centered) {
                     : n.type === 'warn'   ? C.textWarn
                     : n.type === 'good'   ? C.textGood
                     : C.text;
-    drawTextShadow(ctx, n.text, nx, ny, typeColor, '#000000aa', 9, align);
-    ny += 13;
+    drawTextShadow(ctx, n.text, nx, ny, typeColor, '#000000aa', 11, align);
+    ny += 15;
     n.ttl--;
   }
   gs.notifications = notifs;
@@ -259,9 +259,9 @@ function drawModal(ctx, x, y, w, h, title) {
   // Body
   drawPanel(ctx, x, y, w, h, C.panelBg, C.border2);
   // Title bar
-  fillRect(ctx, x, y, w, 16, '#0e0e20');
-  drawText(ctx, title || '', x + w/2, y + 11, C.textBright, 9, 'center', true);
-  drawDivider(ctx, x+2, y+16, w-4, C.border2);
+  fillRect(ctx, x, y, w, 20, '#0e0e20');
+  drawText(ctx, title || '', x + w/2, y + 14, C.textBright, 11, 'center', true);
+  drawDivider(ctx, x+2, y+20, w-4, C.border2);
 }
 
 // ── In-game log strip ─────────────────────────────────────────────────────────

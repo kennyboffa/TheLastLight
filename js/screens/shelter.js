@@ -166,7 +166,7 @@ function renderShelter(ctx, gs) {
   const wmx = shelterW(mx), wmy = shelterWY(my);
 
   // Handle drag-to-pan (update scroll each frame while mouse is down)
-  const inWorld = mx < MAIN_W && my < CFG.H - 30 && !shelterUI.activeMenu;
+  const inWorld = mx < MAIN_W && my < CFG.H - 36 && !shelterUI.activeMenu;
   if (gs.mouse.down && inWorld) {
     if (!shelterUI.isDragging) {
       shelterUI.isDragging = true;
@@ -484,45 +484,45 @@ function drawCharPanel(ctx, gs, mx, my) {
 
   fillRect(ctx, px, py, PW, PH, C.panelBg);
   strokeRect(ctx, px, py, PW, PH, selColor);
-  fillRect(ctx, px, py, PW, 18, '#0a0a18');
-  drawText(ctx, `${who.name.toUpperCase()}  (${role})`, px + PW/2, py + 12, selColor, 8, 'center', true);
+  fillRect(ctx, px, py, PW, 22, '#0a0a18');
+  drawText(ctx, `${who.name.toUpperCase()}  (${role})`, px + PW/2, py + 15, selColor, 10, 'center', true);
   if (personality) {
     const PERS_COLORS = { cautious:'#6090b0', reckless:'#cc6030', optimistic:'#3aaa50', bitter:'#aa4060', quiet:'#707090', resourceful:'#d4aa40' };
     const pc = PERS_COLORS[personality] || C.textDim;
-    drawText(ctx, personality.toUpperCase(), px + PW/2, py + 20, pc, 6, 'center');
+    drawText(ctx, personality.toUpperCase(), px + PW/2, py + 26, pc, 8, 'center');
   }
 
   // Trait label
   if (who.trait) {
     const traitNames = { slow_metabolism:'Slow Metabolism', fast_healer:'Fast Healer', fast_learner:'Fast Learner',
       slow_learner:'Slow Learner', lucky:'Lucky', night_owl:'Night Owl', meticulous:'Meticulous' };
-    drawText(ctx, `Trait: ${traitNames[who.trait] || who.trait}`, px + PW/2, py + 22, '#a0a070', 6, 'center');
+    drawText(ctx, `Trait: ${traitNames[who.trait] || who.trait}`, px + PW/2, py + 28, '#a0a070', 8, 'center');
   }
 
-  let y = py + (who.trait ? 30 : 24);
+  let y = py + (who.trait ? 36 : 28);
   const sw = PW - 16;
-  drawStatBar(ctx, px+8, y, sw, 5, who.health, who.maxHealth, C.hp,         null, 'HP');      y += 9;
-  drawStatBar(ctx, px+8, y, sw, 5, who.hunger,        100,    C.hunger,     null, 'Hunger');   y += 9;
-  drawStatBar(ctx, px+8, y, sw, 5, who.thirst,        100,    C.thirst,     null, 'Thirst');   y += 9;
-  drawStatBar(ctx, px+8, y, sw, 5, who.tiredness,     100,    C.tiredness,  null, 'Tired');    y += 9;
-  drawStatBar(ctx, px+8, y, sw, 5, who.depression,    100,    C.depression, null, 'Depr.');    y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, who.health, who.maxHealth, C.hp,         null, 'HP');      y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, who.hunger,        100,    C.hunger,     null, 'Hunger');   y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, who.thirst,        100,    C.thirst,     null, 'Thirst');   y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, who.tiredness,     100,    C.tiredness,  null, 'Tired');    y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, who.depression,    100,    C.depression, null, 'Depr.');    y += 12;
   // Illness indicator for Lily
   if (sel === 'child' && gs.flags && gs.flags.lilySick) {
     const illCol = gs.flags.lilyCured ? '#3aaa50' : '#cc6644';
     const illText = gs.flags.lilyCured ? 'Illness: Recovering' : 'Illness: Fever (needs medicine)';
-    drawText(ctx, illText, px + PW/2, y + 7, illCol, 7, 'center', true);
-    y += 14;
+    drawText(ctx, illText, px + PW/2, y + 8, illCol, 8, 'center', true);
+    y += 16;
   }
 
   // Level & XP
   const lvl    = who.level  || 1;
   const curXP  = who.xp     || 0;
   const needXP = xpForLevel(lvl);
-  drawText(ctx, `Lv.${lvl}`, px+8, y+8, '#d4aa40', 7, 'left', true);
-  drawText(ctx, `XP: ${curXP}/${needXP}`, px + PW - 8, y+8, C.textDim, 7, 'right');
+  drawText(ctx, `Lv.${lvl}`, px+8, y+9, '#d4aa40', 9, 'left', true);
+  drawText(ctx, `XP: ${curXP}/${needXP}`, px + PW - 8, y+9, C.textDim, 9, 'right');
+  y += 13;
+  drawStatBar(ctx, px+8, y, sw, 5, curXP, needXP, '#d4aa40');
   y += 11;
-  drawStatBar(ctx, px+8, y, sw, 4, curXP, needXP, '#d4aa40');
-  y += 10;
 
   // Equipped weapon / armor info
   if (who.equipped) {
@@ -532,24 +532,24 @@ function drawCharPanel(ctx, gs, mx, my) {
       const dmgStr = Array.isArray(wpnDef.damage)
         ? `${wpnDef.damage[0]}–${wpnDef.damage[1]} dmg`
         : (wpnDef.damage ? `${wpnDef.damage} dmg` : '');
-      drawText(ctx, `⚔ ${wpnDef.name}${dmgStr ? '  ' + dmgStr : ''}`, px+8, y+8, C.weapon || '#c03030', 7);
-      y += 10;
+      drawText(ctx, `⚔ ${wpnDef.name}${dmgStr ? '  ' + dmgStr : ''}`, px+8, y+9, C.weapon || '#c03030', 9);
+      y += 12;
     }
     if (armDef) {
       const avStr = armDef.armorValue ? `  ${armDef.armorValue} armor` : '';
-      drawText(ctx, `🛡 ${armDef.name}${avStr}`, px+8, y+8, '#6080a0', 7);
-      y += 10;
+      drawText(ctx, `🛡 ${armDef.name}${avStr}`, px+8, y+9, '#6080a0', 9);
+      y += 12;
     }
     if (!wpnDef && !armDef) {
-      drawText(ctx, 'No weapon/armor equipped', px+8, y+8, C.textDim, 6);
-      y += 10;
+      drawText(ctx, 'No weapon/armor equipped', px+8, y+9, C.textDim, 8);
+      y += 12;
     }
   }
 
   const taskLabel = who.isSleeping ? 'Sleeping...'
     : who.task ? (who.task.type[0].toUpperCase() + who.task.type.slice(1) + '...')
     : 'Idle';
-  drawText(ctx, `Task: ${taskLabel}`, px+8, y+8, who.task || who.isSleeping ? C.textGood : C.textDim, 7);
+  drawText(ctx, `Task: ${taskLabel}`, px+8, y+9, who.task || who.isSleeping ? C.textGood : C.textDim, 9);
   y += 12;
   if ((who.task || who.isSleeping) && who.taskDuration > 0) {
     drawStatBar(ctx, px+8, y, sw, 3, who.taskProgress, who.taskDuration, C.textGood);
@@ -777,12 +777,13 @@ const CTRL_BUTTONS = [
 ];
 
 function drawShelterControls(ctx, gs, mx, my) {
-  const barH = 30, barY = CFG.H - barH;
+  const barH = 36, barY = CFG.H - barH;
   fillRect(ctx, 0, barY, MAIN_W, barH, C.panelBg);
   drawDivider(ctx, 0, barY, MAIN_W, C.border2);
 
   let bx = 6;
   for (const btn of CTRL_BUTTONS) {
+    const bw = btn.w + 8; // extra width for readability at larger font
     const disabled = (btn.needsCampfire && !gs.shelter.campfire)
                   || (btn.id === 'explore' && (gs.parent.isExploring || !!gs.parent.task || gs.parent.isSleeping || gs.parent.hasExploredToday))
                   || (btn.id === 'sleep'   && gs.parent.isSleeping)
@@ -793,12 +794,10 @@ function drawShelterControls(ctx, gs, mx, my) {
                 || (btn.id === 'cook'    && shelterUI.activeMenu === 'cooking')
                 || (btn.id === 'journal' && shelterUI.activeMenu === 'journal')
                 || (btn.id === 'mute'    && !Audio.isEnabled());
-    drawButton(ctx, bx, barY + 5, btn.w, 20, btn.label,
-      hitTest(mx, my, bx, barY + 5, btn.w, 20), active, disabled);
-    bx += btn.w + 4;
+    drawButton(ctx, bx, barY + 5, bw, 26, btn.label,
+      hitTest(mx, my, bx, barY + 5, bw, 26), active, disabled);
+    bx += bw + 4;
   }
-
-  // Time speed buttons drawn in surface area (top-right) — see drawShelterSurfaceSpeedBtns
 }
 
 // ── Context menus ─────────────────────────────────────────────────────────────
@@ -1209,7 +1208,7 @@ function drawJournalPanel(ctx, gs, mx, my) {
   drawModal(ctx, px, py, W2, H2, 'JOURNAL');
 
   // ── Tabs (Log | Bunker Diary | Other | Help) ──────────────────────────────
-  const tabY  = py + 16;
+  const tabY  = py + 22;
   const tabW  = 68, tabGap = 3;
   const tab0  = px + 6;
   const tabs  = [
@@ -1222,16 +1221,16 @@ function drawJournalPanel(ctx, gs, mx, my) {
   tabs.forEach((tab, i) => {
     const tx = tab0 + i * (tabW + tabGap);
     const active = shelterUI.journalTab === tab.id;
-    drawButton(ctx, tx, tabY, tabW, 15, tab.label, hitTest(mx, my, tx, tabY, tabW, 15), active);
-    gs._journalTabs[tab.id] = { x: tx, y: tabY, w: tabW, h: 15 };
+    drawButton(ctx, tx, tabY, tabW, 18, tab.label, hitTest(mx, my, tx, tabY, tabW, 18), active);
+    gs._journalTabs[tab.id] = { x: tx, y: tabY, w: tabW, h: 18 };
   });
 
-  const bodyY = tabY + 18;
-  const bodyH = H2 - (bodyY - py) - 26;
+  const bodyY = tabY + 22;
+  const bodyH = H2 - (bodyY - py) - 30;
 
   const drawScrollBody = (lines, scrollKey, lineH, headerColor) => {
     // lines: [{text, color?, bold?}] or [{heading, lines[]}]
-    let totalH = lines.reduce((s, l) => s + (l.heading ? 14 + l.lines.length * lineH + 6 : lineH), 0);
+    let totalH = lines.reduce((s, l) => s + (l.heading ? 16 + l.lines.length * lineH + 8 : lineH), 0);
     const maxScroll = Math.max(0, totalH - bodyH);
     shelterUI[scrollKey] = clamp(shelterUI[scrollKey] || 0, 0, maxScroll);
     ctx.save();
@@ -1239,11 +1238,11 @@ function drawJournalPanel(ctx, gs, mx, my) {
     let y = bodyY + 2 - shelterUI[scrollKey];
     for (const l of lines) {
       if (l.heading) {
-        drawText(ctx, l.heading, px + 8, y + 9, headerColor || '#c8a050', 8, 'left', true); y += 14;
-        for (const line of l.lines) { drawText(ctx, line, px + 12, y + 9, C.textDim, 7); y += lineH; }
-        y += 6;
+        drawText(ctx, l.heading, px + 8, y + 11, headerColor || '#c8a050', 10, 'left', true); y += 16;
+        for (const line of l.lines) { drawText(ctx, line, px + 12, y + 10, C.textDim, 9); y += lineH; }
+        y += 8;
       } else {
-        drawText(ctx, l.text, px + 8, y + lineH - 2, l.color || C.textDim, l.size || 7);
+        drawText(ctx, l.text, px + 8, y + lineH - 2, l.color || C.textDim, l.size || 9);
         y += lineH;
       }
     }
@@ -1266,7 +1265,7 @@ function drawJournalPanel(ctx, gs, mx, my) {
       warn:'#cc8830', danger:'#cc3030', combat:'#aa4040',
     };
     const entries = gs.log.slice(0, 40);
-    const lineH   = 14;
+    const lineH   = 16;
     const lines = entries.map(e => ({ text: `Day ${e.day}: ${e.text}`, color: LOG_COLORS[e.type] || LOG_COLORS.normal }));
     if (lines.length === 0) {
       drawText(ctx, 'No entries yet.', px + W2 / 2, bodyY + bodyH / 2, C.textDim, 8, 'center');
@@ -1295,7 +1294,7 @@ function drawJournalPanel(ctx, gs, mx, my) {
         if (line) wrapped.push(line);
         return { heading: s.title, lines: wrapped };
       }).filter(Boolean);
-      drawScrollBody(sections, 'diaryScroll', 12, '#d4a860');
+      drawScrollBody(sections, 'diaryScroll', 14, '#d4a860');
     }
 
   } else if (tab === 'other') {
@@ -1316,18 +1315,18 @@ function drawJournalPanel(ctx, gs, mx, my) {
         if (line) wrapped.push(line);
         return { heading: n.title, lines: wrapped };
       });
-      drawScrollBody(sections, 'otherScroll', 12, '#8ab0d0');
+      drawScrollBody(sections, 'otherScroll', 14, '#8ab0d0');
     }
 
   } else {
     // ── Help tab ──────────────────────────────────────────────────────────────
-    const lineH = 12;
+    const lineH = 14;
     drawScrollBody(HELP_SECTIONS, 'helpScroll', lineH, '#c8a050');
   }
 
-  const closeX = px + W2 - 58, closeY = py + H2 - 22;
-  drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
-  gs._journalClose = { x: closeX, y: closeY, w: 50, h: 16 };
+  const closeX = px + W2 - 62, closeY = py + H2 - 24;
+  drawButton(ctx, closeX, closeY, 54, 20, 'Close', hitTest(mx, my, closeX, closeY, 54, 20));
+  gs._journalClose = { x: closeX, y: closeY, w: 54, h: 20 };
 }
 
 // ── Settings menu ─────────────────────────────────────────────────────────────
@@ -1384,24 +1383,24 @@ function drawSettingsMenu(ctx, gs, mx, my) {
   function volRow(label, val, rowY) {
     const pct = Math.round(val * 100);
     const mx1 = px + 14, px1 = px + W2 - 42;
-    drawText(ctx, label, px + W2 / 2, rowY + 8, C.text, 8, 'center', true);
-    rowY += 16;
-    drawButton(ctx, mx1, rowY, 24, 18, '−', hitTest(mx, my, mx1, rowY, 24, 18), false, val <= 0);
-    drawText(ctx, `${pct}%`, px + W2 / 2, rowY + 12, C.textBright, 10, 'center', true);
-    drawButton(ctx, px1, rowY, 24, 18, '+', hitTest(mx, my, px1, rowY, 24, 18), false, val >= 1.0);
-    return { minusX: mx1, minusY: rowY, plusX: px1, plusY: rowY, bW: 24, bH: 18 };
+    drawText(ctx, label, px + W2 / 2, rowY + 10, C.text, 10, 'center', true);
+    rowY += 18;
+    drawButton(ctx, mx1, rowY, 26, 20, '−', hitTest(mx, my, mx1, rowY, 26, 20), false, val <= 0);
+    drawText(ctx, `${pct}%`, px + W2 / 2, rowY + 13, C.textBright, 11, 'center', true);
+    drawButton(ctx, px1, rowY, 26, 20, '+', hitTest(mx, my, px1, rowY, 26, 20), false, val >= 1.0);
+    return { minusX: mx1, minusY: rowY, plusX: px1, plusY: rowY, bW: 26, bH: 20 };
   }
 
   // Display Scale row
-  drawText(ctx, 'Display Scale', px + W2/2, y + 8, C.text, 9, 'center', true); y += 20;
+  drawText(ctx, 'Display Scale', px + W2/2, y + 10, C.text, 10, 'center', true); y += 22;
   const scale  = gs.userScale || 1.0;
   const sPct   = Math.round(scale * 100);
   const sMinX  = px + 14, sPlusX = px + W2 - 42;
-  drawButton(ctx, sMinX,  y, 24, 18, '−', hitTest(mx, my, sMinX,  y, 24, 18), false, scale <= 0.6);
-  drawText(ctx, `${sPct}%`, px + W2/2, y + 12, C.textBright, 10, 'center', true);
-  drawButton(ctx, sPlusX, y, 24, 18, '+', hitTest(mx, my, sPlusX, y, 24, 18), false, scale >= 2.0);
-  const scaleBtns = { minusX: sMinX, minusY: y, plusX: sPlusX, plusY: y, bW: 24, bH: 18 };
-  y += 28;
+  drawButton(ctx, sMinX,  y, 26, 20, '−', hitTest(mx, my, sMinX,  y, 26, 20), false, scale <= 0.6);
+  drawText(ctx, `${sPct}%`, px + W2/2, y + 13, C.textBright, 11, 'center', true);
+  drawButton(ctx, sPlusX, y, 26, 20, '+', hitTest(mx, my, sPlusX, y, 26, 20), false, scale >= 2.0);
+  const scaleBtns = { minusX: sMinX, minusY: y, plusX: sPlusX, plusY: y, bW: 26, bH: 20 };
+  y += 30;
 
   drawDivider(ctx, px + 10, y, W2 - 20, C.border);
   y += 10;
@@ -1427,26 +1426,26 @@ function drawSettingsMenu(ctx, gs, mx, my) {
   // Master mute toggle
   const sfxOn  = Audio.isEnabled();
   const sfxCol = sfxOn ? C.textGood : C.textDim;
-  drawText(ctx, `Audio: ${sfxOn ? 'ON' : 'OFF'}`, px + W2/2, y + 8, sfxCol, 8, 'center', true);
-  const muteX = px + W2/2 - 30, muteY = y + 14;
-  drawButton(ctx, muteX, muteY, 60, 16, sfxOn ? 'Mute All' : 'Unmute',
-    hitTest(mx, my, muteX, muteY, 60, 16));
-  y += 36;
+  drawText(ctx, `Audio: ${sfxOn ? 'ON' : 'OFF'}`, px + W2/2, y + 10, sfxCol, 10, 'center', true);
+  const muteX = px + W2/2 - 34, muteY = y + 16;
+  drawButton(ctx, muteX, muteY, 68, 20, sfxOn ? 'Mute All' : 'Unmute',
+    hitTest(mx, my, muteX, muteY, 68, 20));
+  y += 40;
 
-  const closeX = px + W2 - 62, closeY = py + H2 - 22;
-  drawButton(ctx, closeX, closeY, 54, 16, 'Close', hitTest(mx, my, closeX, closeY, 54, 16));
+  const closeX = px + W2 - 66, closeY = py + H2 - 26;
+  drawButton(ctx, closeX, closeY, 58, 20, 'Close', hitTest(mx, my, closeX, closeY, 58, 20));
 
   gs._settingsBtns = {
-    minus:      { x: scaleBtns.minusX, y: scaleBtns.minusY, w: 24, h: 18 },
-    plus:       { x: scaleBtns.plusX,  y: scaleBtns.plusY,  w: 24, h: 18 },
-    musicMinus: { x: mBtns.minusX, y: mBtns.minusY, w: 24, h: 18 },
-    musicPlus:  { x: mBtns.plusX,  y: mBtns.plusY,  w: 24, h: 18 },
-    sfxMinus:   { x: sBtns.minusX, y: sBtns.minusY, w: 24, h: 18 },
-    sfxPlus:    { x: sBtns.plusX,  y: sBtns.plusY,  w: 24, h: 18 },
-    clickMinus: { x: cBtns.minusX, y: cBtns.minusY, w: 24, h: 18 },
-    clickPlus:  { x: cBtns.plusX,  y: cBtns.plusY,  w: 24, h: 18 },
-    sfx:        { x: muteX,   y: muteY,  w: 60, h: 16 },
-    close:      { x: closeX,  y: closeY, w: 54, h: 16 },
+    minus:      { x: scaleBtns.minusX, y: scaleBtns.minusY, w: 26, h: 20 },
+    plus:       { x: scaleBtns.plusX,  y: scaleBtns.plusY,  w: 26, h: 20 },
+    musicMinus: { x: mBtns.minusX, y: mBtns.minusY, w: 26, h: 20 },
+    musicPlus:  { x: mBtns.plusX,  y: mBtns.plusY,  w: 26, h: 20 },
+    sfxMinus:   { x: sBtns.minusX, y: sBtns.minusY, w: 26, h: 20 },
+    sfxPlus:    { x: sBtns.plusX,  y: sBtns.plusY,  w: 26, h: 20 },
+    clickMinus: { x: cBtns.minusX, y: cBtns.minusY, w: 26, h: 20 },
+    clickPlus:  { x: cBtns.plusX,  y: cBtns.plusY,  w: 26, h: 20 },
+    sfx:        { x: muteX,   y: muteY,  w: 68, h: 20 },
+    close:      { x: closeX,  y: closeY, w: 58, h: 20 },
   };
 }
 
@@ -1454,7 +1453,7 @@ function drawSettingsMenu(ctx, gs, mx, my) {
 
 function shelterClick(mx, my, gs) {
   const M    = shelterUI;
-  const barY = CFG.H - 30;
+  const barY = CFG.H - 36;
   // World-space coords for hitting elements inside the zoom/scroll transform
   const wx = shelterW(mx), wy = shelterWY(my);
 
@@ -1480,9 +1479,10 @@ function shelterClick(mx, my, gs) {
     let bx = 6;
     for (const b of CTRL_BUTTONS) {
       if (b === btn) break;
-      bx += b.w + 4;
+      bx += (b.w + 8) + 4;
     }
-    if (hitTest(mx, my, bx, barY + 5, btn.w, 20)) {
+    const bw = btn.w + 8;
+    if (hitTest(mx, my, bx, barY + 5, bw, 26)) {
       handleControlBtn(btn.id, gs, mx, my);
       return;
     }
@@ -1619,7 +1619,7 @@ function handleControlBtn(id, gs, mx, my) {
 
 function handleMenuClick(mx, my, gs) {
   const M    = shelterUI;
-  const barH = 30;
+  const barH = 36;
 
   if (M.activeMenu === 'room') {
     const roomId = M.selectedRoom;

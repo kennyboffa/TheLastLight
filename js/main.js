@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.21';
+const GAME_VERSION = 'v0.23';
 
 function resizeCanvas() {
   const vp = window.visualViewport;

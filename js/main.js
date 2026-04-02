@@ -8,6 +8,8 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
+const GAME_VERSION = 'v0.21';
+
 function resizeCanvas() {
   const vp = window.visualViewport;
   const ww = vp ? vp.width  : window.innerWidth;
@@ -511,6 +513,15 @@ function render(ctx) {
       ctx.restore();
     }
   }
+
+  // Version watermark — always visible, bottom-left
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#a0a090';
+  ctx.font = '8px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(GAME_VERSION, 4, CFG.H - 4);
+  ctx.restore();
 }
 
 function renderGameOver(ctx, gs) {

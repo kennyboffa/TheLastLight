@@ -9,27 +9,45 @@ const ctx    = canvas.getContext('2d');
 let SCALE = 1;
 
 function resizeCanvas() {
-  // visualViewport gives the true visible area on mobile (excludes address bar,
-  // on-screen keyboard, etc.). Fall back to window dimensions on desktop.
   const vp = window.visualViewport;
   const ww = vp ? vp.width  : window.innerWidth;
   const wh = vp ? vp.height : window.innerHeight;
 
-  // Fill the screen at 1:1 aspect ratio; user can nudge with Display Scale setting.
-  // Cap so canvas height never exceeds viewport — keeps bottom menu buttons visible.
   const fitScale = Math.min(ww / CFG.W, wh / CFG.H);
   const userMult = (typeof GS !== 'undefined' && GS.userScale) ? GS.userScale : 1.0;
-  const maxScale = wh / CFG.H;  // never taller than viewport
-  SCALE = Math.min(fitScale * userMult, maxScale);
+  SCALE = fitScale * userMult;
 
   canvas.width  = CFG.W;
   canvas.height = CFG.H;
 
-  canvas.style.width  = Math.round(CFG.W * SCALE) + 'px';
-  canvas.style.height = Math.round(CFG.H * SCALE) + 'px';
+  const cssW = Math.round(CFG.W * SCALE);
+  const cssH = Math.round(CFG.H * SCALE);
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = cssH + 'px';
   canvas.style.filter = 'saturate(0.7)';
   canvas.style.transform       = '';
   canvas.style.transformOrigin = '';
+
+  // When canvas is larger than viewport, switch to scrollable layout so
+  // the user can drag/scroll to see the whole game.
+  const gameWrap = document.getElementById('game-wrap');
+  if (cssW > ww || cssH > wh) {
+    document.body.style.overflow  = 'auto';
+    if (gameWrap) {
+      gameWrap.style.alignItems      = 'flex-start';
+      gameWrap.style.justifyContent  = 'flex-start';
+      gameWrap.style.minWidth        = cssW + 'px';
+      gameWrap.style.minHeight       = cssH + 'px';
+    }
+  } else {
+    document.body.style.overflow  = 'hidden';
+    if (gameWrap) {
+      gameWrap.style.alignItems      = 'center';
+      gameWrap.style.justifyContent  = 'center';
+      gameWrap.style.minWidth        = '';
+      gameWrap.style.minHeight       = '';
+    }
+  }
 }
 
 window.addEventListener('resize', resizeCanvas);

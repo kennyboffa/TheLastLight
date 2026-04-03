@@ -14,9 +14,9 @@ let fogCanvas    = null;   // offscreen canvas for fog of war
 
 // ── Mobile D-pad button rects ─────────────────────────────────────────────────
 const _MOBILE_BTNS = {
-  left:   { x: 8,   y: 272, w: 60, h: 44 },
-  right:  { x: 74,  y: 272, w: 60, h: 44 },
-  action: { x: 526, y: 272, w: 66, h: 44 },
+  left:   { x: 8,   y: 288, w: 42, h: 30 },
+  right:  { x: 56,  y: 288, w: 42, h: 30 },
+  action: { x: 530, y: 288, w: 46, h: 30 },
 };
 
 // ── Fog of war ────────────────────────────────────────────────────────────────
@@ -120,33 +120,14 @@ function startExploration(gs, loc) {
     }
   }
 
-  // Outdoor containers — scarce: 0-1 per zone only outside nature zones
+  // Containers are inside buildings only — nothing outside
   const containers = [];
-  for (const zone of loc.zones) {
-    const isNatureZone = zone.lootTable && (zone.lootTable.startsWith('nature') || zone.lootTable.startsWith('water'));
-    const count = isNatureZone ? 0 : randInt(0, 1);
-    for (let i = 0; i < count; i++) {
-      const cx = zone.x + 50 + randInt(0, zone.w - 100);
-      if (buildings.some(b => Math.abs(cx - (b.doorX + 8)) < 35)) continue;
-      const types = ['locker', 'bag'];
-      // 30% chance container is empty (already picked over)
-      const loot = chance(30) ? [] : rollLoot(zone.lootTable);
-      containers.push({
-        wx: cx, wy: GROUND_Y,
-        type: randChoice(types),
-        searched: false, searching: false,
-        searchProgress: 0,
-        searchDuration: 1.5 + randFloat(0.5, 2.5),
-        loot,
-      });
-    }
-  }
 
   // Sparse ground loot — only ~15% of rolled items end up visible on the ground
   const lootItems = [];
   for (const zone of loc.zones) {
     const items = rollLoot(zone.lootTable);
-    const groundItems = items.filter(() => Math.random() < 0.15);
+    const groundItems = items.filter(it => it.id !== 'raw_meat' && Math.random() < 0.15);
     for (const item of groundItems) {
       lootItems.push({
         id: item.id, qty: item.qty,

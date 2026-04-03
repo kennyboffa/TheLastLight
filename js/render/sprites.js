@@ -133,8 +133,10 @@ const _envSpr = {};
 function drawEnvSprite(ctx, key, cx, groundY, drawW, drawH) {
   const img = _envSpr[key];
   if (!img || !img.complete || !img.naturalWidth) return false;
+  // Always draw at the image's natural pixel size — no rescaling
+  const w = img.naturalWidth, h = img.naturalHeight;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, Math.round(cx - drawW / 2), Math.round(groundY - drawH), drawW, drawH);
+  ctx.drawImage(img, Math.round(cx - w / 2), Math.round(groundY - h), w, h);
   return true;
 }
 
@@ -146,13 +148,13 @@ function drawEnvSprite(ctx, key, cx, groundY, drawW, drawH) {
 function drawCharSprite(ctx, key, x, y, s, facing, baseH) {
   const img = _envSpr[key];
   if (!img || !img.complete || !img.naturalWidth) return false;
-  const drawH = Math.round(s * baseH);
-  const drawW = Math.round(img.width * drawH / img.height);
+  // Always draw at natural pixel size — no rescaling
+  const w = img.naturalWidth, h = img.naturalHeight;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);
-  ctx.drawImage(img, -Math.round(drawW / 2), -drawH, drawW, drawH);
+  ctx.drawImage(img, -Math.round(w / 2), -h, w, h);
   ctx.restore();
   return true;
 }
@@ -168,13 +170,13 @@ function drawSurvivorSprite(ctx, x, y, s, facing, idx) {
   const key = (idx % 2 === 0) ? 'survivor_1' : 'survivor_2';
   const img = _envSpr[key];
   if (!img || !img.complete || !img.naturalWidth) return false;
-  const drawH = Math.round(s * 28);
-  const drawW = Math.round(img.width * drawH / img.height);
+  // Always draw at natural pixel size — no rescaling
+  const w = img.naturalWidth, h = img.naturalHeight;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);
-  ctx.drawImage(img, -Math.round(drawW / 2), -drawH, drawW, drawH);
+  ctx.drawImage(img, -Math.round(w / 2), -h, w, h);
   ctx.restore();
   return true;
 }

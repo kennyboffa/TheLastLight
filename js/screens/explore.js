@@ -1306,6 +1306,10 @@ function drawExploreHUD(ctx, gs, es) {
 // ── Drawing helpers ───────────────────────────────────────────────────────────
 
 function drawExploreTent(ctx, cx, groundY, w, h, label) {
+  if (drawEnvSprite(ctx, 'tent', cx, groundY, w, h)) {
+    if (label) drawText(ctx, label, cx, groundY - h - 6, C.textDim, 6, 'center');
+    return;
+  }
   // A-frame tent shape — triangle roof with small floor
   const hw = w / 2;
   ctx.save();
@@ -1434,6 +1438,7 @@ function drawExploreWideBush(ctx, x, groundY) {
 }
 
 function drawExploreCarWreck(ctx, x, groundY) {
+  if (drawEnvSprite(ctx, 'car_wreck', x, groundY, 68, 36)) return;
   ctx.save();
   ctx.globalAlpha = 0.88;
   const carW = 52, carH = 18;

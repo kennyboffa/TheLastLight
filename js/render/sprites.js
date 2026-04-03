@@ -112,6 +112,12 @@ const _envSpr = {};
     crate: 'conatiner_crate.png', box: 'container_box.png',
     chest: 'container_chest.png', locker: 'container_locker.png',
     survivor_1: 'survivor_1.png', survivor_2: 'survivor_2.png',
+    // Environment objects
+    car_wreck: 'car_wreck.png', tent: 'tent.png',
+    // Characters / enemies
+    dog: 'dog.png',
+    enemy_human: 'enemy_human.png', enemy_robot: 'enemy_robot.png',
+    enemy_wolf: 'enemy_wolf.png',   enemy_drone: 'enemy_drone.png',
   };
   for (const [key, file] of Object.entries(files)) {
     const img = new Image();
@@ -129,6 +135,25 @@ function drawEnvSprite(ctx, key, cx, groundY, drawW, drawH) {
   if (!img || !img.complete || !img.naturalWidth) return false;
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(img, Math.round(cx - drawW / 2), Math.round(groundY - drawH), drawW, drawH);
+  return true;
+}
+
+/**
+ * Draw a character sprite centred at (x, y) with feet at y, with optional facing mirror.
+ * baseH is the logical height at s=1; sprite aspect ratio is preserved.
+ * Returns true if sprite was drawn, false if not yet loaded.
+ */
+function drawCharSprite(ctx, key, x, y, s, facing, baseH) {
+  const img = _envSpr[key];
+  if (!img || !img.complete || !img.naturalWidth) return false;
+  const drawH = Math.round(s * baseH);
+  const drawW = Math.round(img.width * drawH / img.height);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(Math.round(x), Math.round(y));
+  if (facing < 0) ctx.scale(-1, 1);
+  ctx.drawImage(img, -Math.round(drawW / 2), -drawH, drawW, drawH);
+  ctx.restore();
   return true;
 }
 
@@ -641,6 +666,7 @@ function drawSurvivor(ctx, x, y, s, facing, animFrame, idx, pose) {
 }
 
 function drawDog(ctx, x, y, s, facing, animFrame) {
+  if (drawCharSprite(ctx, 'dog', x, y, s, facing, 14)) return;
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }
@@ -696,6 +722,7 @@ function drawDog(ctx, x, y, s, facing, animFrame) {
 // ── Enemy sprites ─────────────────────────────────────────────────────────────
 
 function drawDroneSprite(ctx, x, y, s, animFrame) {
+  if (drawCharSprite(ctx, 'enemy_drone', x, y, s, 1, 18)) return;
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
 
@@ -761,6 +788,7 @@ function drawDroneSprite(ctx, x, y, s, animFrame) {
 }
 
 function drawRobotSprite(ctx, x, y, s, facing) {
+  if (drawCharSprite(ctx, 'enemy_robot', x, y, s, facing, 30)) return;
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);
@@ -852,6 +880,7 @@ function drawRobotSprite(ctx, x, y, s, facing) {
 }
 
 function drawHumanEnemy(ctx, x, y, s, facing, animFrame) {
+  if (drawCharSprite(ctx, 'enemy_human', x, y, s, facing, 24)) return;
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);
@@ -929,6 +958,7 @@ function drawHumanEnemy(ctx, x, y, s, facing, animFrame) {
 }
 
 function drawWolfSprite(ctx, x, y, s, facing, animFrame) {
+  if (drawCharSprite(ctx, 'enemy_wolf', x, y, s, facing, 14)) return;
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) { ctx.scale(-1, 1); }

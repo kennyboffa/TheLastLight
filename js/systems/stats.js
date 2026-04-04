@@ -44,64 +44,88 @@ function tickStats(gs, dt) {
 
   const dm = diffMult(gs);
 
+  // ── Missing parent countdown ───────────────────────────────────────────────
+  if (gs.parentMissing) {
+    gs.parentMissingMinutes = Math.max(0, (gs.parentMissingMinutes || 0) - hrs * 60);
+    if (gs.parentMissingMinutes <= 0) {
+      gs.parentMissing = false;
+      const p2 = gs.parent;
+      p2.tiredness = clamp(85 + randInt(0, 15), 0, 100);
+      p2.hunger    = clamp(p2.hunger + randInt(20, 35), 0, 100);
+      p2.thirst    = clamp(p2.thirst + randInt(25, 40), 0, 100);
+      if (Math.random() < 0.45) {
+        p2.wounded = true;
+        p2.health  = Math.max(1, p2.health - randInt(10, 25));
+      }
+      const woundedStr = p2.wounded ? ', wounded' : '';
+      notify(`${p2.name} found their way home — barely.`, 'danger');
+      addLog(`${p2.name} returned after going missing — exhausted${woundedStr}.`, 'danger');
+    }
+    // Still tick hunger/thirst while missing (they're out there somewhere)
+    gs.parent.hunger = clamp(gs.parent.hunger + CFG.HUNGER_PER_HOUR * dm * hrs, 0, 100);
+    gs.parent.thirst = clamp(gs.parent.thirst + CFG.THIRST_PER_HOUR * dm * hrs, 0, 100);
+    // Skip the rest of parent updates while missing
+  }
+
   // ── Parent ──────────────────────────────────────────────────────────────────
   const p = gs.parent;
-  // Trait multipliers for hunger/thirst
-  const isNightTime = gs.time < 7 * 60 || gs.time >= 20 * 60; // before 7am or after 8pm
-  let pHungerMult = 1.0;
-  if (p.trait === 'slow_metabolism') pHungerMult = 0.80;
-  if (p.trait === 'fast_healer')     pHungerMult = 1.20;
-  const pTireMult = (p.trait === 'night_owl')
-    ? (isNightTime ? 0.6 : 1.25)
-    : 1.0;
-  if (!p.isSleeping) {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs * pHungerMult, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs * pHungerMult, 0, 100);
-    const tireRate = (p.isExploring || p.isWorking) ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR;
-    const rainTire = (p.isExploring && gs.weather && gs.weather.type === 'rain')
-      ? CFG.TIRE_ACTIVE_PER_HOUR * 0.6 : 0;
-    p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs * pTireMult, 0, 100);
-  } else {
-    p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
-    p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
-    p.tiredness = clamp(p.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
-    if (p.tiredness <= 0) {
-      p.isSleeping = false; p.tiredness = 0;
-      if (p.task && p.task.type === 'sleep') {
-        p.task = null; p.taskProgress = 0; p.taskDuration = 0; p.isWorking = false;
-        notify(`${p.name} woke up rested.`, 'good');
+  if (!gs.parentMissing) {
+    // Trait multipliers for hunger/thirst
+    const isNightTime = gs.time < 7 * 60 || gs.time >= 20 * 60;
+    let pHungerMult = 1.0;
+    if (p.trait === 'slow_metabolism') pHungerMult = 0.80;
+    if (p.trait === 'fast_healer')     pHungerMult = 1.20;
+    const pTireMult = (p.trait === 'night_owl')
+      ? (isNightTime ? 0.6 : 1.25)
+      : 1.0;
+    if (!p.isSleeping) {
+      p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * dm * hrs * pHungerMult, 0, 100);
+      p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * dm * hrs * pHungerMult, 0, 100);
+      const tireRate = (p.isExploring || p.isWorking) ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR;
+      const rainTire = (p.isExploring && gs.weather && gs.weather.type === 'rain')
+        ? CFG.TIRE_ACTIVE_PER_HOUR * 0.6 : 0;
+      p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs * pTireMult, 0, 100);
+    } else {
+      p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
+      p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
+      p.tiredness = clamp(p.tiredness + CFG.TIRE_SLEEP_PER_HOUR * hrs, 0, 100);
+      if (p.tiredness <= 0) {
+        p.isSleeping = false; p.tiredness = 0;
+        if (p.task && p.task.type === 'sleep') {
+          p.task = null; p.taskProgress = 0; p.taskDuration = 0; p.isWorking = false;
+          notify(`${p.name} woke up rested.`, 'good');
+        }
       }
     }
-  }
 
-  // Wounded heals naturally once HP recovers above 60%
-  if (p.wounded && p.health / p.maxHealth >= 0.6) p.wounded = false;
+    // Wounded heals naturally once HP recovers above 60%
+    if (p.wounded && p.health / p.maxHealth >= 0.6) p.wounded = false;
 
-  // Depression (ambient rise + child-based effects handled below)
-  p.depression = clamp(p.depression + CFG.DEPR_PARENT_IDLE_PER_HOUR * dm * hrs, 0, 100);
+    // Depression (ambient rise + child-based effects handled below)
+    p.depression = clamp(p.depression + CFG.DEPR_PARENT_IDLE_PER_HOUR * dm * hrs, 0, 100);
 
-  // HP damage from hunger/thirst
-  if (p.hunger  >= CFG.HUNGER_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
-  if (p.thirst  >= CFG.THIRST_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
+    // HP damage from hunger/thirst
+    if (p.hunger  >= CFG.HUNGER_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
+    if (p.thirst  >= CFG.THIRST_DAMAGE)  p.health = Math.max(0, p.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
 
-  // Infection: slow health drain (scaled to 25 maxHP), notify once per hour
-  if (p.infected) {
-    p.health = Math.max(1, p.health - 0.4 * hrs);
-    // Periodic reminder (roughly once per game hour)
-    if (!p._infNotifyTimer) p._infNotifyTimer = 0;
-    p._infNotifyTimer -= hrs;
-    if (p._infNotifyTimer <= 0) {
-      notify(`${p.name} is infected — use antibiotics!`, 'danger');
-      p._infNotifyTimer = 1;
+    // Infection: slow health drain, notify once per hour
+    if (p.infected) {
+      p.health = Math.max(1, p.health - 0.4 * hrs);
+      if (!p._infNotifyTimer) p._infNotifyTimer = 0;
+      p._infNotifyTimer -= hrs;
+      if (p._infNotifyTimer <= 0) {
+        notify(`${p.name} is infected — use antibiotics!`, 'danger');
+        p._infNotifyTimer = 1;
+      }
+    } else {
+      p._infNotifyTimer = 0;
     }
-  } else {
-    p._infNotifyTimer = 0;
-  }
 
-  // Forced sleep if too tired
-  if (p.tiredness >= CFG.TIRE_FORCED_SLEEP && !p.isSleeping) {
-    p.isSleeping = true;
-    notify('Too tired to continue — sleeping.', 'warn');
+    // Forced sleep if too tired
+    if (p.tiredness >= CFG.TIRE_FORCED_SLEEP && !p.isSleeping) {
+      p.isSleeping = true;
+      notify('Too tired to continue — sleeping.', 'warn');
+    }
   }
 
   // ── Child ───────────────────────────────────────────────────────────────────

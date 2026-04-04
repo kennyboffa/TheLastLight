@@ -454,11 +454,20 @@ function updateExplore(gs, dt) {
   }
 
   es.showReturnPrompt = es.px < 80 || es.px > CFG.WORLD_W - 120;
-  if (p.tiredness >= 92) {
-    // Collapsed from exhaustion — treated like a late return (found at dawn)
-    gs.lateReturn    = true;
-    gs.parent.wounded = true;
-    addLog(`${p.name} collapsed from exhaustion in the field.`, 'danger');
+
+  // ── Tiredness warnings & collapse ─────────────────────────────────────────
+  if (p.tiredness >= 80 && !es._tiredWarned) {
+    es._tiredWarned = true;
+    notify(`${p.name} is exhausted. Head home soon.`, 'warn');
+    addLog(`${p.name} is running on empty — should return home.`, 'warn');
+  }
+  if (p.tiredness >= 100) {
+    // Collapsed — goes missing for 6–16 game hours before returning
+    const missingMins = randInt(360, 960);
+    gs.parentMissing        = true;
+    gs.parentMissingMinutes = missingMins;
+    notify(`${p.name} collapsed from exhaustion!`, 'danger');
+    addLog(`${p.name} collapsed in the field and went missing.`, 'danger');
     endExploration(gs);
     return;
   }
@@ -509,6 +518,22 @@ function updateBuildingInterior(gs, dt) {
         finishSearch(c, gs);
       }
     }
+  }
+
+  // Tiredness warning / collapse (same thresholds as outdoor)
+  const es2 = exploreState;
+  if (p.tiredness >= 80 && !es2._tiredWarned) {
+    es2._tiredWarned = true;
+    notify(`${p.name} is exhausted. Head home soon.`, 'warn');
+    addLog(`${p.name} is running on empty — should return home.`, 'warn');
+  }
+  if (p.tiredness >= 100) {
+    const missingMins = randInt(360, 960);
+    gs.parentMissing        = true;
+    gs.parentMissingMinutes = missingMins;
+    notify(`${p.name} collapsed from exhaustion!`, 'danger');
+    addLog(`${p.name} collapsed inside a building and went missing.`, 'danger');
+    endExploration(gs);
   }
 }
 

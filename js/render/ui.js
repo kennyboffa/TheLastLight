@@ -32,7 +32,15 @@ function drawStatsPanel(ctx, gs) {
   drawText(ctx, `Lv.${pLvl}`, x + w - 8, y + 9, '#d4aa40', 9, 'right', true);
   y += 12;
 
-  y = drawPersonStats(ctx, gs.parent, x + 8, y, w - 16);
+  if (gs.parentMissing) {
+    const hrs = Math.ceil((gs.parentMissingMinutes || 0) / 60);
+    drawText(ctx, 'MISSING', x + w / 2, y + 9, '#cc3030', 10, 'center', true);
+    y += 12;
+    drawText(ctx, `~${hrs}h until return`, x + w / 2, y + 8, '#663030', 8, 'center');
+    y += 12;
+  } else {
+    y = drawPersonStats(ctx, gs.parent, x + 8, y, w - 16);
+  }
   y += 4;
   gs._parentStatBounds = { x, y: pRowStart, w, h: y - pRowStart };
   drawDivider(ctx, x + 6, y, w - 12, C.border2);

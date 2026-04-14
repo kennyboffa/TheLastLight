@@ -528,21 +528,24 @@ function render(ctx) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, CFG.W, CFG.H);
 
-  // Scanlines + VHS banding — retro tape look
+  // Scanlines + VHS tape banding — retro look
   if (gs.screen !== 'intro') {
     ctx.save();
+    // Scanlines
     ctx.globalAlpha = 0.055;
     ctx.fillStyle = '#000000';
     for (let _sy = 0; _sy < CFG.H; _sy += 2) ctx.fillRect(0, _sy, CFG.W, 1);
-    // Occasional horizontal tape band (flickers on a slow cycle)
-    const _bSlot = Math.floor(Date.now() / 2200);
-    const _bRng  = ((_bSlot * 2654435761) >>> 0) / 0xFFFFFFFF;
-    if (_bRng > 0.68) {
-      const _bandY = Math.floor(((_bSlot * 1234567891 + 999) >>> 0) / 0xFFFFFFFF * (CFG.H - 20));
-      const _bandH = 3 + Math.floor(_bRng * 9);
-      ctx.globalAlpha = 0.08 + _bRng * 0.12;
-      ctx.fillStyle = '#bcd0ff';
-      ctx.fillRect(0, _bandY, CFG.W, _bandH);
+    // Tape band: drifts continuously upward, pulses in/out on a slow sine
+    const _t    = Date.now() / 1000;
+    const _bandY = (_t * CFG.H / 9) % CFG.H;             // scrolls full height every 9s
+    const _vis   = Math.pow(Math.max(0, Math.sin(_t * 0.65)), 2.5); // pulse ~every 9s
+    if (_vis > 0.015) {
+      ctx.globalAlpha = _vis * 0.15;
+      ctx.fillStyle = '#c4d8ff';
+      ctx.fillRect(0, Math.floor(_bandY), CFG.W, 14);     // main band body
+      ctx.globalAlpha = _vis * 0.08;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, Math.floor(_bandY), CFG.W, 3);      // bright leading edge
     }
     ctx.globalAlpha = 1;
     ctx.restore();

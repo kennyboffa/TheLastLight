@@ -644,6 +644,25 @@ function exploreKeyPress(key, gs) {
   if (!exploreState) return;
   const es = exploreState;
 
+  // ── Combat keyboard shortcuts ─────────────────────────────────────────────
+  if (gs.inCombat && gs.combat) {
+    const c = gs.combat;
+    if (c.turn !== 'player' || c.phase !== 'action') return;
+    if (key === 'arrowleft'  || key === 'a') { playerMoveLeft(gs);  return; }
+    if (key === 'arrowright' || key === 'd') { playerMoveRight(gs); return; }
+    if (key === ' ' || key === 'f') {
+      // Attack current target
+      const alive = c.enemies.filter(e => !e.dead);
+      if (alive.length) {
+        const realIdx = c.enemies.indexOf(alive[c.targetIdx] || alive[0]);
+        playerAttack(gs, realIdx >= 0 ? realIdx : 0);
+      }
+      return;
+    }
+    if (key === 'enter' || key === 'e') { playerEndTurn(gs); return; }
+    return;
+  }
+
   if (key === 'e') {
     if (es.building) interactBuilding(gs);
     else             interactOutdoor(gs);
@@ -1133,11 +1152,12 @@ function renderOutdoor(ctx, gs, es) {
     drawText(ctx, apStr, _combatPx, PLAYER_FOOT - 63, '#d4c888', 7, 'center');
   }
 
-  // Companion following player
+  // Companion following player (uses combat world-x during combat)
   if (gs.exploreCompanionId) {
     const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
     if (compIdx >= 0) {
-      const compX = es.px - es.facing * 22;
+      const compAnchorX = (gs.inCombat && gs.combat) ? gs.combat.playerWx : es.px;
+      const compX = compAnchorX - es.facing * 22;
       drawSurvivor(ctx, compX, PLAYER_FOOT, 2, -es.facing, es.animFrame, compIdx, Math.abs(es.velX) > 0.1 ? 'side' : 'front');
     }
   }
@@ -1420,7 +1440,13 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   const mrHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 32, 24);
   drawButton(ctx, bx, _COMBAT_BAR_Y, 32, 24, '▶', mrHov, false, c.playerAp < 1);
   gs._combatMoveR = { x: bx, y: _COMBAT_BAR_Y, w: 32, h: 24 };
-  bx += 40;
+  bx += 36;
+
+  // End Turn
+  const etHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 50, 24);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 50, 24, 'End ↵', etHov);
+  gs._combatEndTurn = { x: bx, y: _COMBAT_BAR_Y, w: 50, h: 24 };
+  bx += 56;
 
   // Attack
   const wd        = gs.parent.equipped.weapon ? getItemDef(gs.parent.equipped.weapon) : null;
@@ -1486,6 +1512,10 @@ function _handleExploreCombatClick(mx, my, gs) {
   // Move right
   if (gs._combatMoveR && hitTest(mx, my, gs._combatMoveR.x, gs._combatMoveR.y, gs._combatMoveR.w, gs._combatMoveR.h)) {
     playerMoveRight(gs); return;
+  }
+  // End Turn
+  if (gs._combatEndTurn && hitTest(mx, my, gs._combatEndTurn.x, gs._combatEndTurn.y, gs._combatEndTurn.w, gs._combatEndTurn.h)) {
+    playerEndTurn(gs); return;
   }
   // Attack
   if (gs._combatAtk && hitTest(mx, my, gs._combatAtk.x, gs._combatAtk.y, gs._combatAtk.w, gs._combatAtk.h)) {

@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.27';
+const GAME_VERSION = 'v0.28';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -535,17 +535,19 @@ function render(ctx) {
     ctx.globalAlpha = 0.055;
     ctx.fillStyle = '#000000';
     for (let _sy = 0; _sy < CFG.H; _sy += 2) ctx.fillRect(0, _sy, CFG.W, 1);
-    // Tape band: drifts continuously upward, pulses in/out on a slow sine
+    // Tape band: rare (~once per 30s), nearly invisible, skews pixels in band area
     const _t    = Date.now() / 1000;
-    const _bandY = (_t * CFG.H / 9) % CFG.H;             // scrolls full height every 9s
-    const _vis   = Math.pow(Math.max(0, Math.sin(_t * 0.65)), 2.5); // pulse ~every 9s
-    if (_vis > 0.015) {
-      ctx.globalAlpha = _vis * 0.15;
+    const _vis   = Math.pow(Math.max(0, Math.sin(_t * 0.2)), 12); // ~31s period, spiky pulse
+    if (_vis > 0.01) {
+      const _by    = Math.floor((_t * CFG.H / 9) % CFG.H);
+      const _bh    = 14;
+      const _shift = Math.round(Math.sin(_t * 19.7) * 4 * _vis);
+      // skew: self-copy the band strip with a horizontal pixel shift
+      ctx.drawImage(canvas, 0, _by, CFG.W, _bh, _shift, _by, CFG.W, _bh);
+      // faint tint over the skewed strip
+      ctx.globalAlpha = _vis * 0.04;
       ctx.fillStyle = '#c4d8ff';
-      ctx.fillRect(0, Math.floor(_bandY), CFG.W, 14);     // main band body
-      ctx.globalAlpha = _vis * 0.08;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, Math.floor(_bandY), CFG.W, 3);      // bright leading edge
+      ctx.fillRect(0, _by, CFG.W, _bh);
     }
     ctx.globalAlpha = 1;
     ctx.restore();

@@ -141,12 +141,15 @@ function startExploration(gs, loc) {
   const encounters = [];
   for (const zone of loc.zones) {
     if (chance(zone.enemyChance)) {
+      const _ps = (loc.canHunt || zone.canHunt) ? 'wolf'
+                : loc.id === 'factory' ? 'robot' : 'human_hostile';
       encounters.push({
         wx: zone.x + Math.floor(zone.w * 0.6) + randInt(-20, 20),
         triggered: false, killed: false, distance: 70,
         difficulty: loc.difficulty,
         locCanHunt: !!loc.canHunt,
         zone,
+        previewSprite: _ps,
       });
     }
   }
@@ -390,6 +393,14 @@ function updateExplore(gs, dt) {
   const es = exploreState;
   const p  = gs.parent;
 
+  // While in combat: keep scroll locked on combat player position, skip exploration
+  if (gs.inCombat && gs.combat) {
+    const targetScroll = gs.combat.playerWx - CFG.W * 0.35;
+    es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.12), 0, CFG.WORLD_W - CFG.W);
+    es.px = gs.combat.playerWx;
+    return;
+  }
+
   // Movement (keyboard + mobile D-pad)
   const dpadLeft  = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
   const dpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
@@ -423,13 +434,21 @@ function updateExplore(gs, dt) {
     }
   }
 
-  // Encounters — trigger distance grows by 20% at night
-  const nightMult = 1 + nightFactor(gs.time) * 0.2;
+  // Enemy encounters — stealth affects detection range
+  const stealth    = gs.parent.skills?.stealth || 0;
+  const alertRange = Math.max(50, 150 - stealth * 12);
+  const nightMult  = 1 + nightFactor(gs.time) * 0.3;
   for (const enc of es.encounters) {
-    if (!enc.triggered && Math.abs(es.px - enc.wx) < enc.distance * nightMult) {
+    if (!enc.triggered && Math.abs(es.px - enc.wx) < alertRange * nightMult) {
       enc.triggered = true;
       const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
-      if (enemies.length > 0) { gs.mouse.down = false; startCombat(gs, enemies); gs.combat._encRef = enc; gs.screen = 'combat'; return; }
+      if (enemies.length > 0) {
+        gs.mouse.down = false;
+        startCombat(gs, enemies, es.px, enc.wx);
+        gs.combat._encRef = enc;
+        gs.inCombat = true;
+        return;
+      }
     }
   }
 
@@ -758,6 +777,12 @@ function exploreClick(mx, my, gs) {
   if (!exploreState) return;
   const es = exploreState;
 
+  // ── In-world combat clicks ────────────────────────────────────────────────────
+  if (gs.inCombat && gs.combat) {
+    _handleExploreCombatClick(mx, my, gs);
+    return;
+  }
+
   // Inventory overlay — handle before anything else
   if (es.invOpen) {
     const px = 30, py = 40, pw = CFG.W - 60, ph = CFG.H - 80;
@@ -1055,10 +1080,33 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
-  // Encounter warning markers
-  for (const enc of es.encounters) {
-    if (!enc.triggered && Math.abs(es.px - enc.wx) > 50) {
-      drawText(ctx, '⚠', enc.wx, GROUND_Y - 10, '#cc3333', 8, 'center');
+  // Enemies — patrol in world before combat, static positions during combat
+  if (gs.inCombat && gs.combat) {
+    for (const en of gs.combat.enemies) {
+      if (en.dead) { ctx.globalAlpha = 0.2; _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite); ctx.globalAlpha = 1; continue; }
+      _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite);
+      // HP bar above enemy
+      drawStatBar(ctx, en.worldX - 22, GROUND_Y - 52, 44, 5,
+        en.hp, en.maxHp, (en.hp / en.maxHp) > 0.5 ? '#aa2222' : '#dd1010');
+      drawText(ctx, en.name, en.worldX, GROUND_Y - 57, '#cc4444', 7, 'center');
+      // Target indicator
+      if (gs.combat.targetIdx === en.index && gs.combat.turn === 'player') {
+        ctx.save(); ctx.strokeStyle = '#cc4433'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(en.worldX - 18, GROUND_Y - 95, 36, 95);
+        ctx.restore();
+      }
+    }
+  } else {
+    for (let i = 0; i < es.encounters.length; i++) {
+      const enc = es.encounters[i];
+      if (enc.triggered || enc.killed) continue;
+      // Patrol oscillation (visual only — detection still uses enc.wx)
+      const patrolWx = enc.wx + Math.sin(Date.now() / 1400 + i * 2.1) * 35;
+      ctx.save();
+      ctx.globalAlpha = 0.82;
+      _drawWorldEnemy(ctx, patrolWx, GROUND_Y, enc.previewSprite || 'human_hostile');
+      ctx.globalAlpha = 1;
+      ctx.restore();
     }
   }
 
@@ -1070,9 +1118,20 @@ function renderOutdoor(ctx, gs, es) {
   }
 
   // Player
+  const _combatPx = (gs.inCombat && gs.combat) ? gs.combat.playerWx : es.px;
   const _outSearching = es.containers.some(c => c.searching);
   const _outPose = Math.abs(es.velX) > 0.1 ? 'run' : (_outSearching ? 'back' : 'front');
-  drawParent(ctx, es.px, PLAYER_FOOT, 2, es.facing, es.animFrame, gs.parent.gender, _outPose);
+  drawParent(ctx, _combatPx, PLAYER_FOOT, 2, es.facing, es.animFrame, gs.parent.gender, _outPose);
+  // In-combat player HP bar + AP indicator above player
+  if (gs.inCombat && gs.combat) {
+    const cp = gs.combat;
+    drawStatBar(ctx, _combatPx - 22, PLAYER_FOOT - 52, 44, 5,
+      cp.player.hp, cp.player.maxHp, (cp.player.hp / cp.player.maxHp) > 0.4 ? '#3a8a3a' : '#cc2020');
+    drawText(ctx, gs.parent.name, _combatPx, PLAYER_FOOT - 57, '#88cc88', 7, 'center');
+    // AP dots
+    const apStr = '▪'.repeat(cp.playerAp) + '▫'.repeat(Math.max(0, cp.player.maxAp - cp.playerAp));
+    drawText(ctx, apStr, _combatPx, PLAYER_FOOT - 63, '#d4c888', 7, 'center');
+  }
 
   // Companion following player
   if (gs.exploreCompanionId) {
@@ -1291,22 +1350,188 @@ function drawExploreHUD(ctx, gs, es) {
     drawButton(ctx, 6, retBtnY, 112, 26, 'Return Home', hitTest(mx, my, 6, retBtnY, 112, 26));
   }
 
-  // ── Mobile D-pad (always visible; only meaningful on touch devices) ──────────
-  const MB = _MOBILE_BTNS;
-  const leftHov  = hitTest(mx, my, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h);
-  const rightHov = hitTest(mx, my, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h);
-  const actHov   = hitTest(mx, my, MB.action.x, MB.action.y, MB.action.w, MB.action.h);
-  const isLeft   = GS.keys['a'] || GS.keys['arrowleft'];
-  const isRight  = GS.keys['d'] || GS.keys['arrowright'];
-  drawButton(ctx, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h,   '◀', leftHov,  isLeft);
-  drawButton(ctx, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h,  '▶', rightHov, isRight);
-  drawButton(ctx, MB.action.x, MB.action.y, MB.action.w, MB.action.h, '[E]', actHov);
+  // ── Combat overlay HUD (replaces D-pad when in combat) ───────────────────────
+  if (gs.inCombat && gs.combat) {
+    _drawExploreCombatHUD(ctx, gs, mx, my);
+  } else {
+    // Mobile D-pad (only shown when not in combat)
+    const MB = _MOBILE_BTNS;
+    const leftHov  = hitTest(mx, my, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h);
+    const rightHov = hitTest(mx, my, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h);
+    const actHov   = hitTest(mx, my, MB.action.x, MB.action.y, MB.action.w, MB.action.h);
+    const isLeft   = GS.keys['a'] || GS.keys['arrowleft'];
+    const isRight  = GS.keys['d'] || GS.keys['arrowright'];
+    drawButton(ctx, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h,   '◀', leftHov,  isLeft);
+    drawButton(ctx, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h,  '▶', rightHov, isRight);
+    drawButton(ctx, MB.action.x, MB.action.y, MB.action.w, MB.action.h, '[E]', actHov);
+  }
 
   // INV button (top-right, below clock panel)
   const invBtnX = CFG.W - 60, invBtnY = 34;
   const invHov = hitTest(mx, my, invBtnX, invBtnY, 50, 22);
   drawButton(ctx, invBtnX, invBtnY, 50, 22, 'INV', invHov, es.invOpen);
   gs._exploreInvBtn = { x: invBtnX, y: invBtnY, w: 50, h: 22 };
+}
+
+// ── In-world combat HUD ───────────────────────────────────────────────────────
+
+const _COMBAT_BAR_Y = CFG.H - 34;
+
+function _drawExploreCombatHUD(ctx, gs, mx, my) {
+  const c = gs.combat;
+
+  // Combat log strip (above action bar)
+  const logX = 6, logY = CFG.H - 100, logW = CFG.W - 12, logH = 60;
+  fillRect(ctx, logX, logY, logW, logH, C.panelBg, 0.88);
+  strokeRect(ctx, logX, logY, logW, logH, C.border2);
+  const LOG_COLS = { good:'#44aa55', danger:'#cc4444', warn:'#cc8830', normal:C.textDim };
+  let ly = logY + 10;
+  for (let i = 0; i < Math.min(c.log.length, 5); i++) {
+    const e = c.log[i];
+    drawText(ctx, e.text, logX + 8, ly, LOG_COLS[e.type] || C.textDim, 8);
+    ly += 11;
+  }
+
+  // Action bar background
+  fillRect(ctx, 0, _COMBAT_BAR_Y - 4, CFG.W, 40, C.panelBg, 0.92);
+  drawDivider(ctx, 0, _COMBAT_BAR_Y - 4, CFG.W, C.border2);
+
+  if (c.turn !== 'player' || c.phase !== 'action') {
+    const msg = c.turn === 'enemy' ? 'Enemy turn...' : (c.phase === 'victory' ? 'VICTORY!' : c.phase === 'fled' ? 'ESCAPED!' : 'DEFEATED');
+    const col = (c.phase === 'victory' || c.phase === 'fled') ? C.textGood : C.textDanger;
+    drawText(ctx, msg, CFG.W / 2, _COMBAT_BAR_Y + 14, col, 10, 'center', true);
+    return;
+  }
+
+  let bx = 8;
+
+  // AP display
+  const apStr = `AP:${c.playerAp}/${c.player.maxAp}`;
+  drawText(ctx, apStr, bx + 14, _COMBAT_BAR_Y + 14, '#d4c888', 9, 'center', true);
+  bx += 34;
+
+  // Move left
+  const mlHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 32, 24);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 32, 24, '◀', mlHov, false, c.playerAp < 1);
+  gs._combatMoveL = { x: bx, y: _COMBAT_BAR_Y, w: 32, h: 24 };
+  bx += 36;
+
+  // Move right
+  const mrHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 32, 24);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 32, 24, '▶', mrHov, false, c.playerAp < 1);
+  gs._combatMoveR = { x: bx, y: _COMBAT_BAR_Y, w: 32, h: 24 };
+  bx += 40;
+
+  // Attack
+  const wd        = gs.parent.equipped.weapon ? getItemDef(gs.parent.equipped.weapon) : null;
+  const isFirearm = wd && wd.weaponType === 'firearm';
+  const isEmpty   = isFirearm && c.player.magazine <= 0;
+  const alive     = c.enemies.filter(e => !e.dead);
+  const tgt       = alive[c.targetIdx] || alive[0];
+  const meleeDist = (gs.inCombat && tgt) ? Math.abs(c.playerWx - tgt.worldX) : 0;
+  const tooFar    = !isFirearm && meleeDist > MELEE_RANGE;
+  const atkLabel  = isEmpty ? '⚠ EMPTY' : (tooFar ? 'Too far' : (wd ? 'Attack' : 'Punch'));
+  const atkHov    = hitTest(mx, my, bx, _COMBAT_BAR_Y, 66, 24);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 66, 24, atkLabel, atkHov, false, isEmpty || tooFar);
+  if (wd) drawText(ctx, wd.name.slice(0,8), bx + 33, _COMBAT_BAR_Y - 2, C.textDim, 7, 'center');
+  gs._combatAtk = { x: bx, y: _COMBAT_BAR_Y, w: 66, h: 24 };
+  bx += 72;
+
+  // Reload (firearm only)
+  if (isFirearm) {
+    const rlHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 56, 24);
+    drawButton(ctx, bx, _COMBAT_BAR_Y, 56, 24, 'Reload', rlHov, false,
+      !isEmpty || (gs.parent.ammo[wd.ammoType] || 0) <= 0);
+    gs._combatReload = { x: bx, y: _COMBAT_BAR_Y, w: 56, h: 24 };
+    bx += 62;
+  } else { gs._combatReload = null; }
+
+  // Target cycle (multiple enemies)
+  if (alive.length > 1) {
+    const tgHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 60, 24);
+    drawButton(ctx, bx, _COMBAT_BAR_Y, 60, 24, `Target ${c.targetIdx + 1}/${alive.length}`, tgHov);
+    gs._combatTarget = { x: bx, y: _COMBAT_BAR_Y, w: 60, h: 24 };
+    bx += 66;
+  } else { gs._combatTarget = null; }
+
+  // Item
+  const hasUsable = gs.parent.inventory.some(s => { const d = getItemDef(s.id); return d && (d.health || d.hunger || d.thirst); });
+  const itHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 50, 24);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 50, 24, 'Item', itHov, false, !hasUsable);
+  gs._combatItem = { x: bx, y: _COMBAT_BAR_Y, w: 50, h: 24 };
+  bx += 56;
+
+  // Flee
+  const canFlee = !alive.length || Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX))) >= FLEE_MIN_DIST;
+  const flHov   = hitTest(mx, my, bx, _COMBAT_BAR_Y, 48, 24);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 48, 24, 'Flee', flHov, false, c.playerAp < 2 || !canFlee);
+  gs._combatFlee = { x: bx, y: _COMBAT_BAR_Y, w: 48, h: 24 };
+  // Flee hint
+  if (!canFlee) {
+    const needed = alive.length ? Math.round(FLEE_MIN_DIST - Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX)))) : 0;
+    if (needed > 0) drawText(ctx, `need ${needed}m`, bx + 24, _COMBAT_BAR_Y - 2, '#884444', 6, 'center');
+  }
+}
+
+// ── In-world combat click handler ────────────────────────────────────────────
+
+function _handleExploreCombatClick(mx, my, gs) {
+  const c = gs.combat;
+  if (!c || c.turn !== 'player' || c.phase !== 'action') return;
+
+  // Move left
+  if (gs._combatMoveL && hitTest(mx, my, gs._combatMoveL.x, gs._combatMoveL.y, gs._combatMoveL.w, gs._combatMoveL.h)) {
+    playerMoveLeft(gs); return;
+  }
+  // Move right
+  if (gs._combatMoveR && hitTest(mx, my, gs._combatMoveR.x, gs._combatMoveR.y, gs._combatMoveR.w, gs._combatMoveR.h)) {
+    playerMoveRight(gs); return;
+  }
+  // Attack
+  if (gs._combatAtk && hitTest(mx, my, gs._combatAtk.x, gs._combatAtk.y, gs._combatAtk.w, gs._combatAtk.h)) {
+    const alive = c.enemies.filter(e => !e.dead);
+    if (!alive.length) return;
+    // Find the actual index of the current target in c.enemies
+    const realIdx = c.enemies.indexOf(alive[c.targetIdx] || alive[0]);
+    playerAttack(gs, realIdx >= 0 ? realIdx : 0);
+    return;
+  }
+  // Reload
+  if (gs._combatReload && hitTest(mx, my, gs._combatReload.x, gs._combatReload.y, gs._combatReload.w, gs._combatReload.h)) {
+    playerReload(gs); return;
+  }
+  // Target cycle
+  if (gs._combatTarget && hitTest(mx, my, gs._combatTarget.x, gs._combatTarget.y, gs._combatTarget.w, gs._combatTarget.h)) {
+    const alive = c.enemies.filter(e => !e.dead);
+    if (alive.length > 1) {
+      let next = (c.targetIdx + 1) % alive.length;
+      c.targetIdx = next;
+    }
+    return;
+  }
+  // Item
+  if (gs._combatItem && hitTest(mx, my, gs._combatItem.x, gs._combatItem.y, gs._combatItem.w, gs._combatItem.h)) {
+    const slot = gs.parent.inventory.find(s => { const d = getItemDef(s.id); return d && (d.health || d.hunger || d.thirst); });
+    if (slot) playerUseItem(gs, slot.id);
+    return;
+  }
+  // Flee
+  if (gs._combatFlee && hitTest(mx, my, gs._combatFlee.x, gs._combatFlee.y, gs._combatFlee.w, gs._combatFlee.h)) {
+    playerFlee(gs); return;
+  }
+}
+
+// ── World enemy sprite helper ─────────────────────────────────────────────────
+
+function _drawWorldEnemy(ctx, wx, groundY, sprite) {
+  const frame = Math.floor(Date.now() / 300) % 2;
+  switch (sprite) {
+    case 'drone':
+    case 'drone_heavy': drawDroneSprite(ctx, wx, groundY - 28, 2, frame); break;
+    case 'robot':       drawRobotSprite(ctx, wx, groundY, 2, -1); break;
+    case 'wolf':        drawDog(ctx, wx, groundY, 2, -1, frame); break;
+    default:            drawHumanEnemy(ctx, wx, groundY, 2, -1, frame); break;
+  }
 }
 
 // ── Drawing helpers ───────────────────────────────────────────────────────────
@@ -1945,6 +2170,8 @@ function endExploration(gs) {
 
   gs.parent.isExploring = false;
   gs.child.isAlone      = false;
+  gs.inCombat           = false;
+  gs.combat             = null;
   Audio.stopMusic();
   Audio.startShelterMusic();
   // Return companion

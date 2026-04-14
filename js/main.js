@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.26';
+const GAME_VERSION = 'v0.27';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -53,7 +53,7 @@ function resizeCanvas() {
 
   canvas.style.width  = Math.round(CFG.W * fitScale) + 'px';
   canvas.style.height = Math.round(CFG.H * fitScale) + 'px';
-  canvas.style.filter = 'saturate(0.7)';
+  canvas.style.filter = 'saturate(0.8)';
 
   _applyCanvasTransform(userMult, ww, wh, fitScale);
 
@@ -437,7 +437,8 @@ function update(dt) {
   if (gs.screen === 'intro')      updateIntro(dt);
   if (gs.screen === 'explore' && !(gs.screenFade && gs.screenFade.active))
     updateExplore(gs, dt);
-  if (gs.screen === 'combat')     updateCombat(gs, dt);
+  if ((gs.screen === 'explore' && gs.inCombat) || gs.screen === 'combat')
+    updateCombat(gs, dt);
 
   // Shelter ambient events (skip if day transition just started this frame)
   if (gs.screen === 'shelter' && !gs.dayFade.active) {
@@ -526,6 +527,26 @@ function render(ctx) {
   vig.addColorStop(1, 'rgba(0,0,0,0.62)');
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, CFG.W, CFG.H);
+
+  // Scanlines + VHS banding — retro tape look
+  if (gs.screen !== 'intro') {
+    ctx.save();
+    ctx.globalAlpha = 0.055;
+    ctx.fillStyle = '#000000';
+    for (let _sy = 0; _sy < CFG.H; _sy += 2) ctx.fillRect(0, _sy, CFG.W, 1);
+    // Occasional horizontal tape band (flickers on a slow cycle)
+    const _bSlot = Math.floor(Date.now() / 2200);
+    const _bRng  = ((_bSlot * 2654435761) >>> 0) / 0xFFFFFFFF;
+    if (_bRng > 0.68) {
+      const _bandY = Math.floor(((_bSlot * 1234567891 + 999) >>> 0) / 0xFFFFFFFF * (CFG.H - 20));
+      const _bandH = 3 + Math.floor(_bRng * 9);
+      ctx.globalAlpha = 0.08 + _bRng * 0.12;
+      ctx.fillStyle = '#bcd0ff';
+      ctx.fillRect(0, _bandY, CFG.W, _bandH);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 
   // Film grain — scattered noise/dirt particles, no directional pattern
   if (gs.screen !== 'intro') {
@@ -656,6 +677,9 @@ function handleClick(mx, my, gs) {
 // ── Auto feed logic (basic needs management hint) ─────────────────────────────
 
 function autoFeedLogic(gs) {
+  // Respect the Auto Feed setting (default ON)
+  if (!gs.settings) gs.settings = {};
+  if (gs.settings.autoFeed === false) return;
   // Auto feed Lily if parent is present, storage has food, lily is hungry
   if (gs.parent.isExploring) return;
   const ch = gs.child;

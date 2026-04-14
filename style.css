@@ -44,6 +44,8 @@ body {
   /* Prevent long-press context menu on mobile */
   -webkit-touch-callout: none;
   user-select: none;
+  /* Desaturate slightly for a bleaker, post-apocalyptic feel */
+  filter: saturate(0.8);
 }
 
 /* ── Portrait-mode warning ──────────────────────────────────────────────────── */

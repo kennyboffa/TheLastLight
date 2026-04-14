@@ -1373,7 +1373,8 @@ function drawLoadMenu(ctx, gs, mx, my) {
 }
 
 function drawSettingsMenu(ctx, gs, mx, my) {
-  const W2 = 250, H2 = 280;
+  if (!gs.settings) gs.settings = {};
+  const W2 = 250, H2 = 316;
   const px = Math.floor((MAIN_W - W2) / 2), py = 70;
   drawModal(ctx, px, py, W2, H2, 'SETTINGS');
 
@@ -1432,6 +1433,15 @@ function drawSettingsMenu(ctx, gs, mx, my) {
     hitTest(mx, my, muteX, muteY, 68, 20));
   y += 40;
 
+  // Auto Feed toggle
+  const autoFeedOn = gs.settings.autoFeed !== false;
+  const afCol = autoFeedOn ? C.textGood : C.textDim;
+  drawText(ctx, `Auto Feed: ${autoFeedOn ? 'ON' : 'OFF'}`, px + W2/2, y + 10, afCol, 10, 'center', true);
+  const afX = px + W2/2 - 40, afY = y + 14;
+  drawButton(ctx, afX, afY, 80, 18, autoFeedOn ? 'Disable' : 'Enable',
+    hitTest(mx, my, afX, afY, 80, 18));
+  y += 34;
+
   const closeX = px + W2 - 66, closeY = py + H2 - 26;
   drawButton(ctx, closeX, closeY, 58, 20, 'Close', hitTest(mx, my, closeX, closeY, 58, 20));
 
@@ -1445,6 +1455,7 @@ function drawSettingsMenu(ctx, gs, mx, my) {
     clickMinus: { x: cBtns.minusX, y: cBtns.minusY, w: 26, h: 20 },
     clickPlus:  { x: cBtns.plusX,  y: cBtns.plusY,  w: 26, h: 20 },
     sfx:        { x: muteX,   y: muteY,  w: 68, h: 20 },
+    autoFeed:   { x: afX,     y: afY,    w: 80, h: 18 },
     close:      { x: closeX,  y: closeY, w: 58, h: 20 },
   };
 }
@@ -1934,11 +1945,17 @@ function handleMenuClick(mx, my, gs) {
     if (hitTest(mx, my, btns.sfx.x, btns.sfx.y, btns.sfx.w, btns.sfx.h)) {
       Audio.toggle(); return;
     }
+    // Auto feed toggle
+    if (btns.autoFeed && hitTest(mx, my, btns.autoFeed.x, btns.autoFeed.y, btns.autoFeed.w, btns.autoFeed.h)) {
+      if (!gs.settings) gs.settings = {};
+      gs.settings.autoFeed = (gs.settings.autoFeed === false) ? true : false;
+      return;
+    }
     if (hitTest(mx, my, btns.close.x, btns.close.y, btns.close.w, btns.close.h)) {
       M.activeMenu = null; return;
     }
     // Click outside closes
-    const W2 = 250, H2 = 280;
+    const W2 = 250, H2 = 316;
     const px = Math.floor((MAIN_W - W2) / 2), py = 70;
     if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
     return;

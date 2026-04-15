@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.29';
+const GAME_VERSION = 'v0.30';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -53,7 +53,7 @@ function resizeCanvas() {
 
   canvas.style.width  = Math.round(CFG.W * fitScale) + 'px';
   canvas.style.height = Math.round(CFG.H * fitScale) + 'px';
-  canvas.style.filter = 'saturate(0.8)';
+  canvas.style.filter = 'saturate(0.65)';
 
   _applyCanvasTransform(userMult, ww, wh, fitScale);
 

@@ -45,7 +45,7 @@ body {
   -webkit-touch-callout: none;
   user-select: none;
   /* Desaturate slightly for a bleaker, post-apocalyptic feel */
-  filter: saturate(0.8);
+  filter: saturate(0.65);
 }
 
 /* ── Portrait-mode warning ──────────────────────────────────────────────────── */

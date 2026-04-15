@@ -441,7 +441,14 @@ function updateExplore(gs, dt) {
   for (const enc of es.encounters) {
     if (!enc.triggered && Math.abs(es.px - enc.wx) < alertRange * nightMult) {
       enc.triggered = true;
-      const enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
+      // Re-use survivors from a previous fled combat (same HP); else roll fresh
+      let enemies;
+      if (enc._savedEnemies) {
+        enemies = enc._savedEnemies;
+        enc._savedEnemies = null;
+      } else {
+        enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
+      }
       if (enemies.length > 0) {
         gs.mouse.down = false;
         startCombat(gs, enemies, es.px, enc.wx);
@@ -1016,7 +1023,8 @@ function renderOutdoor(ctx, gs, es) {
     fillRect(ctx, zone.x, 0, zone.w, GROUND_Y, zone.bgColor || C.bg, 0.18);
   }
 
-  // Trees for nature/forest zones
+  // Trees for nature/forest zones — desaturated 40%
+  ctx.filter = 'saturate(0.6)';
   for (const zone of loc.zones) {
     const isNature = zone.lootTable && zone.lootTable.startsWith('nature');
     if (isNature) {
@@ -1025,19 +1033,23 @@ function renderOutdoor(ctx, gs, es) {
       }
     }
   }
+  ctx.filter = 'none';
 
   // Foliage / environment dressing (pre-generated positions)
   if (es.foliage) {
     for (const f of es.foliage) {
+      const _isTree = f.type === 'tall_tree' || f.type === 'dead_tree';
+      if (_isTree) ctx.filter = 'saturate(0.6)';
       switch (f.type) {
-        case 'bush':       drawExploreBush(ctx, f.wx, GROUND_Y);      break;
-        case 'wide_bush':  drawExploreWideBush(ctx, f.wx, GROUND_Y);  break;
-        case 'grass':      drawExploreGrass(ctx, f.wx, GROUND_Y);     break;
-        case 'tall_tree':  drawExploreTallTree(ctx, f.wx, GROUND_Y);  break;
-        case 'dead_tree':  drawExploreDeadTree(ctx, f.wx, GROUND_Y);  break;
-        case 'car_wreck':  drawExploreCarWreck(ctx, f.wx, GROUND_Y);  break;
+        case 'bush':       drawExploreBush(ctx, f.wx, GROUND_Y);       break;
+        case 'wide_bush':  drawExploreWideBush(ctx, f.wx, GROUND_Y);   break;
+        case 'grass':      drawExploreGrass(ctx, f.wx, GROUND_Y);      break;
+        case 'tall_tree':  drawExploreTallTree(ctx, f.wx, GROUND_Y);   break;
+        case 'dead_tree':  drawExploreDeadTree(ctx, f.wx, GROUND_Y);   break;
+        case 'car_wreck':  drawExploreCarWreck(ctx, f.wx, GROUND_Y);   break;
         case 'debris':     drawExploreDebrisPile(ctx, f.wx, GROUND_Y); break;
       }
+      if (_isTree) ctx.filter = 'none';
     }
   }
 

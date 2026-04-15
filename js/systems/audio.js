@@ -23,6 +23,12 @@ const Audio = (() => {
   let shltMusicActive    = false;
   let shltMasterGain     = null;
 
+  // ── Combat music nodes ────────────────────────────────────────────────────────
+  let combatMusicNodes     = [];
+  let combatMusicScheduled = [];
+  let combatMusicActive    = false;
+  let combatMasterGain     = null;
+
   function init() {
     if (initialised) return;
     initialised = true;
@@ -265,6 +271,106 @@ const Audio = (() => {
     shltMusicNodes = [];
   }
 
+  // ── Combat music (ominous low beat + drone) ───────────────────────────────────
+
+  function _addCombatNode(node) { combatMusicNodes.push(node); return node; }
+
+  function startCombatMusic() {
+    if (!ctx || !enabled) return;
+    stopMusic();
+    stopShelterMusic();
+    stopCombatMusic();
+    combatMusicActive = true;
+
+    try {
+      const t = ctx.currentTime + 0.05;
+
+      combatMasterGain = _addCombatNode(ctx.createGain());
+      combatMasterGain.gain.setValueAtTime(0, t);
+      combatMasterGain.gain.linearRampToValueAtTime(0.55 * musicVol, t + 1.5);
+      combatMasterGain.connect(ctx.destination);
+
+      // Deep sub-bass drone: two detuned sawtooths
+      const d1 = _addCombatNode(ctx.createOscillator());
+      d1.type = 'sawtooth'; d1.frequency.value = 41.0;
+      const dg1 = _addCombatNode(ctx.createGain()); dg1.gain.value = 0.045;
+      d1.connect(dg1); dg1.connect(combatMasterGain); d1.start(t);
+
+      const d2 = _addCombatNode(ctx.createOscillator());
+      d2.type = 'sawtooth'; d2.frequency.value = 41.5;
+      const dg2 = _addCombatNode(ctx.createGain()); dg2.gain.value = 0.035;
+      d2.connect(dg2); dg2.connect(combatMasterGain); d2.start(t);
+
+      // Tension layer: 82 Hz + slow tremolo
+      const ten = _addCombatNode(ctx.createOscillator());
+      ten.type = 'sine'; ten.frequency.value = 82;
+      const tg = _addCombatNode(ctx.createGain()); tg.gain.value = 0.06;
+      const tLfo = _addCombatNode(ctx.createOscillator());
+      tLfo.type = 'sine'; tLfo.frequency.value = 0.22;
+      const tLg = _addCombatNode(ctx.createGain()); tLg.gain.value = 0.045;
+      tLfo.connect(tLg); tLg.connect(tg.gain);
+      ten.connect(tg); tg.connect(combatMasterGain);
+      ten.start(t); tLfo.start(t);
+
+      // Rhythmic kick at ~70 BPM (857 ms)
+      const beatMs = (60 / 70) * 1000;
+      function scheduleKick(when) {
+        if (!combatMusicActive) return;
+        try {
+          const ko = ctx.createOscillator(); ko.type = 'sine';
+          ko.frequency.setValueAtTime(85, when);
+          ko.frequency.exponentialRampToValueAtTime(28, when + 0.18);
+          const kg = ctx.createGain();
+          kg.gain.setValueAtTime(0, when);
+          kg.gain.linearRampToValueAtTime(0.22, when + 0.008);
+          kg.gain.exponentialRampToValueAtTime(0.0001, when + 0.28);
+          ko.connect(kg); kg.connect(combatMasterGain);
+          ko.start(when); ko.stop(when + 0.32);
+        } catch(e) {}
+        combatMusicScheduled.push(setTimeout(() => scheduleKick(ctx.currentTime + 0.02), beatMs));
+      }
+      scheduleKick(t + 0.3);
+
+      // Sparse metallic accent: bandpass noise, every 5-10 s
+      function scheduleAccent(when) {
+        if (!combatMusicActive) return;
+        const interval = 5000 + Math.random() * 5000;
+        try {
+          const sr  = ctx.sampleRate;
+          const dur = 0.10 + Math.random() * 0.08;
+          const buf = ctx.createBuffer(1, Math.ceil(sr * dur), sr);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+          const src = ctx.createBufferSource(); src.buffer = buf;
+          const flt = ctx.createBiquadFilter();
+          flt.type = 'bandpass';
+          flt.frequency.value = 800 + Math.random() * 500;
+          flt.Q.value = 5;
+          const ag = ctx.createGain();
+          ag.gain.setValueAtTime(0.11, when);
+          ag.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+          src.connect(flt); flt.connect(ag); ag.connect(combatMasterGain);
+          src.start(when);
+        } catch(e) {}
+        combatMusicScheduled.push(setTimeout(() => scheduleAccent(ctx.currentTime + 0.02), interval));
+      }
+      scheduleAccent(t + 2 + Math.random() * 3);
+
+    } catch(e) {}
+  }
+
+  function stopCombatMusic() {
+    combatMusicActive = false;
+    combatMasterGain  = null;
+    for (const id of combatMusicScheduled) clearTimeout(id);
+    combatMusicScheduled = [];
+    for (const node of combatMusicNodes) {
+      try { node.stop && node.stop(0); } catch(e) {}
+      try { node.disconnect(); } catch(e) {}
+    }
+    combatMusicNodes = [];
+  }
+
   // ── Creepy ambient FX ──────────────────────────────────────────────────────────
 
   function creepyAmbient() {
@@ -348,6 +454,9 @@ const Audio = (() => {
     if (shltMasterGain) {
       try { shltMasterGain.gain.setTargetAtTime(0.45 * musicVol, ctx.currentTime, 0.1); } catch(e) {}
     }
+    if (combatMasterGain) {
+      try { combatMasterGain.gain.setTargetAtTime(0.55 * musicVol, ctx.currentTime, 0.1); } catch(e) {}
+    }
   }
   function getMusicVol()  { return musicVol; }
   function setSfxVol(v)   { sfxVol   = Math.max(0, Math.min(1, v)); }
@@ -361,6 +470,8 @@ const Audio = (() => {
     startMusic, stopMusic,
     // Shelter music
     startShelterMusic, stopShelterMusic,
+    // Combat music
+    startCombatMusic, stopCombatMusic,
     // Ambient
     creepyAmbient,
 

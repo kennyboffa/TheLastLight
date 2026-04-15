@@ -40,7 +40,8 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     }
   }
 
-  // Space enemies out around the encounter world position
+  // Space enemies out around the encounter world position.
+  // If an enemy already has worldX (re-used from a fled combat) preserve it.
   const count = enemies.length;
   const enemyCombatants = enemies.map((e, i) => ({
     ...e,
@@ -48,8 +49,9 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     index: i,
     dead: false,
     aiTimer: randInt(0, 2),
-    // World position: spread around encounterWx, player approaches from left
-    worldX: (encounterWx || (playerWx + 200)) + (i - (count - 1) / 2) * 55,
+    worldX: (e.worldX !== undefined)
+      ? e.worldX
+      : (encounterWx || (playerWx + 200)) + (i - (count - 1) / 2) * 55,
   }));
 
   const companionData = gs.exploreCompanionId
@@ -77,6 +79,7 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
   };
 
   combatLog(gs, 'Combat started!', 'warn');
+  Audio.startCombatMusic();
 }
 
 function combatLog(gs, text, type) {
@@ -385,6 +388,7 @@ function endCombat(gs, result) {
   const c = gs.combat;
   gs.parent.health    = Math.max(0, c.player.hp);
   gs.parent.tiredness = clamp(gs.parent.tiredness + 15, 0, 100);
+  Audio.stopCombatMusic();
 
   if (result === 'defeat') {
     gs.inCombat = false;
@@ -396,25 +400,36 @@ function endCombat(gs, result) {
   if (result === 'victory' && c._encRef) c._encRef.killed = true;
 
   if (result === 'fled') {
-    // Shove live enemies away from player so they're not right on top when fade clears
-    if (gs.inCombat) {
-      for (const e of c.enemies) {
-        if (!e.dead) {
-          const dir = e.worldX >= c.playerWx ? 1 : -1;
-          e.worldX += dir * 320;
-          if (c._encRef) c._encRef.wx = e.worldX; // shift encounter center too
-        }
+    const enc = c._encRef || null;
+    // Survivors retain current HP; shove them away from player
+    const survivors = c.enemies.filter(e => !e.dead).map(e => {
+      const dir = e.worldX >= c.playerWx ? 1 : -1;
+      return { ...e, worldX: e.worldX + dir * 320 };
+    });
+    if (enc) {
+      if (survivors.length > 0) {
+        // Save survivors so re-approach fights the same weakened enemies
+        enc._savedEnemies = survivors;
+        enc.wx = Math.round(survivors.reduce((s, e) => s + e.worldX, 0) / survivors.length);
+        enc.triggered = false; // make them re-appear on the map
+      } else {
+        enc.killed = true; // all dead while fleeing — they're gone
       }
     }
-    // Fade out → clear combat → fade back in to exploration
     gs.screenFade = {
       active: true, alpha: 0, phase: 'out', titleText: null,
-      pendingFn: () => { gs.inCombat = false; gs.combat = null; gs.screen = 'explore'; },
+      pendingFn: () => {
+        gs.inCombat = false;
+        gs.combat   = null;
+        gs.screen   = 'explore';
+        Audio.startMusic();
+      },
     };
     return;
   }
 
-  // Victory
+  // Victory — restart explore music
+  Audio.startMusic();
   if (c.victoryLoot.length > 0) {
     gs.inCombat = false;
     gs.screen   = 'lootPickup';

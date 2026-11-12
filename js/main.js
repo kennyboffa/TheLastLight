@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.30';
+const GAME_VERSION = 'v0.31';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -781,70 +781,17 @@ function resolveMission(gs, m) {
 // ── Game reset ────────────────────────────────────────────────────────────────
 
 function resetGame() {
-  // Reset state
-  Object.assign(GS, {
-    screen: 'intro',
-    day: 1,
-    time: CFG.DAY_START,
-    paused: false,
-    parent: {
-      name:'Alex', gender:'father',
-      health:100, maxHealth:100,
-      hunger:20, thirst:20, tiredness:20, depression:15,
-      infected:false,
-      strength:5, agility:5, perception:5, intelligence:5, charisma:5,
-      skills:{scavenging:1,stealth:1,exploration:1,bartering:1,speech:1,lockpick:1,melee:1,firearms:1},
-      inventory:[], backpackId:null,
-      equipped:{weapon:null,armor:null},
-      ammo:{pistol:0,rifle:0,shotgun:0},
-      loaded:{pistol:0,rifle:0,shotgun:0},
-      isExploring:false, isSleeping:false, isWorking:false,
-      task:null, taskProgress:0, taskDuration:0,
-      level:1, xp:0,
-      x:115, y:0, facing:1, animFrame:0, animTimer:0,
-    },
-    child: {
-      name:'Lily', health:80, maxHealth:80,
-      hunger:20, thirst:20, tiredness:25, depression:15,
-      isAlone:false, infected:false,
-      isSleeping:false, task:null, taskProgress:0, taskDuration:0,
-      strength:2, agility:5, perception:5, intelligence:6, charisma:6,
-      skills:{scavenging:1,stealth:2,exploration:1,bartering:1,speech:2,lockpick:1,melee:1,firearms:1},
-      level:1, xp:0,
-      x:65, y:0, facing:1, animFrame:0, animTimer:0,
-    },
-    survivors: [],
-    shelter: {
-      rooms: [
-        {id:'main',     unlocked:true,  level:1, building:false, buildProgress:0},
-        {id:'bedroom',  unlocked:true,  level:1, building:false, buildProgress:0},
-        {id:'storage',  unlocked:false, level:0, building:false, buildProgress:0},
-        {id:'workshop', unlocked:false, level:0, building:false, buildProgress:0},
-        {id:'infirmary',unlocked:false, level:0, building:false, buildProgress:0},
-        {id:'security', unlocked:false, level:0, building:false, buildProgress:0},
-      ],
-      storage:[], storageMax:80, defenseLevel:0,
-      hasWaterFilter:false, hasGenerator:false, hasRadioDampener:false,
-      hasRaincatcher:false,
-      campfire:false, noiseBudget:100, noiseToday:0,
-      dronePatrol:{ active:false, x:-30, dir:1, timer:0, nextPatrol:300 },
-    },
-    dog:null, suspicion:10,
-    explore:null, combat:null, event:null,
-    missions:[], eventLastFired:{},
-    _pendingLoc: null,
-    flags:{dogEncountered:false,dogRescued:false,firstExplore:false,traderMet:false,
-           lilySick:false,lilySickDay:0,lilyCured:false,antiviralFound:false,escapeReady:false,gameWon:false},
-    log:[], notifications:[],
-    dayFade:{active:false,alpha:0,phase:'out',timer:0},
-    weather:{ type:'clear', timer:0, nextChange:240, rainAccum:0 },
-    zoom:1.0,
-    timeScale: 1,
-    mouse:{x:0,y:0,down:false,clicked:false,clickX:0,clickY:0},
-    keys:{},
-    gameOverReason: '',
-  });
+  // Keep player preferences, restore everything else to the starting state
+  const keep = { settings: GS.settings, userScale: GS.userScale };
+  for (const k of Object.keys(GS)) delete GS[k];
+  Object.assign(GS, JSON.parse(JSON.stringify(GS_INITIAL)), keep);
+  GS.screen = 'intro';
+  if (typeof exploreState !== 'undefined') exploreState = null;
+  Audio.stopCombatMusic();
+  Audio.stopMusic();
+  Audio.stopShelterMusic();
   initTitle();
+  initIntro();
   initCharCreate();
   // Reset shelter UI
   shelterUI.activeMenu   = null;

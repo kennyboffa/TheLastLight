@@ -39,31 +39,45 @@ function loadGame(gs) {
       if (SKIP_FIELDS.includes(key)) continue;
       gs[key] = data[key];
     }
-    // Always restore to shelter screen after load
-    gs.screen = 'shelter';
-    gs.combat  = null;
-    gs.event   = null;
-    gs.explore = null;
-    gs.paused  = false;
-    gs.dayFade    = { active: false, alpha: 0, phase: 'out', timer: 0 };
-    gs.screenFade = { active: false, alpha: 0, phase: 'idle', pendingFn: null };
-    gs.notifications = [];
-    // Reset any UI state
-    if (typeof shelterUI !== 'undefined') {
-      shelterUI.activeMenu   = null;
-      shelterUI.selectedRoom = null;
-      shelterUI.selectedChar = null;
-    }
-    if (typeof eventUI !== 'undefined') {
-      eventUI.resultText  = null;
-      eventUI.resultTimer = 0;
-    }
+    _finishLoad(gs);
     notify('Game loaded — Day ' + gs.day + '.', 'good');
     return true;
   } catch (e) {
     notify('Load failed: ' + e.message, 'danger');
     return false;
   }
+}
+
+// Shared clean-up after restoring any save: always resume in the shelter with
+// no exploration/combat in progress (autosaves can be written mid-exploration).
+function _finishLoad(gs) {
+  gs.screen   = 'shelter';
+  gs.combat   = null;
+  gs.inCombat = false;
+  gs.event    = null;
+  gs.explore  = null;
+  gs.paused   = false;
+  gs._returnTo = null;
+  gs.dayFade    = { active: false, alpha: 0, phase: 'out', timer: 0 };
+  gs.screenFade = { active: false, alpha: 0, phase: 'idle', pendingFn: null };
+  gs.notifications = [];
+  if (gs.parent) gs.parent.isExploring = false;
+  if (gs.child)  gs.child.isAlone = false;
+  for (const s of (gs.survivors || [])) s.isExploring = false;
+  gs.exploreCompanionId = null;
+  if (typeof exploreState !== 'undefined') exploreState = null;
+  if (typeof shelterUI !== 'undefined') {
+    shelterUI.activeMenu   = null;
+    shelterUI.selectedRoom = null;
+    shelterUI.selectedChar = null;
+  }
+  if (typeof eventUI !== 'undefined') {
+    eventUI.resultText  = null;
+    eventUI.resultTimer = 0;
+  }
+  Audio.stopCombatMusic();
+  Audio.stopMusic();
+  Audio.startShelterMusic();
 }
 
 function hasSave() {
@@ -115,23 +129,7 @@ function loadAutosave(gs) {
       if (SKIP_FIELDS.includes(key)) continue;
       gs[key] = data[key];
     }
-    gs.screen     = 'shelter';
-    gs.combat     = null;
-    gs.event      = null;
-    gs.explore    = null;
-    gs.paused     = false;
-    gs.dayFade    = { active: false, alpha: 0, phase: 'out', timer: 0 };
-    gs.screenFade = { active: false, alpha: 0, phase: 'idle', pendingFn: null };
-    gs.notifications = [];
-    if (typeof shelterUI !== 'undefined') {
-      shelterUI.activeMenu   = null;
-      shelterUI.selectedRoom = null;
-      shelterUI.selectedChar = null;
-    }
-    if (typeof eventUI !== 'undefined') {
-      eventUI.resultText  = null;
-      eventUI.resultTimer = 0;
-    }
+    _finishLoad(gs);
     notify('Autosave loaded — Day ' + gs.day + '.', 'good');
     return true;
   } catch (e) {

@@ -221,6 +221,10 @@ const GS = {
   },
 };
 
+// Pristine copy of the starting state, used by resetGame() so a new run after
+// game over starts exactly like a fresh page load.
+const GS_INITIAL = JSON.parse(JSON.stringify(GS));
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function addLog(text, type) {

@@ -5,11 +5,6 @@
 // player_sprite_idle.png                    — single frame (bunker idle)
 // player_sprites.png                        — 4×4 walk cycle (bunker moving)
 // player_sprites_running.png                — 4×4 run cycle (fallback)
-// file_00000000211c7243924f52ea61a8cd87.png — main character sheet, 5 cols × 7 rows
-//   row 0: unarmed walk  (5 frames) — explore movement
-//   row 1: armed / rifle (5 frames) — armed exploration
-//   row 5: crawling wounded         — future combat states
-//   row 6: dead                     — future downed states
 // Frames read left→right, top→bottom. All face right; left is auto-mirrored.
 
 const _SPRITE_COLS          = 4;
@@ -20,14 +15,10 @@ const _SPRITE_TOTAL_FRAMES  = _SPRITE_COLS * _SPRITE_ROWS; // 16
 const _SPRITE_FOOT_FRAC       = 0.72;  // player sprites
 const _CHILD_SPRITE_FOOT_FRAC = 0.91;  // Lily sprites (her frames have feet lower)
 
-// Main character sheet constants
-const _MAIN_COLS   = 5;
-const _MAIN_ROWS   = 7;
 
 let _idleStaticSprite = null; // single frame — bunker idle
 let _idleSprite       = null; // 4×4 sheet   — bunker walking
 let _runSprite        = null; // 4×4 sheet   — fallback run
-let _mainSprite       = null; // 5×7 main character sheet
 
 function _loadSpriteSheet(src, callback) {
   const img = new Image();
@@ -48,19 +39,6 @@ function _loadSpriteSheet(src, callback) {
 
 _loadSpriteSheet('Assets/player_sprites.png',          function(s) { _idleSprite = s; });
 _loadSpriteSheet('Assets/player_sprites_running.png',   function(s) { _runSprite  = s; });
-
-// Main character sheet: divide by its own cols/rows
-(function() {
-  const img = new Image();
-  img.onload = function() {
-    _mainSprite = {
-      img,
-      fw: Math.floor(img.width  / _MAIN_COLS),
-      fh: Math.floor(img.height / _MAIN_ROWS),
-    };
-  };
-  img.src = 'Assets/file_00000000211c7243924f52ea61a8cd87.png';
-})();
 
 // ── Child (Lily) sprites ──────────────────────────────────────────────────────
 // lily_idle.png    — single 64×64 still frame

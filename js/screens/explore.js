@@ -1343,8 +1343,8 @@ function drawExploreHUD(ctx, gs, es) {
   drawPanel(ctx, CFG.W - 84, 6, 78, 26, C.panelBg);
   drawText(ctx, timeStr, CFG.W - 45, 23, timeWarnColor, 13, 'center', true);
 
-  // Pick-up hint
-  if (!es.building) {
+  // Pick-up hint (not during combat — the combat HUD owns the bottom of the screen)
+  if (!es.building && !gs.inCombat) {
     const nearLoot = es.loot.find(item => !item.taken && Math.abs(es.px - item.wx) < 25);
     if (nearLoot) {
       const def = getItemDef(nearLoot.id);
@@ -1357,11 +1357,13 @@ function drawExploreHUD(ctx, gs, es) {
     }
   }
 
-  // Carry weight
-  const wt    = calcWeight(gs.parent.inventory).toFixed(1);
-  const maxWt = parentMaxCarry().toFixed(1);
-  const wtCol = parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : C.textDim;
-  drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 36, wtCol, 9);
+  // Carry weight (hidden during combat — the action bar sits there)
+  if (!gs.inCombat) {
+    const wt    = calcWeight(gs.parent.inventory).toFixed(1);
+    const maxWt = parentMaxCarry().toFixed(1);
+    const wtCol = parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : C.textDim;
+    drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 36, wtCol, 9);
+  }
 
   // Night run warning
   const nf = nightFactor(gs.time);
@@ -1377,7 +1379,7 @@ function drawExploreHUD(ctx, gs, es) {
   }
 
   // Return Home button — only visible at the area edges, not inside a building
-  if (es.showReturnPrompt && !es.building) {
+  if (es.showReturnPrompt && !es.building && !gs.inCombat) {
     const retBtnY = CFG.H - 34;
     drawButton(ctx, 6, retBtnY, 112, 26, 'Return Home', hitTest(mx, my, 6, retBtnY, 112, 26));
   }
@@ -1413,12 +1415,13 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   const c = gs.combat;
 
   // Combat log strip (above action bar)
-  const logX = 6, logY = CFG.H - 100, logW = CFG.W - 12, logH = 60;
+  // Compact strip so it doesn't cover the ground line and characters' feet
+  const logX = 6, logY = CFG.H - 76, logW = CFG.W - 12, logH = 36;
   fillRect(ctx, logX, logY, logW, logH, C.panelBg, 0.88);
   strokeRect(ctx, logX, logY, logW, logH, C.border2);
   const LOG_COLS = { good:'#44aa55', danger:'#cc4444', warn:'#cc8830', normal:C.textDim };
   let ly = logY + 10;
-  for (let i = 0; i < Math.min(c.log.length, 5); i++) {
+  for (let i = 0; i < Math.min(c.log.length, 3); i++) {
     const e = c.log[i];
     drawText(ctx, e.text, logX + 8, ly, LOG_COLS[e.type] || C.textDim, 8);
     ly += 11;
@@ -1561,6 +1564,19 @@ function _handleExploreCombatClick(mx, my, gs) {
   if (gs._combatFlee && hitTest(mx, my, gs._combatFlee.x, gs._combatFlee.y, gs._combatFlee.w, gs._combatFlee.h)) {
     playerFlee(gs); return;
   }
+}
+
+// Start in-world combat from outside the encounter system (e.g. an event's
+// "Fight back" choice). Enemies appear a short distance ahead of the player.
+function startExploreCombat(gs, enemies) {
+  const es = exploreState;
+  if (!es || !enemies || enemies.length === 0) return;
+  if (es.building) es.building = null; // fights happen outdoors
+  const dir = es.facing || 1;
+  const enemyWx = clamp(es.px + dir * 140, 40, CFG.WORLD_W - 40);
+  gs.mouse.down = false;
+  startCombat(gs, enemies, es.px, enemyWx);
+  gs.inCombat = true;
 }
 
 // ── World enemy sprite helper ─────────────────────────────────────────────────

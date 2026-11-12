@@ -567,8 +567,17 @@ function advanceDay(gs) {
 
 // ── Game over ─────────────────────────────────────────────────────────────────
 function triggerGameOver(gs, reason) {
+  if (gs.screen === 'gameOver') return;
   gs.gameOverReason = reason;
   gs.screen = 'gameOver';
+  // Death can come from stats ticking mid-fight or mid-exploration: shut those down
+  gs.inCombat = false;
+  gs.combat   = null;
+  gs.event    = null;
+  if (gs.screenFade) { gs.screenFade.active = false; gs.screenFade.pendingFn = null; }
+  Audio.stopCombatMusic();
+  Audio.stopMusic();
+  Audio.stopShelterMusic();
 }
 
 // ── XP & Leveling ─────────────────────────────────────────────────────────────

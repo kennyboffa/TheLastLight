@@ -561,7 +561,7 @@ const EVENTS_DB = [
         action: gs => {
           const enemies = [deepClone(ENEMY_TEMPLATES.raider), deepClone(ENEMY_TEMPLATES.survivor_bandit)];
           gs._returnTo = 'explore';
-          startCombat(gs, enemies);
+          startExploreCombat(gs, enemies);
           return null;
         }
       },

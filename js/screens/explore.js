@@ -415,7 +415,8 @@ function updateExplore(gs, dt) {
   else if (right) { es.velX =  CFG.PLAYER_SPEED * speedMult; es.facing =  1; }
   else es.velX = 0;
 
-  es.px = clamp(es.px + es.velX, 10, CFG.WORLD_W - 10);
+  // velX is tuned in px per 60fps frame; scale by real time so slow frames don't slow walking
+  es.px = clamp(es.px + es.velX * dt * 60, 10, CFG.WORLD_W - 10);
 
   const targetScroll = es.px - CFG.W * 0.35;
   es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.15), 0, CFG.WORLD_W - CFG.W);
@@ -527,7 +528,7 @@ function updateBuildingInterior(gs, dt) {
   else if (right) { bi.velX =  CFG.PLAYER_SPEED * biSpeedMult; bi.facing =  1; }
   else bi.velX = 0;
 
-  bi.px = clamp(bi.px + bi.velX, 10, fl.width - 10);
+  bi.px = clamp(bi.px + bi.velX * dt * 60, 10, fl.width - 10);
 
   const targetScroll = bi.px - CFG.W * 0.35;
   bi.scrollX = clamp(lerp(bi.scrollX, targetScroll, 0.15), 0, Math.max(0, fl.width - CFG.W));

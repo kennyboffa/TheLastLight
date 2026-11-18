@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.32';
+const GAME_VERSION = 'v0.33';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -353,12 +353,13 @@ function handleKeyPress(key) {
 
 // ── Main game loop ────────────────────────────────────────────────────────────
 
+let _vhsStrip   = null;  // small buffer for the VHS band skew
 let lastTime   = 0;
 let frameCount = 0;
 const TARGET_FPS = 60;
 
 function gameLoop(timestamp) {
-  const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // cap at 50ms
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1); // cap at 100ms (keeps speed right down to 10 fps)
   lastTime = timestamp;
   frameCount++;
 
@@ -532,8 +533,8 @@ function render(ctx) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, CFG.W, CFG.H);
 
-  // Scanlines + VHS tape banding — retro look
-  if (gs.screen !== 'intro') {
+  // Scanlines + VHS tape banding — retro look (can be turned off in Settings)
+  if (gs.screen !== 'intro' && !(gs.settings && gs.settings.vhs === false)) {
     ctx.save();
     // Scanlines
     ctx.globalAlpha = 0.055;
@@ -546,8 +547,16 @@ function render(ctx) {
       const _by    = Math.floor((_t * CFG.H / 9) % CFG.H);
       const _bh    = 14;
       const _shift = Math.round(Math.sin(_t * 19.7) * 4 * _vis);
-      // skew: self-copy the band strip with a horizontal pixel shift
-      ctx.drawImage(canvas, 0, _by, CFG.W, _bh, _shift, _by, CFG.W, _bh);
+      // skew: copy just the strip into a small buffer, then draw it back shifted.
+      // (Drawing the canvas onto itself makes the browser snapshot the whole
+      // canvas every frame — that dropped the game to ~20 fps while the band showed.)
+      if (_shift !== 0) {
+        if (!_vhsStrip) { _vhsStrip = document.createElement('canvas'); _vhsStrip.width = CFG.W; _vhsStrip.height = 14; }
+        const sc = _vhsStrip.getContext('2d');
+        sc.clearRect(0, 0, CFG.W, _bh);
+        sc.drawImage(canvas, 0, _by, CFG.W, _bh, 0, 0, CFG.W, _bh);
+        ctx.drawImage(_vhsStrip, 0, 0, CFG.W, _bh, _shift, _by, CFG.W, _bh);
+      }
       // faint tint over the skewed strip
       ctx.globalAlpha = _vis * 0.04;
       ctx.fillStyle = '#c4d8ff';

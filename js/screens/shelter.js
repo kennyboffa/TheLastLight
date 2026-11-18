@@ -1415,7 +1415,7 @@ function drawLoadMenu(ctx, gs, mx, my) {
 
 function drawSettingsMenu(ctx, gs, mx, my) {
   if (!gs.settings) gs.settings = {};
-  const W2 = 250, H2 = 316;
+  const W2 = 250, H2 = 350;
   const px = Math.floor((MAIN_W - W2) / 2), py = 70;
   drawModal(ctx, px, py, W2, H2, 'SETTINGS');
 
@@ -1483,6 +1483,13 @@ function drawSettingsMenu(ctx, gs, mx, my) {
     hitTest(mx, my, afX, afY, 80, 18));
   y += 34;
 
+  // Retro VHS effect toggle (scanlines + tape band); off helps slower devices
+  const vhsOn = gs.settings.vhs !== false;
+  drawText(ctx, `Retro VHS: ${vhsOn ? 'ON' : 'OFF'}`, px + W2/2, y + 10, vhsOn ? C.textGood : C.textDim, 10, 'center', true);
+  const vhX = px + W2/2 - 40, vhY = y + 14;
+  drawButton(ctx, vhX, vhY, 80, 18, vhsOn ? 'Disable' : 'Enable', hitTest(mx, my, vhX, vhY, 80, 18));
+  y += 34;
+
   const closeX = px + W2 - 66, closeY = py + H2 - 26;
   drawButton(ctx, closeX, closeY, 58, 20, 'Close', hitTest(mx, my, closeX, closeY, 58, 20));
 
@@ -1497,6 +1504,7 @@ function drawSettingsMenu(ctx, gs, mx, my) {
     clickPlus:  { x: cBtns.plusX,  y: cBtns.plusY,  w: 26, h: 20 },
     sfx:        { x: muteX,   y: muteY,  w: 68, h: 20 },
     autoFeed:   { x: afX,     y: afY,    w: 80, h: 18 },
+    vhs:        { x: vhX,     y: vhY,    w: 80, h: 18 },
     close:      { x: closeX,  y: closeY, w: 58, h: 20 },
   };
 }
@@ -1987,6 +1995,11 @@ function handleMenuClick(mx, my, gs) {
       Audio.toggle(); return;
     }
     // Auto feed toggle
+    if (btns.vhs && hitTest(mx, my, btns.vhs.x, btns.vhs.y, btns.vhs.w, btns.vhs.h)) {
+      if (!gs.settings) gs.settings = {};
+      gs.settings.vhs = gs.settings.vhs === false;
+      return;
+    }
     if (btns.autoFeed && hitTest(mx, my, btns.autoFeed.x, btns.autoFeed.y, btns.autoFeed.w, btns.autoFeed.h)) {
       if (!gs.settings) gs.settings = {};
       gs.settings.autoFeed = (gs.settings.autoFeed === false) ? true : false;
@@ -1996,7 +2009,7 @@ function handleMenuClick(mx, my, gs) {
       M.activeMenu = null; return;
     }
     // Click outside closes
-    const W2 = 250, H2 = 316;
+    const W2 = 250, H2 = 350;
     const px = Math.floor((MAIN_W - W2) / 2), py = 70;
     if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
     return;

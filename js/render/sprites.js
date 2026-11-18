@@ -16,6 +16,41 @@ const _SPRITE_FOOT_FRAC       = 0.72;  // player sprites
 const _CHILD_SPRITE_FOOT_FRAC = 0.91;  // Lily sprites (her frames have feet lower)
 
 
+// Extra grain added to the hand-drawn PNGs at load time so they match the
+// generated sprites (see tools/gen_art.py). The files themselves are never
+// changed. ART_GRAIN is the noise strength in brightness steps; 0 = off.
+const ART_GRAIN = 9;
+const ART_SPECKLE = 0.035;   // share of pixels darkened a little, like the generated art
+
+function _grainify(img, name) {
+  if (!ART_GRAIN) return img;
+  const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  let data;
+  try { data = g.getImageData(0, 0, w, h); }
+  catch (e) { return img; }               // pixel access blocked (e.g. opened from file://)
+  // Deterministic noise per file, so the grain doesn't shimmer between loads
+  let seed = 2166136261;
+  for (let i = 0; i < name.length; i++) seed = Math.imul(seed ^ name.charCodeAt(i), 16777619);
+  const rnd = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296; };
+  const px = data.data;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] === 0) continue;
+    const n = (rnd() + rnd() + rnd() - 1.5) * 2 * ART_GRAIN;   // roughly normal, sd ≈ ART_GRAIN
+    const k = rnd() < ART_SPECKLE ? 0.72 : 1;
+    px[i]     = Math.max(0, Math.min(255, (px[i]     + n) * k));
+    px[i + 1] = Math.max(0, Math.min(255, (px[i + 1] + n) * k));
+    px[i + 2] = Math.max(0, Math.min(255, (px[i + 2] + n) * k));
+  }
+  g.putImageData(data, 0, 0);
+  // Look like a loaded <img> to the drawing code
+  c.naturalWidth = w; c.naturalHeight = h; c.complete = true;
+  return c;
+}
+
 let _idleStaticSprite = null; // single frame — bunker idle
 let _idleSprite       = null; // 4×4 sheet   — bunker walking
 let _runSprite        = null; // 4×4 sheet   — fallback run
@@ -25,7 +60,7 @@ function _loadSpriteSheet(src, callback) {
   img.onload = function () {
     const fw = Math.floor(img.width  / _SPRITE_COLS);
     const fh = Math.floor(img.height / _SPRITE_ROWS);
-    callback({ img, fw, fh });
+    callback({ img: _grainify(img, src), fw, fh });
   };
   img.src = src;
 }
@@ -33,7 +68,7 @@ function _loadSpriteSheet(src, callback) {
 // Single idle frame — it's a 64×64 image treated as a 1×1 grid
 (function() {
   const img = new Image();
-  img.onload = function () { _idleStaticSprite = { img, fw: img.width, fh: img.height }; };
+  img.onload = function () { _idleStaticSprite = { img: _grainify(img, 'idle'), fw: img.width, fh: img.height }; };
   img.src = 'Assets/player_sprite_idle.png';
 })();
 
@@ -48,14 +83,14 @@ let _childWalkSprite = null;
 
 (function() {
   const img = new Image();
-  img.onload = function() { _childIdleSprite = { img, fw: img.width, fh: img.height }; };
+  img.onload = function() { _childIdleSprite = { img: _grainify(img, 'lily_idle'), fw: img.width, fh: img.height }; };
   img.src = 'Assets/lily_idle.png';
 })();
 
 (function() {
   const img = new Image();
   img.onload = function() {
-    _childWalkSprite = { img, fw: Math.floor(img.width / 2), fh: Math.floor(img.height / 2), cols: 2, total: 4 };
+    _childWalkSprite = { img: _grainify(img, 'lily_walking'), fw: Math.floor(img.width / 2), fh: Math.floor(img.height / 2), cols: 2, total: 4 };
   };
   img.src = 'Assets/lily_walking.png';
 })();
@@ -68,7 +103,7 @@ function _loadItemVariants(id, filenames) {
   _itemSpriteMap[id] = [];
   filenames.forEach(function(filename) {
     const img = new Image();
-    img.onload = function() { _itemSpriteMap[id].push(img); };
+    img.onload = function() { _itemSpriteMap[id].push(_grainify(img, filename)); };
     img.src = 'Assets/' + filename;
   });
 }
@@ -91,6 +126,11 @@ const BUILDING_SPRITES = {
   cabin:     [{ key: 'bld_cabin',   w: 130, h: 104 }],
   urban:     [{ key: 'bld_apartment', w: 140, h: 170 }, { key: 'bld_house_2', w: 132, h: 128 }],
 };
+
+// Sprites drawn by hand (get extra grain at load); everything else is generated
+const HAND_DRAWN = new Set(['tree_1', 'tree_2', 'tree_3', 'large_tree', 'dead_tree', 'bush', 'bush_berry',
+  'grass_1', 'grass_2', 'bones_1', 'bones_2', 'trash', 'crate', 'box', 'chest', 'locker',
+  'survivor_1', 'survivor_2']);
 
 const _envSpr = {};
 (function() {
@@ -128,7 +168,7 @@ const _envSpr = {};
   }
   for (const [key, file] of Object.entries(files)) {
     const img = new Image();
-    img.onload = function() { _envSpr[key] = img; };
+    img.onload = function() { _envSpr[key] = HAND_DRAWN.has(key) ? _grainify(img, file) : img; };
     img.src = 'Assets/' + file;
   }
 })();
@@ -156,7 +196,9 @@ function _fitSprite(key, targetH) {
   src.width = img.naturalWidth; src.height = img.naturalHeight;
   const sc = src.getContext('2d');
   sc.drawImage(img, 0, 0);
-  const data = sc.getImageData(0, 0, src.width, src.height).data;
+  let data;
+  try { data = sc.getImageData(0, 0, src.width, src.height).data; }
+  catch (e) { _fitCache[ck] = img; return img; }   // pixel access blocked: draw as-is
   let x0 = src.width, y0 = src.height, x1 = -1, y1 = -1;
   for (let y = 0; y < src.height; y++) for (let x = 0; x < src.width; x++) {
     if (data[(y * src.width + x) * 4 + 3] > 8) {

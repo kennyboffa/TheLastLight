@@ -411,8 +411,9 @@ const CHAR_HAND = { enemy_human: [18, 27] };
 // at time t0 of its last attack. Melee: hang → wind-up → strike. Guns: low → level.
 function _weaponPose(id, t0) {
   const gun = WEAPON_GUNS.has(id);
-  const t = t0 ? (Date.now() - t0) / WEAPON_ANIM_MS : 2;
-  if (gun) return { angle: t < 1 ? 0 : 35, flash: t >= 0 && t < 0.3 };
+  let t = t0 ? (Date.now() - t0) / WEAPON_ANIM_MS : 2;
+  if (t < 0) t = 2;                                    // attack scheduled but not started yet
+  if (gun) return { angle: t < 1 ? (t < 0.12 ? -10 : 0) : 35, flash: t < 0.3 };   // recoil kick, then level
   if (t >= 1) return { angle: 65 + Math.sin(Date.now() / 600) * 3, flash: false };
   if (t < 0.35) return { angle: 65 + (-115 - 65) * (t / 0.35), flash: false };   // raise overhead
   return { angle: -115 + (-25 + 115) * ((t - 0.35) / 0.65), flash: false };       // strike forward

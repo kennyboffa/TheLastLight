@@ -660,7 +660,7 @@ function exploreKeyPress(key, gs) {
   // ── Combat keyboard shortcuts ─────────────────────────────────────────────
   if (gs.inCombat && gs.combat) {
     const c = gs.combat;
-    if (c.introTimer > 0 || c.turn !== 'player' || c.phase !== 'action') return;
+    if (c.introTimer > 0 || (c.busyUntil && Date.now() < c.busyUntil) || c.turn !== 'player' || c.phase !== 'action') return;
     if (key === 'arrowleft'  || key === 'a') { playerMoveLeft(gs);  return; }
     if (key === 'arrowright' || key === 'd') { playerMoveRight(gs); return; }
     if (key === ' ' || key === 'f') {
@@ -1122,12 +1122,22 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
+  // Bodies from earlier fights
+  _fxStore();
+  const _now = Date.now();
+  for (const cp of es.corpses) _drawCorpse(ctx, cp.x, cp.sprite, cp.dir, cp.t0, cp.weapon, _now);
+
   // Enemies — patrol in world before combat, static positions during combat
   if (gs.inCombat && gs.combat) {
     for (const en of gs.combat.enemies) {
       const enFacing = gs.combat.playerWx >= en.worldX ? 1 : -1;
-      if (en.dead) { ctx.globalAlpha = 0.2; _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite, null, enFacing); ctx.globalAlpha = 1; continue; }
-      _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing);
+      if (en.dead) {
+        // still standing until its death effect fires, then it falls
+        if (en._deathT0) { _drawCorpse(ctx, en.worldX, en.sprite, en._deathDir || -enFacing, en._deathT0, enemyWeaponId(en), _now); continue; }
+      }
+      const _ex = en.worldX + _hitOffset(en._hitT0, en._hitDir || -enFacing);
+      _drawWorldEnemy(ctx, _ex, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing);
+      if (en.dead) continue;
       // HP bar above enemy
       drawStatBar(ctx, en.worldX - 22, GROUND_Y - 52, 44, 5,
         en.hp, en.maxHp, (en.hp / en.maxHp) > 0.5 ? '#aa2222' : '#dd1010');
@@ -1171,7 +1181,21 @@ function renderOutdoor(ctx, gs, es) {
     if (tg) _pFacing = tg.worldX >= gs.combat.playerWx ? 1 : -1;
   }
   const _pWeapon = { id: gs.parent.equipped.weapon, t0: gs.inCombat && gs.combat ? gs.combat.playerAnimT0 : 0 };
-  drawParent(ctx, _combatPx, PLAYER_FOOT, 2, _pFacing, es.animFrame, gs.parent.gender, _outPose, _pWeapon);
+  const _pc = gs.inCombat && gs.combat ? gs.combat : null;
+  if (_pc && _pc.playerDeathT0 && Date.now() >= _pc.playerDeathT0) {
+    // falls backwards, weapon drops
+    const k = Math.min(1, (Date.now() - _pc.playerDeathT0) / FX_FALL_MS);
+    const e = 1 - (1 - k) * (1 - k);
+    const dir = _pc.playerDeathDir || -_pFacing;
+    ctx.save();
+    ctx.translate(_combatPx, PLAYER_FOOT - 6 * e);
+    ctx.rotate(dir * e * Math.PI / 2);
+    drawParent(ctx, 0, 0, 2, _pFacing, 0, gs.parent.gender, 'front', null);
+    ctx.restore();
+  } else {
+    const _px = _combatPx + (_pc ? _hitOffset(_pc.playerHitT0, _pc.playerHitDir || -_pFacing) : 0);
+    drawParent(ctx, _px, PLAYER_FOOT, 2, _pFacing, es.animFrame, gs.parent.gender, _outPose, _pWeapon);
+  }
   // In-combat player HP bar + AP indicator above player
   if (gs.inCombat && gs.combat) {
     const cp = gs.combat;
@@ -1192,6 +1216,9 @@ function renderOutdoor(ctx, gs, es) {
       drawSurvivor(ctx, compX, PLAYER_FOOT, 2, -es.facing, es.animFrame, compIdx, Math.abs(es.velX) > 0.1 ? 'side' : 'front');
     }
   }
+
+  // Blood, sparks, damage numbers, tracers
+  _updateDrawFx(ctx, gs, es);
 
   ctx.restore(); // end world translate
   ctx.restore(); // end view zoom
@@ -1461,8 +1488,9 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   fillRect(ctx, 0, _COMBAT_BAR_Y - 4, CFG.W, 40, C.panelBg, 0.92);
   drawDivider(ctx, 0, _COMBAT_BAR_Y - 4, CFG.W, C.border2);
 
-  if (c.turn !== 'player' || c.phase !== 'action') {
-    const msg = c.turn === 'enemy' ? 'Enemy turn...' : (c.phase === 'victory' ? 'VICTORY!' : c.phase === 'fled' ? 'ESCAPED!' : 'DEFEATED');
+  const _busy = c.busyUntil && Date.now() < c.busyUntil;
+  if (c.turn !== 'player' || c.phase !== 'action' || _busy) {
+    const msg = (c.turn === 'enemy' || _busy) ? 'Enemy turn...' : (c.phase === 'victory' ? 'VICTORY!' : c.phase === 'fled' ? 'ESCAPED!' : 'DEFEATED');
     const col = (c.phase === 'victory' || c.phase === 'fled') ? C.textGood : C.textDanger;
     drawText(ctx, msg, CFG.W / 2, _COMBAT_BAR_Y + 14, col, 10, 'center', true);
     return;
@@ -1548,7 +1576,7 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
 
 function _handleExploreCombatClick(mx, my, gs) {
   const c = gs.combat;
-  if (!c || c.introTimer > 0 || c.turn !== 'player' || c.phase !== 'action') return;
+  if (!c || c.introTimer > 0 || (c.busyUntil && Date.now() < c.busyUntil) || c.turn !== 'player' || c.phase !== 'action') return;
 
   // Move left
   if (gs._combatMoveL && hitTest(mx, my, gs._combatMoveL.x, gs._combatMoveL.y, gs._combatMoveL.w, gs._combatMoveL.h)) {
@@ -1635,6 +1663,202 @@ function _drawCombatBanner(ctx, timeLeft) {
   ctx.fillStyle = '#d4483a';
   ctx.fillText('C O M B A T', 0, 0);
   ctx.restore();
+}
+
+// ── Combat effects: blood, sparks, damage numbers, deaths, corpses ───────────
+// combat.js reports hits/misses/deaths via combatFx(); everything here is
+// visual and lives on exploreState for the rest of the run.
+
+const FX_GRAVITY = 300;     // px/s²
+const FX_FALL_MS = 450;     // death topple time
+
+function _fxStore() {
+  const es = exploreState;
+  if (!es) return null;
+  if (!es.fx) { es.fx = []; es.decals = []; es.floaters = []; es.corpses = []; es.fxQueue = []; }
+  return es;
+}
+
+function _isMachine(sprite) { return sprite === 'robot' || sprite === 'drone' || sprite === 'drone_heavy'; }
+
+// Height above the ground where hits land, per body type
+function _hitHeight(sprite) {
+  if (sprite === 'drone' || sprite === 'drone_heavy') return 40;
+  if (sprite === 'wolf') return 14;
+  if (sprite === 'robot') return 34;
+  return 28;
+}
+
+function _spray(es, x, y, dir, machine, n) {
+  for (let i = 0; i < n; i++) {
+    es.fx.push({
+      x: x + (Math.random() - 0.5) * 4, y: y + (Math.random() - 0.5) * 8,
+      vx: dir * (25 + Math.random() * 95) + (Math.random() - 0.5) * 30,
+      vy: -(15 + Math.random() * 85),
+      life: machine ? 0.45 + Math.random() * 0.3 : 1.5,
+      machine,
+      size: Math.random() < 0.3 ? 2 : 1,
+      color: machine ? ['#ffd060', '#ffa030', '#fff4c0'][i % 3] : ['#8a1010', '#a01a14', '#6a0a0a'][i % 3],
+    });
+  }
+}
+
+function combatFx(gs, type, who, amount, fromX, delayMs) {
+  const es = _fxStore();
+  if (!es || !gs.combat) return;
+  if (delayMs > 0) { es.fxQueue.push({ at: Date.now() + delayMs, args: [gs, type, who, amount, fromX, 0] }); return; }
+  const c = gs.combat;
+  const now = Date.now();
+  const isPlayer = who === 'player';
+  const x = isPlayer ? c.playerWx : who.worldX;
+  const sprite = isPlayer ? 'player' : who.sprite;
+  const y = GROUND_Y - _hitHeight(sprite);
+  const away = x >= (fromX === undefined ? x - 1 : fromX) ? 1 : -1;   // direction away from the attacker
+  const machine = _isMachine(sprite);
+  if (type === 'hit') {
+    if (isPlayer) { c.playerHitT0 = now; c.playerHitDir = away; }
+    else { who._hitT0 = now; who._hitDir = away; }
+    _spray(es, x, y, away, machine, 6 + Math.min(16, amount * 2));
+    es.floaters.push({ x, y: y - 18, text: '-' + amount, color: isPlayer ? '#ff5a4a' : '#ffd8a8', t0: now });
+  } else if (type === 'miss') {
+    es.floaters.push({ x, y: y - 18, text: isPlayer ? 'DODGE' : 'MISS', color: '#b8b4a0', t0: now });
+  } else if (type === 'death') {
+    if (isPlayer) { c.playerDeathT0 = now; c.playerDeathDir = away; }
+    else { who._deathT0 = now; who._deathDir = away; }
+    _spray(es, x, y, away, machine, 18);
+  }
+}
+
+// Move dead enemies into the persistent corpse list when a fight ends
+function archiveCorpses(gs, c) {
+  const es = _fxStore();
+  if (!es || !c) return;
+  for (const en of c.enemies) {
+    if (!en.dead) continue;
+    es.corpses.push({ x: en.worldX, sprite: en.sprite, dir: en._deathDir || 1,
+                      t0: en._deathT0 || 0, weapon: enemyWeaponId(en) });
+  }
+}
+
+// Draw one fallen body (k = 0..1 through the fall). `dir` is the direction it falls.
+function _drawCorpse(ctx, x, sprite, dir, t0, weapon, now) {
+  const k = t0 ? Math.min(1, Math.max(0, (now - t0) / FX_FALL_MS)) : 1;
+  const e = 1 - (1 - k) * (1 - k);                      // ease-out
+  const facing = -dir;                                   // was facing its attacker
+  // Blood pool (or oil) spreading under the body
+  const pt = t0 ? Math.min(1, Math.max(0, (now - t0 - 250) / 2500)) : 1;
+  if (pt > 0) {
+    const pw = (sprite === 'wolf' ? 10 : 8) + pt * (_isMachine(sprite) ? 8 : 16);
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = _isMachine(sprite) ? '#141414' : '#5a0808';
+    ctx.beginPath();
+    ctx.ellipse(x + dir * 10, GROUND_Y + 1, pw, 2 + pt * 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.save();
+  if (sprite === 'drone' || sprite === 'drone_heavy') {
+    // drops out of the air, tilting
+    const yy = GROUND_Y - 28 + e * 20;
+    ctx.translate(x, yy);
+    ctx.rotate(dir * e * 0.5);
+    drawDroneSprite(ctx, 0, 0, 2, 0);
+  } else if (sprite === 'wolf') {
+    ctx.translate(x, GROUND_Y);
+    ctx.scale(1, 1 - 0.45 * e);                           // slumps onto its side
+    ctx.rotate(dir * e * 0.15);
+    drawWolfSprite(ctx, 0, 0, 2, facing, 0);
+  } else {
+    // people and robots topple backwards, pivoting on their feet
+    const lift = (sprite === 'robot' ? 17 : 10) * e;
+    ctx.translate(x, GROUND_Y - lift);
+    ctx.rotate(dir * e * Math.PI / 2);
+    if (sprite === 'robot') drawRobotSprite(ctx, 0, 0, 2, facing);
+    else drawHumanEnemy(ctx, 0, 0, 2, facing, 0, null);
+  }
+  ctx.restore();
+  // dropped weapon lying beside the body
+  if (weapon && k >= 0.6 && _itemArt[weapon]) {
+    const img = _itemArt[weapon];
+    ctx.save();
+    ctx.translate(Math.round(x - dir * 18), GROUND_Y);
+    if (facing < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -Math.round(img.naturalWidth / 2), -img.naturalHeight);
+    ctx.restore();
+  }
+}
+
+// Particles, ground stains, floating numbers, tracers. Called inside the world transform.
+function _updateDrawFx(ctx, gs, es) {
+  if (!es.fx) return;
+  const now = Date.now();
+  const pnow = performance.now();
+  const dt = Math.min(0.05, es._fxLast ? (pnow - es._fxLast) / 1000 : 0);
+  es._fxLast = pnow;
+  // delayed effects
+  if (es.fxQueue.length) {
+    const due = es.fxQueue.filter(q => q.at <= now);
+    es.fxQueue = es.fxQueue.filter(q => q.at > now);
+    for (const q of due) combatFx(...q.args);
+  }
+  // ground stains
+  for (const d of es.decals) fillRect(ctx, d.x, GROUND_Y + d.y, d.w, 1, d.color, 0.9);
+  // particles
+  const keep = [];
+  for (const p of es.fx) {
+    p.vy += FX_GRAVITY * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+    if (p.y >= GROUND_Y) {
+      if (!p.machine) {
+        es.decals.push({ x: Math.round(p.x), y: Math.floor(Math.random() * 3), w: 1 + Math.floor(Math.random() * 3), color: p.color });
+        if (es.decals.length > 400) es.decals.shift();
+      }
+      continue;
+    }
+    if (p.life <= 0) continue;
+    fillRect(ctx, Math.round(p.x), Math.round(p.y), p.size, p.size, p.color);
+    keep.push(p);
+  }
+  es.fx = keep;
+  // bullet tracers (player and gun-carrying enemies)
+  const c = gs.combat;
+  if (gs.inCombat && c) {
+    const tracer = (fromX, toX, t0) => {
+      const t = (now - (t0 || 0)) / 1000;
+      if (t < 0 || t > 0.07) return;
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = '#ffe6a8';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(fromX, GROUND_Y - 26); ctx.lineTo(toX, GROUND_Y - 27);
+      ctx.stroke();
+      ctx.restore();
+    };
+    const pw = gs.parent.equipped.weapon;
+    if (pw && WEAPON_GUNS.has(pw) && c.lastShotTo !== undefined) tracer(c.playerWx, c.lastShotTo, c.playerAnimT0);
+    for (const en of c.enemies) {
+      const w = enemyWeaponId(en);
+      if (w && WEAPON_GUNS.has(w) && en._shotTo !== undefined) tracer(en.worldX, en._shotTo, en._atkT0);
+    }
+  }
+  // floating numbers
+  es.floaters = es.floaters.filter(f => now - f.t0 < 900);
+  for (const f of es.floaters) {
+    const t = (now - f.t0) / 900;
+    ctx.save();
+    ctx.globalAlpha = 1 - t * t;
+    drawText(ctx, f.text, f.x, f.y - t * 18, f.color, 8, 'center', true);
+    ctx.restore();
+  }
+}
+
+// Knockback offset while a hit reaction plays
+function _hitOffset(t0, dir) {
+  if (!t0) return 0;
+  const t = (Date.now() - t0) / 220;
+  if (t < 0 || t >= 1) return 0;
+  return Math.round(dir * 5 * Math.sin(t * Math.PI));
 }
 
 // ── World enemy sprite helper ─────────────────────────────────────────────────

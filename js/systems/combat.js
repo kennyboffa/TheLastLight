@@ -92,6 +92,12 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
   Audio.startCombatMusic();
 }
 
+// Visual effects hook (blood, sparks, damage numbers, deaths) — implemented
+// by the exploration renderer; delayMs staggers effects of simultaneous attacks.
+function _fx(gs, type, who, amount, fromX, delayMs) {
+  if (typeof combatFx === 'function') combatFx(gs, type, who, amount || 0, fromX, delayMs || 0);
+}
+
 function combatLog(gs, text, type) {
   if (!gs.combat) return;
   gs.combat.log.unshift({ text, type: type || 'normal' });
@@ -174,14 +180,17 @@ function playerAttack(gs, targetIdx) {
   hit  = clamp(hit, 10, 96);
 
   c.playerAnimT0 = Date.now();   // swing / muzzle flash on the held weapon
+  c.lastShotTo   = target.worldX;
   if (chance(hit)) {
     const raw    = randInt(dmgMin, dmgMax);
     const damage = Math.max(1, raw - (target.armor || 0));
     target.hp   -= damage;
+    _fx(gs, 'hit', target, damage, c.playerWx, isRanged ? 60 : 200);
     combatLog(gs, `${p.name} hits ${target.name} for ${damage} dmg.`, 'good');
     Audio.hit();
     if (target.hp <= 0) {
       target.dead = true;
+      _fx(gs, 'death', target, 0, c.playerWx, isRanged ? 80 : 220);
       combatLog(gs, `${target.name} destroyed.`, 'good');
       collectLoot(gs, target);
       const _xp = { machine:20, human:15, animal:10 };
@@ -190,6 +199,7 @@ function playerAttack(gs, targetIdx) {
     }
   } else {
     combatLog(gs, `${p.name} misses ${target.name}.`, 'normal');
+    _fx(gs, 'miss', target, 0, c.playerWx, isRanged ? 60 : 200);
     Audio.miss();
   }
 
@@ -274,6 +284,7 @@ function enemyTurn(gs) {
   const c = gs.combat;
   if (!c || c.phase !== 'action') return;
 
+  let attackOrder = 0;   // stagger attack animations so each one is visible
   for (const enemy of c.enemies) {
     if (enemy.dead) continue;
 
@@ -288,11 +299,15 @@ function enemyTurn(gs) {
       if (canAttack && ap >= 2) {
         ap -= 2;
         const hit = clamp(enemy.accuracy || 60, 10, 90);
-        enemy._atkT0 = Date.now();
+        const delay = 300 * attackOrder++;
+        enemy._atkT0  = Date.now() + delay;
+        enemy._shotTo = c.playerWx;
+        const impact = delay + (enemy.isRanged ? 60 : 200);
         if (chance(hit)) {
           const dmg   = randInt(enemy.damage[0], enemy.damage[1]);
           const dealt = Math.max(1, dmg);
           c.player.hp -= dealt;
+          _fx(gs, 'hit', 'player', dealt, enemy.worldX, impact);
           gs.parent.health = Math.max(0, gs.parent.health - dealt);
           combatLog(gs, `${enemy.name} hits ${gs.parent.name} for ${dealt} dmg.`, 'danger');
           if (!gs.parent.infected && chance(5)) {
@@ -306,13 +321,15 @@ function enemyTurn(gs) {
             notify('Seriously wounded — use a medkit!', 'danger');
           }
           if (c.player.hp <= 0) {
+            _fx(gs, 'death', 'player', 0, enemy.worldX, impact + 20);
             c.phase = 'defeat';
             combatLog(gs, `${gs.parent.name} has fallen.`, 'danger');
-            c.pendingAction = 'defeat'; c.pendingTimer = 1.5;
+            c.pendingAction = 'defeat'; c.pendingTimer = 1.6 + impact / 1000;
             return;
           }
         } else {
           combatLog(gs, `${enemy.name} misses.`, 'normal');
+          _fx(gs, 'miss', 'player', 0, enemy.worldX, impact);
         }
         break; // one attack per enemy per turn
       } else if (!canAttack && ap >= 1) {
@@ -338,9 +355,11 @@ function enemyTurn(gs) {
       if (chance(compHit)) {
         const dmg = randInt(3, 8);
         tgt.hp -= dmg;
+        _fx(gs, 'hit', tgt, dmg, c.playerWx, 300 * attackOrder);
         combatLog(gs, `${comp.name} hits ${tgt.name} for ${dmg} dmg.`, 'good');
         if (tgt.hp <= 0) {
           tgt.dead = true;
+          _fx(gs, 'death', tgt, 0, c.playerWx, 300 * attackOrder + 20);
           combatLog(gs, `${tgt.name} destroyed.`, 'good');
           collectLoot(gs, tgt);
         }
@@ -351,8 +370,9 @@ function enemyTurn(gs) {
     }
   }
 
-  // Reset player AP for next turn
+  // Reset player AP for next turn; input waits until the attack animations finish
   c.playerAp = c.player.maxAp;
+  c.busyUntil = attackOrder ? Date.now() + 300 * (attackOrder - 1) + 550 : 0;
   c.turn = 'player';
 }
 
@@ -412,6 +432,8 @@ function endCombat(gs, result) {
   }
 
   if (result === 'victory' && c._encRef) c._encRef.killed = true;
+  // Bodies stay where they fell for the rest of this exploration
+  if (result !== 'defeat' && typeof archiveCorpses === 'function') archiveCorpses(gs, c);
 
   if (result === 'fled') {
     const enc = c._encRef || null;

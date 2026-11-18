@@ -297,6 +297,9 @@ window.addEventListener('keydown', (e) => {
   // Don't swallow typing in name input
   if (document.getElementById('name-input') === document.activeElement) return;
 
+  // In combat every key press is an action; ignore auto-repeat from held keys
+  if (e.repeat && GS.inCombat) return;
+
   handleKeyPress(key);
 });
 
@@ -426,7 +429,8 @@ function update(dt) {
 
   // Stats tick (only in shelter/explore — not during events or combat transitions)
   // timeScale only applies in shelter (not during exploration)
-  if (!gs.paused && (gs.screen === 'shelter' || gs.screen === 'explore')) {
+  const combatIntro = gs.inCombat && gs.combat && gs.combat.introTimer > 0;
+  if (!gs.paused && !combatIntro && (gs.screen === 'shelter' || gs.screen === 'explore')) {
     const scaledDt = (gs.screen === 'shelter') ? dt * (gs.timeScale || 1) : dt;
     tickStats(gs, scaledDt);
     tickMissions(gs);

@@ -654,7 +654,7 @@ function exploreKeyPress(key, gs) {
   // ── Combat keyboard shortcuts ─────────────────────────────────────────────
   if (gs.inCombat && gs.combat) {
     const c = gs.combat;
-    if (c.turn !== 'player' || c.phase !== 'action') return;
+    if (c.introTimer > 0 || c.turn !== 'player' || c.phase !== 'action') return;
     if (key === 'arrowleft'  || key === 'a') { playerMoveLeft(gs);  return; }
     if (key === 'arrowright' || key === 'd') { playerMoveRight(gs); return; }
     if (key === ' ' || key === 'f') {
@@ -998,6 +998,7 @@ function renderExplore(ctx, gs) {
   drawZoneTitleCard(ctx, es);
   drawExploreHUD(ctx, gs, es);
   if (es.invOpen) drawExploreInventory(ctx, gs, es);
+  if (gs.inCombat && gs.combat && gs.combat.introTimer > 0) _drawCombatBanner(ctx, gs.combat.introTimer);
   // Notifications centered between left HUD panels and right clock to avoid overlap
   drawNotifications(ctx, gs, CFG.W / 2, 14, true);
   drawDayTransition(ctx, gs);
@@ -1518,7 +1519,7 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
 
 function _handleExploreCombatClick(mx, my, gs) {
   const c = gs.combat;
-  if (!c || c.turn !== 'player' || c.phase !== 'action') return;
+  if (!c || c.introTimer > 0 || c.turn !== 'player' || c.phase !== 'action') return;
 
   // Move left
   if (gs._combatMoveL && hitTest(mx, my, gs._combatMoveL.x, gs._combatMoveL.y, gs._combatMoveL.w, gs._combatMoveL.h)) {
@@ -1577,6 +1578,34 @@ function startExploreCombat(gs, enemies) {
   gs.mouse.down = false;
   startCombat(gs, enemies, es.px, enemyWx);
   gs.inCombat = true;
+}
+
+// "COMBAT" banner shown while the fight's opening freeze runs
+function _drawCombatBanner(ctx, timeLeft) {
+  const total = CFG_COMBAT_INTRO;
+  const t = 1 - timeLeft / total;                       // 0 → 1 over the freeze
+  const fadeIn  = Math.min(1, t / 0.15);
+  const fadeOut = Math.min(1, timeLeft / 0.25);
+  const a = Math.min(fadeIn, fadeOut);
+  const stretch = 0.85 + 0.15 * Math.min(1, t / 0.2);   // quick horizontal snap-in
+  const cy = Math.round(CFG.H * 0.42);
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(0, cy - 26, CFG.W, 52);
+  ctx.fillStyle = '#8a2a20';
+  ctx.fillRect(0, cy - 26, CFG.W, 2);
+  ctx.fillRect(0, cy + 24, CFG.W, 2);
+  ctx.translate(CFG.W / 2, cy);
+  ctx.scale(stretch, 1);
+  ctx.font = 'bold 30px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#1a0806';
+  ctx.fillText('C O M B A T', 2, 2);
+  ctx.fillStyle = '#d4483a';
+  ctx.fillText('C O M B A T', 0, 0);
+  ctx.restore();
 }
 
 // ── World enemy sprite helper ─────────────────────────────────────────────────

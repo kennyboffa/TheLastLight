@@ -4,6 +4,7 @@
 const MELEE_RANGE    = 70;   // px — max distance for melee attacks
 const FLEE_MIN_DIST  = 110;  // px — min distance from any enemy to attempt flee
 const COMBAT_STEP    = 40;   // px — distance per Move action
+const CFG_COMBAT_INTRO = 1.2; // s — freeze with "COMBAT" banner when a fight starts
 
 // AP per enemy turn: 2 + floor(agility / 3)
 function enemyMaxAp(enemy) {
@@ -76,7 +77,16 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     // World-space positions
     playerWx: playerWx || 80,
     playerAp: 4,   // AP remaining this player turn
+    introTimer: CFG_COMBAT_INTRO, // brief freeze + "COMBAT" banner before anyone acts
   };
+
+  // Stop the player dead: held movement keys must not carry into the fight
+  gs.keys = {};
+  gs.mouse.down = false;
+  if (typeof exploreState !== 'undefined' && exploreState) {
+    exploreState.velX = 0;
+    exploreState.animFrame = 0;
+  }
 
   combatLog(gs, 'Combat started!', 'warn');
   Audio.startCombatMusic();
@@ -373,7 +383,9 @@ function checkCombatVictory(gs) {
 
 function updateCombat(gs, dt) {
   const c = gs.combat;
-  if (!c || !c.pendingAction) return;
+  if (!c) return;
+  if (c.introTimer > 0) { c.introTimer -= dt; return; }
+  if (!c.pendingAction) return;
   c.pendingTimer -= dt;
   if (c.pendingTimer > 0) return;
   const action = c.pendingAction;

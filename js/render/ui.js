@@ -230,12 +230,13 @@ function drawInventoryList(ctx, inv, x, y, w, h, title, scrollY, mx, my, selecte
     if (sel)  fillRect(ctx, x, itemY, w, rowH, '#1a2a3a');
     else if (hov) fillRect(ctx, x, itemY, w, rowH, C.highlight);
 
-    // Type colour strip
-    fillRect(ctx, x + 2, itemY + 2, 3, rowH - 4, itemTypeColor(def.type));
+    // Type colour strip + item icon
+    fillRect(ctx, x + 2, itemY + 2, 2, rowH - 4, itemTypeColor(def.type));
+    const hasIcon = drawItemIcon(ctx, slot.id, x + 6, itemY + 1, rowH - 2);
 
     // Name + qty
     const label = slot.qty > 1 ? `${def.name} x${slot.qty}` : def.name;
-    drawText(ctx, label, x + 10, itemY + rowH - 5, sel ? '#aaddff' : hov ? C.textBright : C.text, 9);
+    drawText(ctx, label, x + (hasIcon ? rowH + 6 : 10), itemY + rowH - 5, sel ? '#aaddff' : hov ? C.textBright : C.text, 9);
 
     // Weight
     const wt = `${(def.weight * slot.qty).toFixed(1)}kg`;

@@ -48,7 +48,8 @@ function renderFog(ctx, playerScreenX, playerScreenY, gs, isIndoor) {
   const radius = (isIndoor ? baseIn - nightShrinkIn : baseOut - nightShrinkOut);
 
   fc.clearRect(0, 0, CFG.W, CFG.H);
-  fc.fillStyle = 'rgba(0,0,0,0.84)';
+  // Lighter by day so the scenery is visible; as dark as before at night
+  fc.fillStyle = `rgba(0,0,0,${(0.84 - 0.40 * df).toFixed(3)})`;
   fc.fillRect(0, 0, CFG.W, CFG.H);
 
   // Punch a radial hole around the player
@@ -1018,7 +1019,11 @@ function renderOutdoor(ctx, gs, es) {
   ctx.scale(vz, vz);
 
   drawExploreBackground(ctx, es.scrollX, null, CFG.H, gs.time, loc.bgTheme);
-  fillRect(ctx, 0, GROUND_Y, CFG.W, CFG.H - GROUND_Y, C.ground);
+  // Walking path: textured ground that scrolls with the world
+  if (!fillTextureScrolled(ctx, exploreGroundTexture(loc.bgTheme), es.scrollX, 1, GROUND_Y, CFG.H - GROUND_Y,
+                           0.15 + (1 - dayFactor(gs.time)) * 0.45)) {
+    fillRect(ctx, 0, GROUND_Y, CFG.W, CFG.H - GROUND_Y, C.ground);
+  }
   fillRect(ctx, 0, GROUND_Y, CFG.W, 3, C.dirt2);
 
   ctx.save();
@@ -1242,11 +1247,13 @@ function renderBuildingInterior(ctx, gs, es) {
   // Exit door
   if (fl.exitX !== null) {
     const ex = fl.exitX;
-    fillRect(ctx, ex, GROUND_Y - 30, 18, 30, '#070710');
-    strokeRect(ctx, ex, GROUND_Y - 30, 18, 30, '#2a2a40');
-    drawText(ctx, 'EXIT', ex + 9, GROUND_Y - 33, '#3a6a3a', 7, 'center');
+    if (!drawEnvSprite(ctx, 'f_exit_door', ex + 9, GROUND_Y)) {
+      fillRect(ctx, ex, GROUND_Y - 30, 18, 30, '#070710');
+      strokeRect(ctx, ex, GROUND_Y - 30, 18, 30, '#2a2a40');
+      drawText(ctx, 'EXIT', ex + 9, GROUND_Y - 33, '#3a6a3a', 7, 'center');
+    }
     if (Math.abs(bi.px - ex) < 30) {
-      drawText(ctx, '[E] Exit', ex + 9, GROUND_Y - 44, C.textBright, 7, 'center');
+      drawText(ctx, '[E] Exit', ex + 9, GROUND_Y - 46, C.textBright, 7, 'center');
     }
   }
 
@@ -1254,13 +1261,13 @@ function renderBuildingInterior(ctx, gs, es) {
   if (fl.stairsUpX !== null) {
     drawBuildingStairs(ctx, fl.stairsUpX, GROUND_Y, 'up');
     if (Math.abs(bi.px - fl.stairsUpX) < 30) {
-      drawText(ctx, '[E] Up', fl.stairsUpX + 12, GROUND_Y - 32, C.textBright, 7, 'center');
+      drawText(ctx, '[E] Up', fl.stairsUpX + 12, GROUND_Y - 74, C.textBright, 7, 'center');
     }
   }
   if (fl.stairsDownX !== null) {
     drawBuildingStairs(ctx, fl.stairsDownX, GROUND_Y, 'down');
     if (Math.abs(bi.px - fl.stairsDownX) < 30) {
-      drawText(ctx, '[E] Down', fl.stairsDownX + 12, GROUND_Y - 32, C.textBright, 7, 'center');
+      drawText(ctx, '[E] Down', fl.stairsDownX + 12, GROUND_Y - 74, C.textBright, 7, 'center');
     }
   }
 
@@ -2145,6 +2152,10 @@ function drawBuildingInteriorDecor(ctx, theme, floorW, groundY) {
 }
 
 function drawBuildingStairs(ctx, sx, groundY, dir) {
+  if (drawEnvSprite(ctx, dir === 'up' ? 'f_stairs_up' : 'f_stairs_down', sx + 24, groundY)) {
+    drawText(ctx, dir === 'up' ? '▲ UP' : '▼ DOWN', sx + 24, groundY - 62, '#8a7aaa', 7, 'center');
+    return;
+  }
   const col = '#30283c';
   const colLight = '#48387a';
   for (let i = 0; i < 6; i++) {

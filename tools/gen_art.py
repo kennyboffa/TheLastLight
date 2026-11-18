@@ -1150,6 +1150,443 @@ def _plain(s, j, n):
         s.rect(x, y, min(n - 1, x + 1), y, j)
 
 
+
+# ════════════════════════════════════════════════════════════════════════════
+# Items (ground loot + inventory icons). Real-world scale next to a 48px person.
+# ════════════════════════════════════════════════════════════════════════════
+
+def _item(w, h):
+    return Sprite(w, h)
+
+
+def it_can(label, tall=False, open_=False, steam=False):
+    h = 11 if tall else 9
+    s = _item(9, h + (3 if steam else 0))
+    y0 = 3 if steam else 0
+    tin = s.material('#9a9a90', 10, 0.05); lab = s.material(label, 12, 0.05)
+    rim = s.material('#6a6a62', 8)
+    s.rect(0, y0, 8, y0 + h - 1, tin); s.rect(0, y0 + 2, 8, y0 + h - 3, lab)
+    s.rect(0, y0, 8, y0, rim); s.rect(0, y0 + h - 1, 8, y0 + h - 1, rim)
+    if open_:
+        s.rect(1, y0, 7, y0, s.material('#3a2a1a', 8))
+    if steam:
+        st = s.material('#c8c8c0', 6, 0)
+        s.px(2, 1, st); s.px(3, 0, st); s.px(6, 2, st); s.px(5, 1, st)
+    s.shade_gradient('x', 0.3)
+    return s.finish(outline=0.4)
+
+
+def it_bottle(liquid, cap='#2a4a6a'):
+    s = _item(6, 14)
+    plast = s.material('#a8b8c0', 8, 0.03); liq = s.material(liquid, 12, 0.05); c = s.material(cap, 8)
+    s.rect(2, 0, 3, 1, c); s.rect(1, 2, 4, 3, plast); s.rect(0, 4, 5, 13, plast); s.rect(0, 6, 5, 13, liq)
+    s.rect(0, 8, 5, 9, s.material('#e0dcc8', 8))
+    s.shade_gradient('x', 0.3)
+    return s.finish(outline=0.35)
+
+
+def it_pills(body, lid='#e8e4d8'):
+    s = _item(6, 9)
+    b = s.material(body, 12, 0.05); l = s.material(lid, 8); lab = s.material('#e0dcc8', 8)
+    s.rect(0, 0, 5, 2, l); s.rect(0, 3, 5, 8, b); s.rect(0, 4, 5, 6, lab)
+    return s.finish(outline=0.35)
+
+
+def it_syringe():
+    s = _item(14, 5)
+    glass = s.material('#b8d0d0', 8); liq = s.material('#5ac0a0', 10, 0); metal = s.material('#9a9a9a', 6)
+    s.rect(0, 1, 2, 3, metal); s.rect(3, 0, 10, 4, glass); s.rect(4, 1, 9, 3, liq); s.rect(11, 2, 13, 2, metal)
+    return s.finish(outline=0.3)
+
+
+def it_bandage():
+    s = _item(10, 8)
+    w = s.material('#d8d4c4', 10, 0.04); r = s.material('#a03a2a', 10)
+    s.ellipse(0, 0, 9, 7, w); s.ellipse(3, 2, 6, 5, s.material('#a8a494', 8)); s.px(8, 3, r)
+    return s.finish(outline=0.35)
+
+
+def it_medkit():
+    s = _item(14, 10)
+    box = s.material('#c8c4b8', 10, 0.05); red = s.material('#b02a22', 8, 0); h = s.material('#4a4a4a', 8)
+    s.rect(5, 0, 8, 1, h); s.rect(0, 2, 13, 9, box)
+    s.rect(6, 3, 7, 8, red); s.rect(4, 5, 9, 6, red)
+    s.shade_gradient('x', 0.25)
+    return s.finish(outline=0.4)
+
+
+def it_meat(raw):
+    s = _item(12, 7)
+    m = s.material('#a83a2a' if raw else '#7a3a1a', 14, 0.08); fat = s.material('#e0c8a8' if raw else '#b08050', 10)
+    bone = s.material('#e8e0cc', 6)
+    s.ellipse(0, 0, 10, 6, m); s.ellipse(2, 1, 6, 3, fat); s.rect(9, 2, 11, 3, bone)
+    return s.finish(outline=0.4)
+
+
+def it_bowl(soup):
+    s = _item(12, 9)
+    bowl = s.material('#8a6a4a', 12, 0.05); liq = s.material(soup, 12, 0.05); st = s.material('#c8c8c0', 6, 0)
+    s.ellipse(0, 3, 11, 8, liq); s.poly([(0, 5), (11, 5), (9, 8), (2, 8)], bowl)
+    s.px(3, 1, st); s.px(4, 0, st); s.px(8, 1, st)
+    return s.finish(outline=0.35)
+
+
+def it_berries():
+    s = _item(10, 6)
+    b = s.material('#6a2a4a', 14, 0.05); leaf = s.material('#4a6a2a', 12)
+    for (x, y) in [(0, 3), (3, 2), (6, 3), (2, 0), (5, 0), (8, 2)]:
+        s.ellipse(x, y, x + 2, y + 2, b)
+    s.rect(4, 0, 5, 1, leaf)
+    return s.finish(outline=0.3)
+
+
+def it_bar():
+    s = _item(12, 5)
+    wrap = s.material('#c48a2a', 12, 0.05); stripe = s.material('#5a2a1a', 8)
+    s.rect(1, 0, 10, 4, wrap); s.rect(0, 1, 0, 3, wrap); s.rect(11, 1, 11, 3, wrap); s.rect(3, 2, 8, 2, stripe)
+    return s.finish(outline=0.35)
+
+
+def it_jerky():
+    s = _item(12, 6)
+    j = s.material('#6a3a1a', 16, 0.1)
+    s.line([(0, 4), (11, 1)], j, width=2); s.line([(1, 5), (10, 4)], j, width=2)
+    return s.finish(outline=0.3)
+
+
+def it_weapon(kind):
+    sizes = {'bat': (28, 6), 'crowbar': (24, 6), 'knife': (14, 4), 'machete': (22, 5), 'pipe': (24, 4),
+             'pistol': (14, 8), 'rifle': (34, 8), 'shotgun': (32, 8), 'spear': (38, 5)}
+    w, h = sizes[kind]
+    s = _item(w, h)
+    wood = s.material('#7a5030', 14, 0.08); steel = s.material('#8a8e92', 10, 0.04)
+    dark = s.material('#2a2c2e', 8); grip = s.material('#3a2a1a', 10); rust = s.material('#7a4a2a', 14)
+    if kind == 'bat':
+        s.poly([(0, 2), (20, 0), (27, 0), (27, 5), (20, 5), (0, 3)], wood); s.rect(0, 1, 3, 4, grip)
+    elif kind == 'crowbar':
+        s.rect(0, 2, 21, 3, rust); s.line([(21, 2), (23, 0)], rust); s.line([(0, 3), (0, 5)], rust)
+    elif kind == 'knife':
+        s.rect(0, 1, 4, 3, grip); s.poly([(5, 1), (13, 1), (11, 3), (5, 3)], steel)
+    elif kind == 'machete':
+        s.rect(0, 1, 5, 3, grip); s.poly([(6, 0), (19, 0), (21, 2), (19, 4), (6, 3)], steel)
+    elif kind == 'pipe':
+        s.rect(0, 1, 23, 2, steel); s.rect(0, 0, 2, 3, dark); s.rect(21, 0, 23, 3, dark)
+    elif kind == 'pistol':
+        s.rect(0, 0, 13, 2, dark); s.rect(1, 3, 4, 7, grip); s.rect(5, 3, 7, 4, dark)
+    elif kind == 'rifle':
+        s.poly([(0, 3), (9, 2), (9, 6), (0, 7)], wood); s.rect(9, 2, 33, 3, dark); s.rect(10, 4, 22, 5, wood)
+        s.rect(14, 0, 18, 1, dark)
+    elif kind == 'shotgun':
+        s.poly([(0, 3), (8, 2), (8, 6), (0, 7)], wood); s.rect(8, 2, 31, 4, dark); s.rect(14, 5, 22, 6, wood)
+    elif kind == 'spear':
+        s.rect(0, 2, 30, 2, wood); s.poly([(30, 0), (37, 2), (30, 4)], steel); s.rect(28, 1, 30, 3, grip)
+    return s.finish(outline=0.35)
+
+
+def it_ammo(label):
+    s = _item(10, 7)
+    box = s.material('#5a5a3a', 12, 0.05); lab = s.material(label, 10); brass = s.material('#c8a040', 8)
+    s.rect(0, 1, 9, 6, box); s.rect(1, 3, 8, 4, lab); s.rect(2, 0, 3, 0, brass); s.rect(6, 0, 7, 0, brass)
+    return s.finish(outline=0.4)
+
+
+def it_pack(color, size):
+    w, h = {'small': (10, 12), 'reg': (12, 15), 'mil': (14, 17)}[size]
+    s = _item(w, h)
+    c = s.material(color, 14, 0.08); strap = s.material('#2a2418', 8); pocket = s.material(color, 18, 0.1)
+    s.ellipse(0, 0, w - 1, h - 1, c); s.rect(0, 3, w - 1, h - 1, c)
+    s.rect(2, h // 2, w - 3, h - 2, pocket); s.rect(2, h // 2, w - 3, h // 2, strap)
+    s.rect(w // 2 - 1, 0, w // 2, 2, strap)
+    s.shade_gradient('x', 0.3)
+    return s.finish(outline=0.4)
+
+
+def it_simple(kind):
+    if kind == 'chemicals':
+        s = _item(9, 12); j = s.material('#c8c0a0', 10); l = s.material('#6a8a2a', 10)
+        s.rect(0, 3, 8, 11, j); s.rect(5, 0, 7, 2, j); s.rect(1, 6, 7, 8, l)
+    elif kind == 'cloth':
+        s = _item(12, 6); c = s.material('#7a6a5a', 16, 0.08); c2 = s.material('#5a4a3a', 14)
+        s.rect(0, 2, 11, 5, c); s.rect(1, 0, 10, 2, c2)
+    elif kind == 'electronics':
+        s = _item(12, 8); b = s.material('#2a5a3a', 10); chip = s.material('#1a1a1a', 6); cu = s.material('#c8a040', 6, 0)
+        s.rect(0, 0, 11, 7, b); s.rect(3, 2, 6, 5, chip); s.px(9, 2, cu); s.px(9, 5, cu); s.px(1, 6, cu)
+    elif kind == 'fuel':
+        s = _item(11, 13); r = s.material('#8a2a1a', 14, 0.08); cap = s.material('#2a2a2a', 6)
+        s.rect(0, 2, 10, 12, r); s.rect(1, 0, 4, 1, cap); s.line([(1, 4), (9, 10)], s.material('#6a1a10', 8))
+    elif kind == 'metal':
+        s = _item(14, 6); m = s.material('#7a7e80', 12, 0.08); r = s.material('#7a4a2a', 14, 0.1)
+        s.poly([(0, 5), (4, 1), (13, 2), (12, 5)], m); s.rect(5, 2, 8, 4, r)
+    elif kind == 'tools':
+        s = _item(14, 8); st = s.material('#8a8e92', 8); h = s.material('#8a3a2a', 10)
+        s.line([(0, 7), (8, 1)], st, width=2); s.rect(8, 0, 11, 2, st); s.rect(10, 3, 13, 7, h)
+    elif kind == 'batteries':
+        s = _item(9, 7); b = s.material('#2a2a2a', 8); t = s.material('#c8a040', 8)
+        s.rect(0, 1, 3, 6, b); s.rect(5, 1, 8, 6, b); s.rect(0, 1, 3, 2, t); s.rect(5, 1, 8, 2, t)
+    elif kind == 'book':
+        s = _item(10, 8); c = s.material('#5a2a2a', 12, 0.06); pg = s.material('#d8d0b8', 8)
+        s.rect(0, 0, 9, 7, c); s.rect(1, 6, 9, 7, pg)
+    elif kind == 'matches':
+        s = _item(9, 5); b = s.material('#c8a040', 10); r = s.material('#a02a22', 8)
+        s.rect(0, 0, 8, 4, b); s.rect(0, 2, 8, 2, r)
+    elif kind == 'photograph':
+        s = _item(9, 7); f = s.material('#e0dcc8', 8); im = s.material('#6a5a4a', 14, 0.1)
+        s.rect(0, 0, 8, 6, f); s.rect(1, 1, 7, 4, im)
+    elif kind == 'toy':
+        s = _item(9, 10); f = s.material('#9a6a3a', 14, 0.08); d = s.material('#2a1a10', 6)
+        s.ellipse(2, 0, 7, 5, f); s.ellipse(1, 4, 8, 9, f); s.ellipse(1, 0, 3, 2, f); s.ellipse(6, 0, 8, 2, f)
+        s.px(3, 2, d); s.px(6, 2, d)
+    elif kind == 'map':
+        s = _item(12, 8); p_ = s.material('#c8b890', 10, 0.05); ln = s.material('#6a5a3a', 8); r = s.material('#a02a22', 6, 0)
+        s.rect(0, 0, 11, 7, p_); s.rect(4, 0, 4, 7, ln); s.rect(8, 0, 8, 7, ln); s.line([(1, 6), (6, 2), (10, 3)], r)
+    elif kind == 'note':
+        s = _item(8, 9); p_ = s.material('#d8d0b8', 8, 0.05); ln = s.material('#6a6a6a', 6)
+        s.rect(0, 0, 7, 8, p_)
+        for y in (2, 4, 6):
+            s.rect(1, y, 6, y, ln)
+    elif kind == 'blueprint':
+        s = _item(12, 6); b = s.material('#2a4a7a', 10); ln = s.material('#a8c0e0', 6)
+        s.rect(0, 0, 11, 5, b); s.ellipse(0, 0, 3, 5, s.material('#3a5a8a', 10)); s.line([(4, 1), (10, 4)], ln)
+    else:
+        raise KeyError(kind)
+    return s.finish(outline=0.35)
+
+
+ITEM_ART = {
+    'canned_beans': lambda: it_can('#a04a2a'), 'canned_soup': lambda: it_can('#c8a040'),
+    'canned_meat': lambda: it_can('#8a2a2a'), 'canned_fruit': lambda: it_can('#c86a2a'),
+    'heated_beans': lambda: it_can('#a04a2a', open_=True, steam=True),
+    'dog_food': lambda: it_can('#4a6a3a'),
+    'cooked_meat': lambda: it_meat(False), 'raw_meat': lambda: it_meat(True),
+    'cooked_soup': lambda: it_bowl('#c8a040'), 'heated_soup': lambda: it_bowl('#b07030'),
+    'dried_berries': it_berries, 'energy_bar': it_bar, 'jerky': it_jerky,
+    'water_bottle': lambda: it_bottle('#5a8ab0'), 'purified_water': lambda: it_bottle('#8ac0e0', '#2a6a4a'),
+    'dirty_water': lambda: it_bottle('#7a6a3a', '#4a3a2a'),
+    'painkiller': lambda: it_pills('#c8c4b8'), 'antibiotics': lambda: it_pills('#c87a2a'),
+    'antiviral': it_syringe, 'bandage': it_bandage, 'medkit': it_medkit,
+    'pistol_ammo': lambda: it_ammo('#c8a040'), 'rifle_ammo': lambda: it_ammo('#a03a2a'),
+    'shotgun_ammo': lambda: it_ammo('#2a5aa0'),
+    'small_backpack': lambda: it_pack('#6a5a3a', 'small'), 'backpack': lambda: it_pack('#3a4a5a', 'reg'),
+    'mil_backpack': lambda: it_pack('#4a5a2a', 'mil'),
+}
+for _k in ('bat', 'crowbar', 'knife', 'machete', 'pipe', 'pistol', 'rifle', 'shotgun', 'spear'):
+    ITEM_ART[_k] = (lambda k: lambda: it_weapon(k))(_k)
+for _k in ('chemicals', 'cloth', 'electronics', 'fuel', 'metal', 'tools', 'batteries', 'book',
+           'matches', 'photograph', 'toy'):
+    ITEM_ART[_k] = (lambda k: lambda: it_simple(k))(_k)
+# shared by whole categories (looked up by type in the game)
+for _k in ('map', 'note', 'blueprint'):
+    ITEM_ART['_' + _k] = (lambda k: lambda: it_simple(k))(_k)
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Parallax background layers (tile horizontally: width = 736, shapes wrap)
+# and ground strips. Kept low-contrast so the playfield stays readable.
+# ════════════════════════════════════════════════════════════════════════════
+
+BG_W = 736
+
+
+class WrapSprite(Sprite):
+    """Sprite whose shapes wrap around the left/right edge (seamless tiling)."""
+    def _paint(self, draw_fn, m):
+        mask = Image.new('L', (self.w * 3, self.h), 0)
+        d = ImageDraw.Draw(mask)
+        # draw three copies offset by one width, then fold them together
+        class Shift:
+            def __init__(s2, dx): s2.dx = dx
+            def rectangle(s2, xy, fill): d.rectangle([xy[0] + s2.dx, xy[1], xy[2] + s2.dx, xy[3]], fill=fill)
+            def ellipse(s2, xy, fill): d.ellipse([xy[0] + s2.dx, xy[1], xy[2] + s2.dx, xy[3]], fill=fill)
+            def polygon(s2, pts, fill): d.polygon([(x + s2.dx, y) for x, y in pts], fill=fill)
+            def line(s2, pts, fill, width=1): d.line([(x + s2.dx, y) for x, y in pts], fill=fill, width=width)
+        for k in (0, 1, 2):
+            draw_fn(Shift(k * self.w))
+        a = np.array(mask)
+        sel = (a[:, :self.w] | a[:, self.w:2 * self.w] | a[:, 2 * self.w:]) > 0
+        # shapes drawn at x in [0,W) land in the middle copy; fold edges into it
+        sel = (np.roll(a[:, :self.w], 0, axis=1) > 0) | (a[:, self.w:2 * self.w] > 0) | (a[:, 2 * self.w:] > 0)
+        self.mat[sel] = m
+        return sel
+
+
+def _ruin_tower(s, x, base, w, h, body, win, rng):
+    s.rect(x, base - h, x + w, base, body)
+    # jagged broken top
+    pts = [(x, base - h)]
+    for k in range(1, 5):
+        pts.append((x + w * k // 4, base - h - int(rng.integers(0, 14))))
+    pts.append((x + w, base - h))
+    s.poly(pts + [(x + w, base - h + 2), (x, base - h + 2)], body)
+    for wy in range(base - h + 6, base - 6, 9):
+        for wx in range(x + 3, x + w - 4, 7):
+            if rng.random() < 0.55:
+                s.rect(wx, wy, wx + 2, wy + 3, win)
+
+
+def bg_city_far():
+    s = WrapSprite(BG_W, 140)
+    body = s.material('#3a3c46', 6, 0.04); win = s.material('#2a2c34', 4)
+    rng = np.random.default_rng(11); x = 0
+    while x < BG_W:
+        w = int(rng.integers(24, 56)); h = int(rng.integers(40, 128))
+        _ruin_tower(s, x, 139, w, h, body, win, rng)
+        x += w + int(rng.integers(2, 18))
+    return s.finish(outline=0.15, grain_scale=0.7)
+
+
+def bg_city_near():
+    s = WrapSprite(BG_W, 110)
+    body = s.material('#2a2a30', 8, 0.05); win = s.material('#1a1a20', 4)
+    pole = s.material('#24201c', 6); wire = s.material('#1c1a18', 4)
+    rng = np.random.default_rng(12); x = 10
+    while x < BG_W:
+        w = int(rng.integers(40, 90)); h = int(rng.integers(30, 90))
+        _ruin_tower(s, x, 109, w, h, body, win, rng)
+        x += w + int(rng.integers(30, 90))
+    for px in range(40, BG_W, 150):                               # leaning power poles
+        s.line([(px, 109), (px + 4, 30)], pole, width=2); s.rect(px - 4, 34, px + 10, 35, pole)
+        s.line([(px + 5, 36), (px + 150, 40)], wire)
+    return s.finish(outline=0.2, grain_scale=0.7)
+
+
+def bg_suburb_near():
+    s = WrapSprite(BG_W, 90)
+    wall = s.material('#2e2c2c', 8, 0.05); roof = s.material('#241e1c', 8, 0.06)
+    win = s.material('#16161a', 4); fence = s.material('#26221e', 6); pole = s.material('#22201c', 6)
+    rng = np.random.default_rng(13); x = 0
+    while x < BG_W:
+        w = int(rng.integers(50, 80)); h = int(rng.integers(26, 40)); b = 89
+        s.rect(x, b - h, x + w, b, wall)
+        if rng.random() < 0.7:
+            s.poly([(x - 4, b - h), (x + w // 2, b - h - 22), (x + w + 4, b - h)], roof)
+        else:                                                      # collapsed roof
+            s.poly([(x - 2, b - h), (x + w // 3, b - h - 14), (x + w // 2, b - h - 4), (x + w, b - h)], roof)
+        for wx in (x + 8, x + w - 18):
+            s.rect(wx, b - h + 8, wx + 9, b - h + 16, win)
+        x += w + int(rng.integers(20, 50))
+    for fx in range(0, BG_W, 6):                                   # picket fence
+        s.rect(fx, 76, fx + 2, 89, fence)
+    s.rect(0, 80, BG_W - 1, 81, fence)
+    for px in range(90, BG_W, 200):
+        s.line([(px, 89), (px, 10)], pole, width=2); s.rect(px - 6, 14, px + 6, 15, pole)
+    return s.finish(outline=0.2, grain_scale=0.7)
+
+
+def bg_industrial_near():
+    s = WrapSprite(BG_W, 130)
+    body = s.material('#2a2c2a', 8, 0.05); dark = s.material('#1c1e1c', 6)
+    rust = s.material('#3a2a20', 8, 0.06)
+    rng = np.random.default_rng(14); x = 0
+    while x < BG_W:
+        kind = rng.choice(['shed', 'stack', 'tank', 'crane'])
+        if kind == 'shed':
+            w = int(rng.integers(70, 120)); h = int(rng.integers(30, 55))
+            s.rect(x, 129 - h, x + w, 129, body)
+            for k in range(0, w - 14, 20):
+                s.poly([(x + k, 129 - h), (x + k + 14, 129 - h - 12), (x + k + 14, 129 - h)], body)
+            x += w + 20
+        elif kind == 'stack':
+            s.rect(x, 20, x + 10, 129, rust); s.rect(x - 2, 18, x + 12, 22, dark); x += 40
+        elif kind == 'tank':
+            s.ellipse(x, 70, x + 50, 129, body); s.rect(x, 100, x + 50, 129, body); x += 70
+        else:
+            s.rect(x + 10, 10, x + 14, 129, dark); s.rect(x - 30, 10, x + 60, 14, dark)
+            s.line([(x + 50, 14), (x + 50, 60)], dark); x += 90
+    return s.finish(outline=0.2, grain_scale=0.7)
+
+
+def _pine(s, x, base, h, m, trunk):
+    s.rect(x - 1, base - h // 5, x + 1, base, trunk)
+    for k in range(4):
+        top = base - h + k * h // 5
+        half = 4 + k * h // 14
+        s.poly([(x, top), (x - half, top + h // 3), (x + half, top + h // 3)], m)
+
+
+def bg_forest_far():
+    s = WrapSprite(BG_W, 120)
+    m = s.material('#24302a', 8, 0.05); trunk = s.material('#1c1e1a', 4)
+    rng = np.random.default_rng(15)
+    for x in range(0, BG_W, 9):
+        _pine(s, x + int(rng.integers(-3, 4)), 119, int(rng.integers(50, 110)), m, trunk)
+    return s.finish(outline=0.1, grain_scale=0.7)
+
+
+def bg_forest_near():
+    s = WrapSprite(BG_W, 140)
+    m = s.material('#1c2620', 10, 0.06); trunk = s.material('#20180f', 6)
+    rng = np.random.default_rng(16)
+    for x in range(0, BG_W, 26):
+        _pine(s, x + int(rng.integers(-8, 9)), 139, int(rng.integers(80, 138)), m, trunk)
+    return s.finish(outline=0.15, grain_scale=0.7)
+
+
+def ground(base, joint, kind, w=96, h=48):
+    s = WrapSprite(w, h)
+    a = s.material(base, 12, 0.08)
+    j = s.material(joint, 8, 0.03)
+    s.rect(0, 0, w - 1, h - 1, a)
+    rng = np.random.default_rng(len(kind) * 31)
+    if kind == 'road':
+        for _ in range(7):                                         # cracks
+            x, y = int(rng.integers(0, w)), int(rng.integers(0, h))
+            pts = [(x, y)]
+            for _ in range(5):
+                x += int(rng.integers(-3, 4)); y += int(rng.integers(-1, 3)); pts.append((x, y))
+            s.line(pts, j)
+        s.rect(0, 6, w - 1, 6, j)
+    elif kind == 'dirt':
+        for _ in range(26):                                        # pebbles / clods
+            x, y = int(rng.integers(0, w)), int(rng.integers(0, h))
+            s.rect(x, y, x + int(rng.integers(0, 2)), y, j)
+    elif kind == 'grass':
+        g = s.material('#3a4a26', 14, 0.08)
+        for _ in range(40):
+            x, y = int(rng.integers(0, w)), int(rng.integers(0, h))
+            s.line([(x, y), (x + int(rng.integers(-1, 2)), y - 2)], g)
+    elif kind == 'concrete':
+        for x in range(0, w, 32):
+            s.rect(x, 0, x, h - 1, j)
+        s.rect(0, 24, w - 1, 24, j)
+    return s.finish(outline=0.0, grain_scale=0.9)
+
+
+
+def exit_door():
+    s = Sprite(24, 40)
+    frame = s.material('#3a3a36', 10); door = s.material('#4a3c2c', 14, 0.08)
+    dark = s.material('#0e0c0a', 6); sign = s.material('#1e3a22', 8); letter = s.material('#7ac07a', 6, 0)
+    handle = s.material('#a0a090', 6)
+    s.rect(0, 8, 23, 39, frame); s.rect(3, 11, 20, 39, dark); s.rect(3, 11, 13, 39, door)
+    s.px(11, 25, handle)
+    s.rect(2, 0, 21, 6, sign)
+    for i, ch in enumerate('EXIT'):
+        for r, row in enumerate(FONT.get(ch, FONT[' '])):
+            for c, bit in enumerate(row):
+                if bit == '1':
+                    s.px(4 + i * 4 + c, 1 + r, letter)
+    return s.finish(outline=0.35)
+
+
+def stairs(up=True):
+    s = Sprite(48, 60)
+    step = s.material('#4a4440', 12, 0.08); edge = s.material('#6a625a', 10)
+    rail = s.material('#2e2a26', 8); dark = s.material('#141210', 6)
+    for i in range(6):
+        ox = i * 7 if up else (5 - i) * 7
+        y = 59 - (i + 1) * 9
+        s.rect(ox, y, ox + 47 - i * 3 - (0 if up else 0), 59, step)
+        s.rect(ox, y, ox + 47 - i * 3, y + 1, edge)
+    # handrail
+    if up:
+        s.line([(2, 44), (40, 2)], rail, width=2); s.rect(2, 44, 3, 58, rail); s.rect(39, 2, 40, 10, rail)
+    else:
+        s.line([(8, 2), (46, 44)], rail, width=2); s.rect(45, 44, 46, 58, rail); s.rect(7, 2, 8, 10, rail)
+    s.shade_gradient('y', 0.25)
+    return s.finish(outline=0.35)
+
+
 if __name__ == '__main__':
     only = set(sys.argv[1:])
     jobs = {
@@ -1198,6 +1635,20 @@ if __name__ == '__main__':
         'tex_floor_tile.png': lambda: tex(48, '#4e504a', '#363832', _tiles(12)),
         'tex_floor_concrete.png': lambda: tex(48, '#34332e', '#262520', _plain),
     }
+    jobs.update({
+        'bg_city_far.png': bg_city_far, 'bg_city_near.png': bg_city_near,
+        'bg_suburb_near.png': bg_suburb_near, 'bg_industrial_near.png': bg_industrial_near,
+        'bg_forest_far.png': bg_forest_far, 'bg_forest_near.png': bg_forest_near,
+        'tex_ground_road.png': lambda: ground('#2e2c2a', '#1a1816', 'road'),
+        'tex_ground_dirt.png': lambda: ground('#3a3022', '#241c12', 'dirt'),
+        'tex_ground_grass.png': lambda: ground('#2e3220', '#1e2214', 'grass'),
+        'tex_ground_concrete.png': lambda: ground('#3a3a36', '#26261f', 'concrete'),
+        'tex_field.png': lambda: ground('#2a2620', '#1a1712', 'dirt', 128, 64),
+    })
+    jobs.update({'f_exit_door.png': exit_door, 'f_stairs_up.png': lambda: stairs(True),
+                 'f_stairs_down.png': lambda: stairs(False)})
+    for _id, _fn in ITEM_ART.items():
+        jobs['item_%s.png' % _id] = _fn
     for name, fn in jobs.items():
         if not only or name in only:
             save(fn(), name)

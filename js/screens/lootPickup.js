@@ -62,9 +62,10 @@ function renderLootPickup(ctx, gs) {
     if (!def) continue;
     const hov = hitTest(mx, my, panX + 2, ly, midX - panX - 6, rowH);
     if (hov) fillRect(ctx, panX + 2, ly, midX - panX - 6, rowH, C.highlight);
-    fillRect(ctx, panX + 4, ly + 2, 3, rowH - 4, itemTypeColor(def.type));
+    fillRect(ctx, panX + 4, ly + 2, 2, rowH - 4, itemTypeColor(def.type));
+    const ic1 = drawItemIcon(ctx, slot.id, panX + 8, ly + 1, rowH - 2);
     const label = slot.qty > 1 ? `${def.name} x${slot.qty}` : def.name;
-    drawText(ctx, label, panX + 12, ly + rowH - 4, hov ? C.textBright : C.text, 9);
+    drawText(ctx, label, panX + (ic1 ? rowH + 8 : 12), ly + rowH - 4, hov ? C.textBright : C.text, 9);
     const wt = `${(def.weight * slot.qty).toFixed(1)}kg`;
     drawText(ctx, wt, midX - 14, ly + rowH - 4, C.textDim, 7, 'right');
     if (ly >= listY + 28) {
@@ -91,9 +92,10 @@ function renderLootPickup(ctx, gs) {
     if (!def) continue;
     const hov = hitTest(mx, my, midX + 2, iy, panX + panW - midX - 6, rowH);
     if (hov) fillRect(ctx, midX + 2, iy, panX + panW - midX - 6, rowH, C.highlight);
-    fillRect(ctx, midX + 4, iy + 2, 3, rowH - 4, itemTypeColor(def.type));
+    fillRect(ctx, midX + 4, iy + 2, 2, rowH - 4, itemTypeColor(def.type));
+    const ic2 = drawItemIcon(ctx, slot.id, midX + 8, iy + 1, rowH - 2);
     const label = slot.qty > 1 ? `${def.name} x${slot.qty}` : def.name;
-    drawText(ctx, label, midX + 12, iy + rowH - 4, hov ? C.textBright : C.text, 9);
+    drawText(ctx, label, midX + (ic2 ? rowH + 8 : 12), iy + rowH - 4, hov ? C.textBright : C.text, 9);
     if (iy >= listY + 28) {
       gs._lootBagBounds.push({ x: midX + 2, y: iy, w: panX + panW - midX - 6, h: rowH, idx: i });
     }

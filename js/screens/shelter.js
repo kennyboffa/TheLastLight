@@ -55,7 +55,48 @@ let shelterUI = {
 
 // ── Room furniture drawing ─────────────────────────────────────────────────────
 
+// Sprite furniture for every room. Falls back to the drawn version while
+// images are still loading.
 function drawRoomFurniture(ctx, roomId, r, level, gs) {
+  if (!_envSpr['s_bed']) return _drawRoomFurnitureLegacy(ctx, roomId, r, level, gs);
+  const fl = r.y + r.h - 6;   // stands against the back wall, just above characters' feet
+  const x0 = r.x;
+  const put = (key, cx) => drawEnvSprite(ctx, key, Math.round(cx), fl);
+  const label = (txt, cx) => drawText(ctx, txt, cx, fl + 4, '#5a4a36', 6, 'center');
+
+  if (roomId === 'bedroom') {
+    // Same x slots the sleeping characters use (see BED_POSITIONS)
+    const beds = [level >= 2, !!(gs && gs.shelter.bedroomBed2), !!(gs && gs.shelter.bedroomBed3)];
+    put(beds[0] ? 's_bed_good' : 's_bed', x0 + 31);
+    if (beds[1]) put('s_bed_good', x0 + 87);
+    if (beds[2]) put('s_bed_good', x0 + 143);
+    if (level >= 2 && !beds[1]) put('s_nightstand', x0 + 66);
+    const n = 1 + (beds[1] ? 1 : 0) + (beds[2] ? 1 : 0);
+    label(`${n} bed${n > 1 ? 's' : ''}`, x0 + r.w / 2);
+  } else if (roomId === 'main') {
+    put('s_barrel', x0 + 16);
+    put('s_water', x0 + 34);
+    put('f_table', x0 + r.w / 2 + 6);
+    put('s_stove', x0 + r.w - 24);
+  } else if (roomId === 'storage') {
+    put('s_shelf', x0 + 30);
+    put('s_shelf', x0 + 76);
+    put('s_crates', x0 + r.w - 32);
+  } else if (roomId === 'workshop') {
+    put('s_workbench', x0 + 42);
+    put('s_crates', x0 + r.w - 30);
+  } else if (roomId === 'infirmary') {
+    put('s_cot', x0 + 36);
+    put('s_medcab', x0 + r.w - 46);
+    put('f_iv_stand', x0 + r.w - 20);
+  } else if (roomId === 'security') {
+    put('s_radio', x0 + 36);
+    put('s_gunrack', x0 + r.w - 56);
+    put('s_sandbags', x0 + r.w - 22);
+  }
+}
+
+function _drawRoomFurnitureLegacy(ctx, roomId, r, level, gs) {
   const fl = r.y + r.h - 14;  // floor line
   const cx = r.x;
 

@@ -85,9 +85,10 @@ function startExploration(gs, loc) {
         ? Math.floor(zone.w * 0.1) + randInt(0, Math.floor(zone.w * 0.65))
         : bdef.relX;
       const bx = zone.x + baseRelX;
-      // Tents are much smaller than proper buildings
-      const bw     = bdef.isTent ? 55 + randInt(0, 20) : 130 + randInt(0, 80);
-      const bh     = bdef.isTent ? 40 + randInt(0, 10) : 85 + randInt(20, 55);
+      // Building size comes from its facade sprite; tents use the tent sprite size
+      const facade = bdef.isTent ? null : pickBuildingSprite(bdef.theme || 'urban', bdef.label || zone.name);
+      const bw     = bdef.isTent ? 72 : facade.w;
+      const bh     = bdef.isTent ? 46 : facade.h;
       const nFloors = bdef.numFloors || 1;
       const floors  = [];
       for (let fi = 0; fi < nFloors; fi++) {
@@ -101,14 +102,16 @@ function startExploration(gs, loc) {
         floors,
         doorX:    bx + Math.floor(bw / 2) - 8,
         isTent:   !!bdef.isTent,
+        sprite:   facade ? facade.key : null,
       });
     }
     // Add a small generic structure for zones with no explicit buildings but outdoor loot
     if ((zone.buildings || []).length === 0 && zone.lootTable &&
         !zone.lootTable.startsWith('nature') && !zone.lootTable.startsWith('water')) {
       const bx = zone.x + Math.floor(zone.w * 0.4);
-      const bw = 90 + randInt(0, 50);
-      const bh = 65 + randInt(0, 40);
+      const facade = pickBuildingSprite('urban', zone.name);
+      const bw = facade.w;
+      const bh = facade.h;
       buildings.push({
         bx, bw, bh,
         label: zone.name,
@@ -116,6 +119,7 @@ function startExploration(gs, loc) {
         numFloors: 1,
         floors: [genBuildingFloor(0, 1, { lootQuality: 'light', theme: 'urban' })],
         doorX: bx + Math.floor(bw / 2) - 8,
+        sprite: facade.key,
       });
     }
   }
@@ -1073,10 +1077,10 @@ function renderOutdoor(ctx, gs, es) {
         }
       }
     } else {
-      if (bld.theme === 'cabin') {
+      if (bld.theme === 'cabin' && !bld.sprite) {
         drawExploreCabin(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
       } else {
-        drawExploreBuildingByTheme(ctx, bld.theme, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
+        drawExploreBuildingByTheme(ctx, bld.theme, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label, bld.sprite);
       }
       if (Math.abs(es.px - (bld.doorX + 8)) < 24) {
         drawText(ctx, '[E] Enter', bld.doorX + 8, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
@@ -1208,6 +1212,12 @@ function renderBuildingInterior(ctx, gs, es) {
   fillRect(ctx, 0, 0, fl.width, 28, '#080810');
   fillRect(ctx, 0, 26, fl.width, 2, '#181820');
 
+  // Textured back wall + floor for the building type
+  const tx = INTERIOR_TEXTURES[bld.theme] || INTERIOR_TEXTURES.urban;
+  fillTexture(ctx, tx[0], 0, 28, fl.width, GROUND_Y - 28, 0.30);
+  fillTexture(ctx, tx[1], 0, GROUND_Y + 2, fl.width, CFG.H - GROUND_Y, 0.35);
+  fillRect(ctx, 0, GROUND_Y - 6, fl.width, 6, '#000', 0.35);   // skirting shadow
+
   // Walls (boundary)
   fillRect(ctx, 0, 0, 8, GROUND_Y, '#161620');
   fillRect(ctx, fl.width - 8, 0, 8, GROUND_Y, '#161620');
@@ -1223,8 +1233,10 @@ function renderBuildingInterior(ctx, gs, es) {
     if (lit) fillRect(ctx, lx - 2, 31, 4, 3, '#b0a050', 0.45);
   }
 
-  // Theme-relevant interior decoration
-  drawBuildingInteriorDecor(ctx, bld.theme, fl.width, GROUND_Y);
+  // Theme-relevant interior decoration (sprites, falling back to the drawn version)
+  if (!drawInteriorFurniture(ctx, bld.theme, fl, GROUND_Y)) {
+    drawBuildingInteriorDecor(ctx, bld.theme, fl.width, GROUND_Y);
+  }
 
   // Exit door
   if (fl.exitX !== null) {
@@ -1786,6 +1798,9 @@ function drawExploreCarWreck(ctx, x, groundY) {
 }
 
 function drawExploreDebrisPile(ctx, x, groundY) {
+  // Alternate the hand-drawn trash pile with concrete rubble
+  const key = _envVariant(x, 2) === 0 ? 'trash' : 'debris';
+  if (drawEnvSprite(ctx, key, x, groundY, 44, 20)) return;
   if (drawEnvSprite(ctx, 'trash', x, groundY, 44, 20)) return;
   ctx.save();
   ctx.globalAlpha = 0.75;
@@ -1860,16 +1875,19 @@ function drawExploreContainer(ctx, wx, groundY, type, highlighted) {
                   : (type === 'chest') ? 'chest'
                   : (type === 'crate') ? 'crate'
                   : 'box';
-  const sprW = (type === 'locker' || type === 'cabinet') ? 20 : (type === 'chest') ? 30 : 26;
-  const sprH = (type === 'locker' || type === 'cabinet') ? 40 : (type === 'chest') ? 22 : 24;
-  if (highlighted) {
-    ctx.save();
-    ctx.globalAlpha = 0.55;
-    fillRect(ctx, wx - sprW / 2 - 2, groundY - sprH - 2, sprW + 4, sprH + 2, '#a08840');
-    ctx.restore();
-  }
-  if (drawEnvSprite(ctx, spriteKey, wx, groundY, sprW, sprH)) {
-    drawText(ctx, type, wx, groundY - sprH - 4, C.textDim, 6, 'center');
+  // Heights relative to a ~48px-tall person: lockers chest-high-plus, crates waist-high
+  const CONTAINER_H = { locker: 42, chest: 18, crate: 24, box: 16 };
+  const targetH = CONTAINER_H[spriteKey];
+  const fit = _fitSprite(spriteKey, targetH);
+  if (fit) {
+    if (highlighted) {
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      fillRect(ctx, wx - fit.width / 2 - 2, groundY - fit.height - 2, fit.width + 4, fit.height + 2, '#a08840');
+      ctx.restore();
+    }
+    drawEnvSpriteFit(ctx, spriteKey, wx, groundY, targetH);
+    drawText(ctx, type, wx, groundY - fit.height - 4, C.textDim, 6, 'center');
     return;
   }
   // Fallback procedural
@@ -1896,6 +1914,82 @@ function drawSearchBar(ctx, wx, y, progress) {
   fillRect(ctx, wx - w / 2, y, w * clamp(progress, 0, 1), 5, '#7aaa30');
   strokeRect(ctx, wx - w / 2, y, w, 5, '#303020');
   drawText(ctx, 'searching...', wx, y - 2, C.textDim, 6, 'center');
+}
+
+// [wall texture, floor texture] per building theme
+const INTERIOR_TEXTURES = {
+  hospital: ['tex_wall_tile', 'tex_floor_tile'],
+  office:   ['tex_wall_plaster', 'tex_floor_tile'],
+  factory:  ['tex_wall_concrete', 'tex_floor_concrete'],
+  mall:     ['tex_wall_tile', 'tex_floor_tile'],
+  house:    ['tex_wall_plaster', 'tex_floor_wood'],
+  cabin:    ['tex_wall_wood', 'tex_floor_wood'],
+  pharmacy: ['tex_wall_tile', 'tex_floor_tile'],
+  church:   ['tex_wall_stone', 'tex_floor_wood'],
+  urban:    ['tex_wall_brick', 'tex_floor_concrete'],
+  tent:     ['tex_wall_brick', 'tex_floor_concrete'],
+};
+
+// Furniture sprites per theme, repeated across the floor. Each entry is a
+// group of sprites laid out left→right with the given gaps.
+const INTERIOR_SETS = {
+  hospital: [['f_hospital_bed', 6, 'f_iv_stand'], ['f_wheelchair'], ['f_hospital_bed', 6, 'f_iv_stand']],
+  office:   [['f_desk', 4, 'f_office_chair'], ['f_filing', 2, 'f_filing'], ['f_desk', 4, 'f_office_chair']],
+  factory:  [['f_machine'], ['conveyor'], ['f_machine']],
+  mall:     [['f_store_shelf', 4, 'f_store_shelf'], ['f_mannequin', 8, 'f_mannequin'], ['f_store_shelf']],
+  house:    [['f_sofa'], ['f_table'], ['f_bookshelf']],
+  cabin:    [['f_table'], ['f_bookshelf'], ['f_sofa']],
+  pharmacy: [['f_med_shelf', 4, 'f_med_shelf'], ['f_med_shelf'], ['f_med_shelf', 4, 'f_med_shelf']],
+  church:   [['f_church_cross'], ['f_pew'], ['f_pew'], ['f_pew']],
+  urban:    [['debris'], ['f_table'], ['debris']],
+  tent:     [['debris']],
+};
+
+// Lays furniture in the gaps between containers, stairs and exits so nothing
+// important is hidden. Returns false if the sprites aren't loaded yet.
+function drawInteriorFurniture(ctx, theme, fl, groundY) {
+  if (!_envSpr['f_table']) return false;
+  const W = fl.width;
+  const sets = INTERIOR_SETS[theme] || INTERIOR_SETS.urban;
+  // Spots to keep clear: containers, stairs, exit door
+  const busy = [];
+  for (const c of fl.containers) busy.push(c.wx);
+  for (const k of ['exitX', 'stairsUpX', 'stairsDownX']) if (fl[k] !== null && fl[k] !== undefined) busy.push(fl[k] + 10);
+  const clear = (x0, x1) => busy.every(b => b < x0 - 26 || b > x1 + 26);
+
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  let x = 70, i = 0;
+  while (x < W - 70) {
+    const group = sets[i % sets.length];
+    // Measure the group
+    let gw = 0;
+    const parts = [];
+    for (let j = 0; j < group.length; j++) {
+      const it = group[j];
+      if (typeof it === 'number') { gw += it; continue; }
+      if (it === 'conveyor') { parts.push({ conveyor: true, x: gw, w: 96 }); gw += 96; continue; }
+      const img = _envSpr[it];
+      if (!img || !img.naturalWidth) continue;
+      parts.push({ key: it, x: gw, w: img.naturalWidth });
+      gw += img.naturalWidth;
+    }
+    if (x + gw < W - 70 && clear(x, x + gw)) {
+      for (const pt of parts) {
+        if (pt.conveyor) {
+          for (let cx2 = 0; cx2 < pt.w; cx2 += 32) drawEnvSprite(ctx, 'f_conveyor', x + pt.x + cx2 + 16, groundY);
+        } else {
+          drawEnvSprite(ctx, pt.key, x + pt.x + pt.w / 2, groundY);
+        }
+      }
+      x += gw + 70 + (i * 37) % 60;   // irregular spacing so rooms don't look stamped
+      i++;
+    } else {
+      x += 24;
+    }
+  }
+  ctx.restore();
+  return true;
 }
 
 function drawBuildingInteriorDecor(ctx, theme, floorW, groundY) {

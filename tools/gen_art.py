@@ -1,0 +1,1203 @@
+#!/usr/bin/env python3
+"""Generates The Last Light's non-hand-made sprites in the style of the
+hand-drawn assets: grainy per-pixel colour variation, soft dark edges and
+simple side shading.
+
+Run:  python3 tools/gen_art.py            (writes PNGs into Assets/)
+Needs: pillow, numpy
+"""
+import os
+import sys
+import numpy as np
+from PIL import Image, ImageDraw
+
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Assets')
+RNG = np.random.default_rng(7)
+
+
+def hexrgb(h):
+    h = h.lstrip('#')
+    return np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)], dtype=float)
+
+
+class Sprite:
+    """Paint shapes as 'materials'; finish() turns them into grainy pixel art."""
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.mat = np.full((h, w), -1, dtype=int)   # material index per pixel
+        self.mats = []                               # (base rgb, grain, shade dir)
+        self.extra = np.zeros((h, w))                # extra light (+) / dark (-)
+
+    def material(self, color, grain=18, speckle=0.06):
+        self.mats.append((hexrgb(color), grain, speckle))
+        return len(self.mats) - 1
+
+    # ── shape primitives (all paint a material into the mask) ──────────────
+    def _paint(self, draw_fn, m):
+        mask = Image.new('L', (self.w, self.h), 0)
+        draw_fn(ImageDraw.Draw(mask))
+        sel = np.array(mask) > 0
+        self.mat[sel] = m
+        return sel
+
+    def rect(self, x0, y0, x1, y1, m):
+        return self._paint(lambda d: d.rectangle([x0, y0, x1, y1], fill=255), m)
+
+    def ellipse(self, x0, y0, x1, y1, m):
+        return self._paint(lambda d: d.ellipse([x0, y0, x1, y1], fill=255), m)
+
+    def poly(self, pts, m):
+        return self._paint(lambda d: d.polygon(pts, fill=255), m)
+
+    def line(self, pts, m, width=1):
+        return self._paint(lambda d: d.line(pts, fill=255, width=width), m)
+
+    def px(self, x, y, m):
+        if 0 <= x < self.w and 0 <= y < self.h:
+            self.mat[y, x] = m
+
+    def clear(self, x0, y0, x1, y1):
+        self.mat[y0:y1 + 1, x0:x1 + 1] = -1
+
+    def shade(self, x0, y0, x1, y1, amount):
+        """Lighten (+) or darken (-) an area after painting."""
+        self.extra[max(0, y0):y1 + 1, max(0, x0):x1 + 1] += amount
+
+    def shade_gradient(self, axis='x', strength=0.25):
+        """Light from the upper-left: darken towards the right / bottom of each shape."""
+        opaque = self.mat >= 0
+        ys, xs = np.nonzero(opaque)
+        if len(xs) == 0:
+            return
+        if axis == 'x':
+            t = (np.arange(self.w) - xs.min()) / max(1, xs.max() - xs.min())
+            self.extra -= strength * t[None, :] * opaque
+        else:
+            t = (np.arange(self.h) - ys.min()) / max(1, ys.max() - ys.min())
+            self.extra -= strength * t[:, None] * opaque
+
+    # ── finishing ─────────────────────────────────────────────────────────
+    def finish(self, outline=0.45, edge_light=0.0, grain_scale=1.0, mottle=0.0):
+        h, w = self.h, self.w
+        img = np.zeros((h, w, 4), dtype=float)
+        opaque = self.mat >= 0
+        for i, (base, grain, speckle) in enumerate(self.mats):
+            sel = self.mat == i
+            n = sel.sum()
+            if not n:
+                continue
+            grain = grain * grain_scale
+            col = np.tile(base, (n, 1))
+            # per-pixel grain: mostly luminance, a little hue drift
+            lum = RNG.normal(0, grain, n)
+            hue = RNG.normal(0, grain * 0.25, (n, 3))
+            col = col + lum[:, None] + hue
+            # occasional dark speckles, like the hand-drawn textures
+            spk = RNG.random(n) < speckle
+            col[spk] *= RNG.uniform(0.45, 0.7, spk.sum())[:, None]
+            img[sel, :3] = col
+            img[sel, 3] = 255
+        # broad shading
+        img[..., :3] *= (1 + self.extra)[..., None]
+        # low-frequency blotches so big surfaces look painted, not like static
+        if mottle:
+            cell = 6
+            small = RNG.normal(0, 1, (h // cell + 2, w // cell + 2))
+            field = np.array(Image.fromarray(((small + 3) * 40).clip(0, 255).astype(np.uint8))
+                             .resize(((w // cell + 2) * cell, (h // cell + 2) * cell), Image.BILINEAR),
+                             dtype=float)[:h, :w] / 40 - 3
+            img[..., :3] *= (1 + mottle * field)[..., None]
+        # outline: opaque pixels that touch transparency get darkened
+        pad = np.pad(opaque, 1)
+        neigh = (pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:])
+        edge = opaque & ~neigh
+        img[edge, :3] *= (1 - outline)
+        if edge_light:
+            top = opaque & ~np.pad(opaque, ((1, 0), (0, 0)))[:-1]
+            img[top & ~edge, :3] *= (1 + edge_light)
+        img[..., :3] = np.clip(img[..., :3], 0, 255)
+        return Image.fromarray(img.astype(np.uint8), 'RGBA')
+
+
+def save(img, name):
+    path = os.path.join(OUT, name)
+    img.save(path)
+    print('wrote', name, img.size)
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Characters & creatures  (scale: an adult is ~48 px tall, like the hand-made
+# player and survivor sprites). All face RIGHT; the game mirrors them.
+# ════════════════════════════════════════════════════════════════════════════
+
+def raider():
+    # Slim build to match the hand-drawn survivors (~12 px shoulders, 48 px tall)
+    s = Sprite(26, 50)
+    skin = s.material('#b07a52', 14, 0.03)
+    hair = s.material('#2a1c14', 14)
+    hood = s.material('#5e2c22', 20, 0.08)
+    jacket = s.material('#4c3b2a', 22, 0.12)
+    strap = s.material('#22180f', 10)
+    pants = s.material('#3e412c', 22, 0.14)
+    boot = s.material('#1e150e', 10)
+    pipe = s.material('#77726a', 14)
+    rag = s.material('#8a2c22', 16)
+    # legs
+    s.rect(8, 29, 10, 45, pants); s.rect(13, 29, 15, 45, pants)
+    s.rect(7, 45, 10, 48, boot); s.rect(13, 45, 16, 48, boot)
+    # torso
+    s.rect(6, 13, 17, 29, jacket)
+    s.line([(7, 13), (16, 27)], strap)              # bandolier
+    s.rect(6, 27, 17, 28, strap)                    # belt
+    # back arm, front arm raised with pipe
+    s.rect(4, 14, 5, 26, jacket); s.rect(4, 26, 5, 28, skin)
+    s.rect(18, 14, 19, 21, jacket); s.rect(19, 20, 21, 22, jacket); s.rect(21, 20, 22, 22, skin)
+    s.line([(21, 25), (24, 6)], pipe, width=2)
+    # head: hood, face, rag over mouth
+    s.ellipse(8, 1, 16, 12, hood)
+    s.rect(11, 4, 16, 11, skin)
+    s.rect(12, 3, 16, 4, hair)
+    s.rect(11, 8, 16, 11, rag)
+    s.px(14, 6, strap)                              # eye
+    s.rect(8, 10, 10, 14, hood)
+    s.shade_gradient('x', 0.30)
+    return s.finish()
+
+
+def robot():
+    s = Sprite(40, 62)
+    plate = s.material('#4e5660', 16, 0.08)
+    dark = s.material('#262b31', 10)
+    joint = s.material('#33383e', 12)
+    rust = s.material('#7a4a2a', 22, 0.15)
+    eye = s.material('#e0402a', 8, 0)
+    glow = s.material('#ff8a5a', 6, 0)
+    # legs
+    s.rect(11, 40, 17, 56, plate); s.rect(23, 40, 29, 56, plate)
+    s.rect(12, 46, 16, 48, joint); s.rect(24, 46, 28, 48, joint)
+    s.rect(9, 56, 18, 60, dark); s.rect(22, 56, 31, 60, dark)
+    # hips & torso
+    s.rect(10, 36, 30, 41, joint)
+    s.poly([(7, 15), (33, 15), (31, 37), (9, 37)], plate)
+    s.rect(13, 21, 27, 31, dark)                  # chest vent
+    for y in range(22, 31, 2):
+        s.rect(14, y, 26, y, joint)
+    s.rect(9, 33, 15, 36, rust); s.rect(27, 16, 31, 20, rust)
+    # arms
+    s.rect(2, 16, 7, 34, plate); s.rect(2, 34, 7, 40, dark)
+    s.rect(33, 16, 38, 34, plate); s.rect(33, 34, 38, 40, dark)
+    s.rect(3, 24, 6, 26, joint); s.rect(34, 24, 37, 26, joint)
+    # head
+    s.rect(13, 4, 27, 14, plate)
+    s.rect(15, 7, 27, 11, dark)
+    s.rect(21, 8, 26, 10, eye); s.rect(23, 8, 25, 9, glow)
+    s.rect(19, 0, 20, 4, joint)                   # antenna
+    s.shade_gradient('x', 0.28)
+    return s.finish(outline=0.5)
+
+
+def drone():
+    s = Sprite(48, 26)
+    body = s.material('#3a4048', 14, 0.07)
+    dark = s.material('#1c2025', 8)
+    rotor = s.material('#5a6068', 10)
+    lens = s.material('#d8402a', 6, 0)
+    glow = s.material('#ffb08a', 4, 0)
+    # rotor arms + blurred rotors
+    s.rect(4, 6, 44, 7, dark)
+    s.ellipse(0, 3, 14, 6, rotor); s.ellipse(34, 3, 48, 6, rotor)
+    s.rect(6, 6, 8, 10, dark); s.rect(40, 6, 42, 10, dark)
+    # body
+    s.ellipse(12, 7, 36, 21, body)
+    s.rect(16, 18, 32, 22, dark)
+    s.line([(20, 22), (17, 25)], dark); s.line([(28, 22), (31, 25)], dark)  # skids
+    # camera eye
+    s.ellipse(26, 11, 33, 18, dark)
+    s.ellipse(28, 13, 32, 17, lens); s.px(29, 14, glow)
+    s.shade_gradient('y', 0.25)
+    return s.finish(outline=0.5)
+
+
+def wolf(fur='#5c5048', belly='#7a6c60', name='wolf'):
+    s = Sprite(46, 30)
+    f = s.material(fur, 22, 0.12)
+    b = s.material(belly, 18, 0.06)
+    d = s.material('#241c18', 10)
+    eye = s.material('#e0b040', 6, 0)
+    # long legs
+    for x in (8, 12, 29, 33):
+        s.rect(x, 15, x + 2, 27, f)
+        s.rect(x, 27, x + 3, 28, d)
+    # lean body, tail hanging
+    s.ellipse(6, 8, 37, 19, f)
+    s.ellipse(12, 13, 32, 19, b)
+    s.poly([(7, 11), (1, 16), (2, 19), (8, 14)], f)
+    # neck & head (facing right)
+    s.poly([(31, 9), (38, 3), (42, 8), (37, 15)], f)
+    s.poly([(38, 4), (46, 8), (45, 12), (38, 11)], f)   # snout
+    s.rect(44, 9, 45, 10, d)                            # nose
+    s.poly([(35, 0), (38, 5), (34, 5)], f)              # ears
+    s.poly([(38, 0), (40, 4), (37, 4)], f)
+    s.px(40, 6, eye)
+    s.line([(40, 12), (44, 12)], d)                     # mouth
+    s.shade_gradient('y', 0.30)
+    return s.finish()
+
+
+def dog():
+    s = Sprite(38, 26)
+    f = s.material('#8a5a32', 20, 0.08)
+    b = s.material('#b88a5a', 16, 0.05)
+    d = s.material('#2a1a10', 10)
+    col = s.material('#a02a22', 10, 0)
+    for x in (7, 11, 24, 28):
+        s.rect(x, 16, x + 2, 24, f)
+        s.rect(x, 23, x + 2, 25, d)
+    s.ellipse(4, 8, 32, 19, f)
+    s.ellipse(9, 13, 28, 19, b)
+    s.poly([(5, 11), (0, 4), (2, 3), (7, 9)], f)          # tail up
+    s.poly([(26, 9), (32, 3), (36, 8), (31, 15)], f)
+    s.poly([(32, 5), (38, 9), (37, 12), (32, 11)], b)     # muzzle
+    s.rect(36, 9, 37, 10, d)
+    s.poly([(30, 1), (33, 7), (28, 6)], d)                # ear
+    s.px(33, 6, d)
+    s.rect(27, 9, 30, 10, col)                            # collar
+    s.shade_gradient('y', 0.28)
+    return s.finish()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Props
+# ════════════════════════════════════════════════════════════════════════════
+
+def car_wreck():
+    s = Sprite(84, 34)
+    rust = s.material('#7a3e22', 24, 0.16)
+    paint = s.material('#4a5a5e', 20, 0.12)
+    dark = s.material('#161210', 8)
+    glass = s.material('#2a3a40', 14, 0.2)
+    tyre = s.material('#1c1a18', 10)
+    chrome = s.material('#8a8478', 14)
+    # body
+    s.poly([(2, 17), (8, 12), (24, 11), (32, 3), (58, 3), (68, 12), (82, 14), (83, 26), (2, 26)], paint)
+    s.rect(2, 24, 83, 27, rust)
+    # rust patches
+    for (x, y, r) in [(10, 16, 4), (44, 20, 5), (74, 18, 3), (36, 6, 2)]:
+        s.ellipse(x - r, y - r, x + r, y + r, rust)
+    # windows (one smashed)
+    s.poly([(34, 5), (46, 5), (46, 12), (27, 12)], glass)
+    s.poly([(49, 5), (57, 5), (64, 12), (49, 12)], dark)
+    s.rect(47, 4, 48, 12, rust)
+    # wheel arches + flat tyres
+    s.ellipse(9, 18, 25, 34, dark); s.ellipse(58, 18, 74, 34, dark)
+    s.ellipse(11, 22, 23, 33, tyre); s.ellipse(60, 22, 72, 33, tyre)
+    s.rect(11, 31, 23, 33, tyre); s.rect(60, 31, 72, 33, tyre)  # flattened
+    s.rect(78, 17, 83, 19, chrome)                            # bumper scrap
+    s.clear(0, 26, 8, 33); s.clear(76, 28, 83, 33)
+    s.shade_gradient('y', 0.30)
+    return s.finish()
+
+
+def tent():
+    s = Sprite(72, 46)
+    can = s.material('#4e5634', 22, 0.10)
+    can2 = s.material('#3c4428', 22, 0.10)
+    patch = s.material('#6a4a2a', 18)
+    dark = s.material('#120f0a', 8)
+    pole = s.material('#5a4a36', 10)
+    rope = s.material('#8a7a5a', 10)
+    s.poly([(36, 4), (70, 45), (2, 45)], can)
+    s.poly([(36, 4), (52, 45), (36, 45)], can2)            # shaded flap side
+    s.poly([(36, 16), (46, 45), (27, 45)], dark)           # opening
+    s.rect(18, 28, 25, 33, patch)
+    s.line([(35, 0), (36, 8)], pole, width=2)
+    s.line([(4, 44), (0, 38)], rope); s.line([(68, 44), (71, 38)], rope)
+    s.shade_gradient('y', 0.20)
+    return s.finish()
+
+
+def debris():
+    s = Sprite(52, 22)
+    conc = s.material('#6a665e', 20, 0.12)
+    brick = s.material('#7a4430', 22, 0.12)
+    wood = s.material('#5a4228', 20, 0.10)
+    rebar = s.material('#3a2a20', 8)
+    dark = s.material('#1e1a16', 8)
+    s.poly([(2, 21), (10, 10), (20, 13), (30, 5), (40, 11), (50, 21)], conc)
+    s.poly([(8, 21), (14, 14), (22, 17), (18, 21)], brick)
+    s.poly([(30, 21), (34, 12), (44, 14), (46, 21)], brick)
+    s.line([(14, 10), (34, 3)], wood, width=3)
+    s.line([(28, 8), (38, 0)], rebar); s.line([(31, 9), (43, 2)], rebar)
+    for (x, y) in [(24, 16), (38, 17), (11, 18)]:
+        s.rect(x, y, x + 2, y + 1, dark)
+    s.shade_gradient('y', 0.30)
+    return s.finish()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Building facades. Doors are always centred horizontally (the game places
+# the door hotspot at the middle of the building) and ~30 px tall.
+# ════════════════════════════════════════════════════════════════════════════
+
+FONT = {  # 3x5 pixel font for signs
+    'A': ['010', '101', '111', '101', '101'], 'C': ['011', '100', '100', '100', '011'],
+    'E': ['111', '100', '110', '100', '111'], 'H': ['101', '101', '111', '101', '101'],
+    'I': ['111', '010', '010', '010', '111'], 'L': ['100', '100', '100', '100', '111'],
+    'M': ['101', '111', '111', '101', '101'], 'O': ['010', '101', '101', '101', '010'],
+    'P': ['110', '101', '110', '100', '100'], 'R': ['110', '101', '110', '101', '101'],
+    'S': ['011', '100', '010', '001', '110'], 'T': ['111', '010', '010', '010', '010'],
+    'Y': ['101', '101', '010', '010', '010'], 'U': ['101', '101', '101', '101', '111'],
+    'N': ['101', '111', '111', '111', '101'], 'D': ['110', '101', '101', '101', '110'],
+    'F': ['111', '100', '110', '100', '100'], 'G': ['011', '100', '101', '101', '011'],
+    'K': ['101', '101', '110', '101', '101'], 'V': ['101', '101', '101', '101', '010'],
+    'W': ['101', '101', '111', '111', '101'], 'B': ['110', '101', '110', '101', '110'],
+    ' ': ['000', '000', '000', '000', '000'],
+}
+
+
+def text(s, x, y, msg, m, missing=()):
+    """Pixel text; letter indices in `missing` are left out (fallen letters)."""
+    for i, ch in enumerate(msg):
+        if i in missing:
+            continue
+        for r, row in enumerate(FONT[ch]):
+            for c, bit in enumerate(row):
+                if bit == '1':
+                    s.px(x + i * 4 + c, y + r, m)
+
+
+def window(s, x, y, w, h, frame, glass, dark, kind=None):
+    kind = kind or RNG.choice(['dark', 'dark', 'broken', 'boarded', 'lit'])
+    s.rect(x - 1, y - 1, x + w, y + h, frame)
+    s.rect(x, y, x + w - 1, y + h - 1, dark)
+    if kind == 'dark':
+        s.rect(x, y, x + w // 2 - 1, y + h // 2 - 1, glass)      # glint pane
+    elif kind == 'broken':
+        s.poly([(x, y), (x + w - 1, y), (x + w // 2, y + h // 2), (x + 1, y + h - 2)], glass)
+    elif kind == 'boarded':
+        board = s.material('#6a5030', 18, 0.10)
+        s.rect(x - 1, y + 1, x + w, y + 3, board)
+        s.rect(x - 1, y + h - 4, x + w, y + h - 2, board)
+    elif kind == 'lit':
+        lit = s.material('#4a3c1c', 10, 0.05)
+        s.rect(x, y, x + w - 1, y + h - 1, lit)
+    s.rect(x, y + h // 2, x + w - 1, y + h // 2, frame)         # mullion
+
+
+def door(s, cx, base, frame, wood, dark, w=14, h=30):
+    x0 = cx - w // 2
+    s.rect(x0 - 2, base - h - 2, x0 + w + 1, base, frame)
+    s.rect(x0, base - h, x0 + w - 1, base, dark)
+    s.rect(x0, base - h, x0 + w // 2, base, wood)                # half-open door
+    s.px(x0 + w // 2 - 2, base - h // 2, frame)
+
+
+def weather(s, w, h, base, cracks=4, dirt=0.35):
+    """Grime gradient at the bottom, roof shadow at the top, and cracks."""
+    crack = s.material('#120e0a', 6, 0)
+    for _ in range(cracks):
+        x = int(RNG.integers(4, w - 4)); y = int(RNG.integers(base // 3, base - 4))
+        pts = [(x, y)]
+        for _ in range(int(RNG.integers(3, 7))):
+            x += int(RNG.integers(-2, 3)); y += int(RNG.integers(1, 4))
+            pts.append((x, y))
+        opaque_line = [(px, py) for px, py in pts if 0 <= px < w and 0 <= py < h and s.mat[py, px] >= 0]
+        for px, py in opaque_line:
+            s.px(px, py, crack)
+    s.shade(0, base - 18, w, base, -dirt * 0.6)
+    s.shade(0, base - 8, w, base, -dirt * 0.4)
+
+
+def house(variant=0):
+    w, h = (150, 140) if variant == 0 else (132, 128)
+    s = Sprite(w, h)
+    side = s.material(['#6a5844', '#5a6066'][variant], 18, 0.08)
+    seam = s.material(['#4a3c2c', '#41464b'][variant], 10)
+    roof = s.material('#3a2c26', 20, 0.12)
+    trim = s.material('#8a7c66', 14)
+    frame = s.material('#2a221a', 8); glass = s.material('#3c5058', 14, 0.15)
+    dark = s.material('#0e0c0a', 6); wood = s.material('#5a3c22', 18, 0.1)
+    base = h - 1
+    wall_top = 44
+    s.rect(4, wall_top, w - 5, base, side)
+    for y in range(wall_top + 4, base, 5):                      # horizontal siding
+        s.rect(4, y, w - 5, y, seam)
+    s.poly([(0, wall_top + 2), (w // 2, 6), (w - 1, wall_top + 2)], roof)
+    s.rect(0, wall_top, w - 1, wall_top + 2, trim)
+    s.rect(w - 34, 10, w - 24, 30, roof)                         # chimney
+    # holes in the roof
+    s.clear(w // 2 - 24, 22, w // 2 - 16, 26)
+    floor2 = wall_top + 10
+    for x in (14, w - 36):
+        window(s, x, floor2, 22, 18, frame, glass, dark)
+    for x in (14, w - 36):
+        window(s, x, base - 34, 22, 20, frame, glass, dark)
+    window(s, w // 2 - 9, 14 + 12, 18, 10, frame, glass, dark, 'dark')   # attic
+    door(s, w // 2, base, frame, wood, dark)
+    s.rect(w // 2 - 12, base - 1, w // 2 + 11, base, trim)      # step
+    weather(s, w, h, base, cracks=3)
+    s.shade_gradient('x', 0.22)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def apartment():
+    w, h = 140, 170
+    s = Sprite(w, h)
+    brick = s.material('#6e3c2c', 20, 0.10)
+    mortar = s.material('#4a2a20', 10)
+    ledge = s.material('#7a7466', 14)
+    frame = s.material('#22201c', 8); glass = s.material('#3a4c54', 14, 0.15)
+    dark = s.material('#0c0b0a', 6); wood = s.material('#4a3420', 16)
+    base = h - 1
+    s.rect(2, 8, w - 3, base, brick)
+    for y in range(10, base, 4):                                 # brick courses
+        s.rect(2, y, w - 3, y, mortar)
+        off = 0 if (y // 4) % 2 else 4
+        for x in range(2 + off, w - 3, 8):
+            s.px(x, y + 1, mortar); s.px(x, y + 2, mortar)
+    s.rect(0, 4, w - 1, 9, ledge)
+    s.clear(w - 30, 4, w - 1, 14)                                # collapsed corner
+    s.poly([(w - 30, 9), (w - 1, 9), (w - 1, 26)], brick)
+    for row, y in enumerate((20, 56, 92)):
+        s.rect(4, y + 26, w - 5, y + 27, ledge)
+        for x in range(12, w - 24, 30):
+            window(s, x, y, 18, 22, frame, glass, dark)
+    door(s, w // 2, base, frame, wood, dark)
+    s.rect(w // 2 - 16, base - 34, w // 2 + 15, base - 33, ledge)
+    weather(s, w, h, base, cracks=6)
+    s.shade_gradient('x', 0.22)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def office(sign_text='OFFICES', band_col='#3e4044', missing=(3,), police=False):
+    w, h = 170, 168
+    s = Sprite(w, h)
+    conc = s.material('#5e6062', 16, 0.08)
+    joint = s.material('#46484a', 10)
+    band = s.material(band_col, 12)
+    frame = s.material('#1c1e20', 8); glass = s.material('#34485a', 16, 0.18)
+    dark = s.material('#0b0c0e', 6); wood = s.material('#3a3a3c', 12)
+    sign = s.material('#2a2c2e', 10); letter = s.material('#9a9a8a', 10, 0)
+    base = h - 1
+    s.rect(3, 6, w - 4, base, conc)
+    for x in range(3, w - 4, 20):
+        s.rect(x, 6, x, base, joint)
+    s.rect(0, 2, w - 1, 6, band)
+    for y in (16, 52, 88):
+        s.rect(3, y - 4, w - 4, y - 3, band)
+        for x in range(10, w - 22, 26):
+            window(s, x, y, 18, 24, frame, glass, dark, RNG.choice(['dark', 'broken', 'dark', 'boarded']))
+    s.rect(w // 2 - 34, base - 52, w // 2 + 33, base - 42, sign)
+    text(s, w // 2 - len(sign_text) * 2 + 1, base - 50, sign_text, letter, missing=missing)
+    if police:                                                   # dead light bar over the door
+        red = s.material('#7a2420', 10, 0); blue = s.material('#24387a', 10, 0)
+        s.rect(w // 2 - 12, base - 40, w // 2 - 1, base - 37, red)
+        s.rect(w // 2, base - 40, w // 2 + 11, base - 37, blue)
+    door(s, w // 2 - 10, base, frame, wood, dark)
+    door(s, w // 2 + 10, base, frame, wood, dark)
+    weather(s, w, h, base, cracks=6)
+    s.shade_gradient('x', 0.20)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def church():
+    w, h = 170, 200
+    s = Sprite(w, h)
+    stone = s.material('#6a6458', 18, 0.10)
+    joint = s.material('#4c473e', 10)
+    roof = s.material('#2e2a28', 18, 0.12)
+    frame = s.material('#1c1814', 8); glass = s.material('#5a3a4a', 18, 0.2)
+    glass2 = s.material('#3a4a6a', 18, 0.2)
+    dark = s.material('#0c0a08', 6); wood = s.material('#4a2e1a', 18)
+    cross = s.material('#8a8274', 12)
+    base = h - 1
+    body_top = 92
+    s.rect(6, body_top, w - 7, base, stone)
+    s.poly([(0, body_top + 4), (w // 2, body_top - 34), (w - 1, body_top + 4)], roof)
+    # bell tower
+    tx0, tx1 = w // 2 - 18, w // 2 + 17
+    s.rect(tx0, 30, tx1, body_top + 10, stone)
+    s.poly([(tx0 - 4, 32), (w // 2, 6), (tx1 + 4, 32)], roof)
+    s.rect(w // 2 - 1, 0, w // 2, 8, cross); s.rect(w // 2 - 3, 2, w // 2 + 2, 3, cross)
+    s.ellipse(w // 2 - 8, 40, w // 2 + 7, 62, frame)            # belfry arch
+    s.ellipse(w // 2 - 6, 42, w // 2 + 5, 62, dark)
+    s.rect(w // 2 - 6, 52, w // 2 + 5, 64, dark)
+    for y in range(body_top + 3, base, 6):                       # stone courses
+        s.rect(6, y, w - 7, y, joint)
+    # pointed stained-glass windows
+    for x, g in ((22, glass), (w - 38, glass2)):
+        s.poly([(x - 1, body_top + 48), (x - 1, body_top + 22), (x + 8, body_top + 10),
+                (x + 17, body_top + 22), (x + 17, body_top + 48)], frame)
+        s.poly([(x, body_top + 47), (x, body_top + 23), (x + 8, body_top + 12),
+                (x + 16, body_top + 23), (x + 16, body_top + 47)], g)
+        s.rect(x + 8, body_top + 14, x + 8, body_top + 47, frame)
+        s.rect(x, body_top + 32, x + 16, body_top + 32, frame)
+    # arched doorway
+    s.ellipse(w // 2 - 12, base - 44, w // 2 + 11, base - 20, frame)
+    s.rect(w // 2 - 12, base - 32, w // 2 + 11, base, frame)
+    s.ellipse(w // 2 - 9, base - 41, w // 2 + 8, base - 22, dark)
+    s.rect(w // 2 - 9, base - 32, w // 2 + 8, base, dark)
+    s.rect(w // 2 - 9, base - 30, w // 2 - 1, base, wood)
+    weather(s, w, h, base, cracks=5)
+    s.shade_gradient('x', 0.22)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def factory():
+    w, h = 210, 150
+    s = Sprite(w, h)
+    metal = s.material('#5a5e58', 16, 0.08)
+    rib = s.material('#3e423e', 10)
+    rust = s.material('#7a4022', 24, 0.18)
+    brick = s.material('#5e3428', 18, 0.10)
+    frame = s.material('#1a1c1a', 8); glass = s.material('#3e4a40', 14, 0.18)
+    dark = s.material('#0b0c0a', 6); wood = s.material('#4a4a44', 12)
+    stack = s.material('#4a3a32', 18, 0.10)
+    base = h - 1
+    top = 50
+    s.rect(4, top, w - 5, base, metal)
+    for x in range(6, w - 5, 4):                                 # corrugation
+        s.rect(x, top, x, base, rib)
+    # sawtooth roof
+    for i in range(5):
+        x0 = 4 + i * 40
+        s.poly([(x0, top), (x0 + 30, top - 22), (x0 + 30, top), ], metal)
+        s.rect(x0 + 24, top - 18, x0 + 29, top - 2, glass)
+    s.rect(0, top, w - 1, top + 3, rib)
+    # chimney stack
+    s.rect(w - 40, 0, w - 26, top, stack)
+    for y in range(4, top, 6):
+        s.rect(w - 40, y, w - 26, y, brick)
+    # brick base and rust streaks
+    s.rect(4, base - 16, w - 5, base, brick)
+    for x in (30, 92, 150, 176):
+        s.rect(x, top + 4, x + 3, top + 4 + int(RNG.integers(20, 50)), rust)
+    # high windows
+    for x in range(16, w - 30, 34):
+        window(s, x, top + 14, 22, 14, frame, glass, dark, RNG.choice(['dark', 'broken']))
+    # loading door (rolled half up) + man door
+    s.rect(w // 2 - 26, base - 52, w // 2 + 25, base, frame)
+    s.rect(w // 2 - 24, base - 50, w // 2 + 23, base - 22, rib)
+    s.rect(w // 2 - 24, base - 22, w // 2 + 23, base, dark)
+    door(s, w // 2, base, frame, wood, dark, w=14, h=20)
+    weather(s, w, h, base, cracks=4)
+    s.shade_gradient('x', 0.20)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def hospital():
+    w, h = 190, 160
+    s = Sprite(w, h)
+    tile = s.material('#8a8a82', 14, 0.10)
+    joint = s.material('#6a6a64', 8)
+    stain = s.material('#6a6248', 18, 0.12)
+    band = s.material('#4a6a6a', 14)
+    red = s.material('#a02a22', 12, 0.05)
+    white = s.material('#c8c4b4', 10)
+    frame = s.material('#22262a', 8); glass = s.material('#3a5058', 14, 0.16)
+    dark = s.material('#0b0c0d', 6); wood = s.material('#3c4448', 12)
+    base = h - 1
+    s.rect(3, 12, w - 4, base, tile)
+    for y in range(14, base, 8):
+        s.rect(3, y, w - 4, y, joint)
+    s.rect(0, 8, w - 1, 12, band)
+    for x in (20, 70, 140):                                     # water stains
+        s.rect(x, 13, x + 8, 13 + int(RNG.integers(25, 60)), stain)
+    for y in (24, 62):
+        for x in range(12, w - 22, 26):
+            window(s, x, y, 18, 22, frame, glass, dark)
+    # red cross sign on the roof
+    s.rect(w // 2 - 11, 0, w // 2 + 10, 20, white)
+    s.rect(w // 2 - 2, 3, w // 2 + 1, 17, red); s.rect(w // 2 - 8, 9, w // 2 + 7, 11, red)
+    # entrance canopy
+    s.rect(w // 2 - 30, base - 44, w // 2 + 29, base - 39, band)
+    text(s, w // 2 - 28 + 13, base - 52, 'HOSPITAL', red, missing=(5,))
+    door(s, w // 2 - 8, base, frame, wood, dark)
+    door(s, w // 2 + 8, base, frame, wood, dark)
+    weather(s, w, h, base, cracks=5)
+    s.shade_gradient('x', 0.20)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def pharmacy():
+    w, h = 150, 116
+    s = Sprite(w, h)
+    wall = s.material('#6a6458', 16, 0.08)
+    joint = s.material('#504a40', 8)
+    awning = s.material('#2e5a3a', 18, 0.10)
+    stripe = s.material('#b0a890', 12)
+    green = s.material('#3aa04a', 10, 0)
+    sign = s.material('#1e2420', 8)
+    frame = s.material('#1c1e1c', 8); glass = s.material('#3a4c48', 14, 0.18)
+    dark = s.material('#0b0c0b', 6); wood = s.material('#3a3a36', 12)
+    base = h - 1
+    s.rect(3, 22, w - 4, base, wall)
+    for y in range(26, base, 6):
+        s.rect(3, y, w - 4, y, joint)
+    s.rect(10, 2, w - 11, 18, sign)
+    text(s, 18, 7, 'PHARMACY', stripe, missing=(4,))
+    s.rect(w - 26, 4, w - 16, 16, green)                        # green cross
+    s.rect(w - 25, 4, w - 17, 6, sign); s.rect(w - 25, 14, w - 17, 16, sign)
+    s.rect(w - 26, 4, w - 24, 6, sign); s.rect(w - 18, 4, w - 16, 6, sign)
+    s.rect(w - 26, 14, w - 24, 16, sign); s.rect(w - 18, 14, w - 16, 16, sign)
+    # striped awning, torn at one end
+    s.poly([(6, 30), (w - 7, 30), (w - 1, 42), (0, 42)], awning)
+    for x in range(4, w - 4, 12):
+        s.poly([(x, 30), (x + 5, 30), (x + 7, 42), (x + 2, 42)], stripe)
+    s.clear(w - 30, 38, w - 1, 42)
+    # shop windows
+    for x in (10, w - 52):
+        s.rect(x - 1, 50, x + 42, base - 10, frame)
+        s.rect(x, 51, x + 41, base - 11, dark)
+        s.poly([(x, 51), (x + 20, 51), (x, 70)], glass)
+    door(s, w // 2, base, frame, wood, dark)
+    weather(s, w, h, base, cracks=3)
+    s.shade_gradient('x', 0.20)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def mall():
+    w, h = 230, 128
+    s = Sprite(w, h)
+    panel = s.material('#7a7064', 14, 0.08)
+    joint = s.material('#5a524a', 8)
+    band = s.material('#5a2e2a', 14)
+    letter = s.material('#d0b070', 8, 0)
+    frame = s.material('#1c1c1c', 8); glass = s.material('#3a4a54', 16, 0.18)
+    dark = s.material('#0b0b0b', 6); wood = s.material('#3c3c3c', 12)
+    base = h - 1
+    s.rect(3, 14, w - 4, base, panel)
+    for x in range(3, w - 4, 24):
+        s.rect(x, 14, x, base, joint)
+    s.rect(0, 10, w - 1, 30, band)
+    text(s, w // 2 - 50, 16, 'SUNNY MALL', letter, missing=(2, 8))
+    # long glass storefront, partly smashed
+    s.rect(10, 44, w - 11, base - 4, frame)
+    s.rect(12, 46, w - 13, base - 6, dark)
+    for x in range(12, w - 13, 30):
+        s.rect(x, 46, x + 1, base - 6, frame)
+        if RNG.random() < 0.6:
+            s.poly([(x + 2, 46), (x + 18, 46), (x + 2, 66)], glass)
+    door(s, w // 2, base, frame, wood, dark, w=22)
+    weather(s, w, h, base, cracks=5)
+    s.shade_gradient('x', 0.18)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+def cabin():
+    w, h = 130, 104
+    s = Sprite(w, h)
+    log = s.material('#5e3e24', 20, 0.12)
+    gap = s.material('#3a2414', 10)
+    roof = s.material('#2e3a26', 22, 0.14)
+    moss = s.material('#4a5a2a', 22, 0.15)
+    stone = s.material('#5a5650', 18, 0.10)
+    frame = s.material('#22160c', 8); glass = s.material('#3a4038', 14, 0.15)
+    dark = s.material('#0c0906', 6); wood = s.material('#4a3018', 18)
+    base = h - 1
+    wall_top = 40
+    s.rect(6, wall_top, w - 7, base, log)
+    for y in range(wall_top + 5, base, 6):
+        s.rect(6, y, w - 7, y, gap)
+    for y in range(wall_top + 2, base, 6):                      # log ends
+        s.ellipse(2, y, 8, y + 5, log); s.ellipse(w - 9, y, w - 3, y + 5, log)
+    s.poly([(0, wall_top + 3), (w // 2, 8), (w - 1, wall_top + 3)], roof)
+    for (x, y) in [(30, 26), (70, 18), (96, 30)]:
+        s.ellipse(x, y, x + 14, y + 6, moss)
+    s.rect(w - 32, 0, w - 20, 26, stone)                         # chimney
+    for x in (16, w - 40):
+        window(s, x, wall_top + 16, 22, 18, frame, glass, dark, RNG.choice(['dark', 'boarded']))
+    door(s, w // 2, base, frame, wood, dark)
+    weather(s, w, h, base, cracks=2, dirt=0.25)
+    s.shade_gradient('x', 0.22)
+    return s.finish(outline=0.35, grain_scale=0.6, mottle=0.06)
+
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Furniture (same scale: a person is ~48 px tall)
+# ════════════════════════════════════════════════════════════════════════════
+
+def _wood(s, c='#5a3c22'):
+    return s.material(c, 16, 0.10)
+
+
+def hospital_bed():
+    s = Sprite(64, 28)
+    frame = s.material('#7a7e80', 12, 0.06); sheet = s.material('#a8a69a', 12, 0.08)
+    stain = s.material('#6a5a40', 16); pil = s.material('#b8b6aa', 10)
+    dark = s.material('#2a2c2e', 8)
+    s.rect(2, 12, 61, 18, sheet); s.rect(4, 8, 16, 13, pil)
+    s.ellipse(30, 13, 42, 17, stain)
+    s.rect(0, 4, 2, 27, frame); s.rect(61, 9, 63, 27, frame)
+    s.rect(0, 18, 63, 20, frame)
+    for x in (4, 58):
+        s.rect(x, 20, x + 1, 25, frame); s.ellipse(x - 1, 24, x + 2, 27, dark)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def iv_stand():
+    s = Sprite(14, 48)
+    pole = s.material('#8a8c8e', 10); bag = s.material('#8aa0a0', 10, 0.05)
+    dark = s.material('#2a2c2e', 8)
+    s.rect(6, 2, 7, 44, pole); s.rect(2, 2, 11, 3, pole)
+    s.rect(1, 4, 5, 14, bag); s.line([(3, 14), (6, 30)], dark)
+    s.rect(2, 44, 11, 45, pole); s.px(2, 46, dark); s.px(11, 46, dark)
+    return s.finish(outline=0.3)
+
+
+def wheelchair():
+    s = Sprite(26, 24)
+    frame = s.material('#6e7276', 12); seat = s.material('#2e3e4a', 14, 0.1)
+    tyre = s.material('#1c1c1c', 6)
+    s.rect(4, 0, 6, 12, frame); s.rect(4, 10, 18, 13, seat); s.rect(4, 4, 6, 12, seat)
+    s.ellipse(1, 9, 15, 23, tyre); s.ellipse(4, 12, 12, 20, frame); s.ellipse(6, 14, 10, 18, tyre)
+    s.ellipse(19, 18, 24, 23, tyre); s.line([(17, 13), (21, 19)], frame)
+    return s.finish(outline=0.3)
+
+
+def desk_monitor():
+    s = Sprite(58, 42)
+    wood = _wood(s, '#4e4234'); dark = s.material('#1c1a18', 8)
+    case_ = s.material('#6a6a62', 10); screen = s.material('#1e2a2e', 10, 0.2)
+    paper = s.material('#a8a48c', 12)
+    s.rect(0, 20, 57, 24, wood); s.rect(2, 24, 6, 41, wood); s.rect(44, 24, 55, 41, wood)
+    s.rect(45, 27, 54, 32, dark); s.rect(45, 34, 54, 39, dark)
+    s.rect(10, 2, 34, 18, case_); s.rect(12, 4, 32, 16, screen)
+    s.poly([(12, 4), (20, 4), (12, 11)], s.material('#3a4a50', 10))
+    s.rect(20, 18, 24, 20, case_)
+    s.rect(36, 17, 46, 19, paper); s.rect(38, 15, 47, 17, paper)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def office_chair():
+    s = Sprite(20, 30)
+    seat = s.material('#2a2c32', 14, 0.1); metal = s.material('#5a5c60', 10)
+    s.rect(2, 0, 8, 16, seat); s.rect(2, 14, 17, 18, seat)
+    s.rect(9, 18, 10, 25, metal); s.rect(3, 26, 16, 27, metal)
+    s.px(3, 28, metal); s.px(16, 28, metal)
+    return s.finish()
+
+
+def filing_cabinet():
+    s = Sprite(22, 42)
+    body = s.material('#5a6058', 12, 0.08); drawer = s.material('#4a4e48', 10)
+    handle = s.material('#9a9a90', 6); rust = s.material('#6a3c22', 18, 0.15)
+    s.rect(0, 0, 21, 41, body)
+    for y in (3, 16, 29):
+        s.rect(2, y, 19, y + 10, drawer); s.rect(8, y + 4, 13, y + 5, handle)
+    s.rect(2, 16, 19, 22, s.material('#14140f', 6))               # drawer hanging open
+    s.ellipse(14, 33, 20, 40, rust)
+    s.shade_gradient('x', 0.25)
+    return s.finish()
+
+
+def machine():
+    s = Sprite(62, 56)
+    body = s.material('#4a5248', 14, 0.10); dark = s.material('#1c1e1c', 8)
+    panel = s.material('#2a302a', 10); rust = s.material('#7a4022', 22, 0.18)
+    warn = s.material('#b08a2a', 12); pipe = s.material('#5a5e5a', 10)
+    s.rect(2, 16, 59, 55, body); s.rect(6, 22, 34, 40, panel)
+    for y in range(24, 40, 4):
+        s.rect(8, y, 32, y, dark)
+    s.ellipse(40, 22, 54, 36, dark); s.ellipse(43, 25, 51, 33, pipe)
+    s.rect(14, 4, 20, 16, pipe); s.rect(12, 0, 22, 4, pipe)       # exhaust
+    for x in range(2, 59, 8):
+        s.rect(x, 50, x + 3, 54, warn)
+    s.ellipse(44, 40, 58, 50, rust); s.ellipse(4, 44, 12, 52, rust)
+    s.shade_gradient('x', 0.22)
+    return s.finish()
+
+
+def conveyor():
+    s = Sprite(32, 14)
+    belt = s.material('#262624', 10); roller = s.material('#5a5a56', 10)
+    leg = s.material('#3e423e', 10)
+    s.rect(0, 0, 31, 5, belt)
+    for x in (2, 12, 22):
+        s.ellipse(x, 1, x + 5, 6, roller)
+    s.rect(4, 6, 6, 13, leg); s.rect(25, 6, 27, 13, leg)
+    return s.finish(outline=0.2)
+
+
+def store_shelf(stock=('#8a3a2a', '#3a6a8a', '#c4a43a', '#4a7a3a'), medicine=False):
+    s = Sprite(46, 54)
+    metal = s.material('#5a5e62', 10, 0.06); back = s.material('#2e3034', 10)
+    items = [s.material(c, 14, 0.05) for c in stock]
+    s.rect(0, 0, 45, 53, back)
+    s.rect(0, 0, 2, 53, metal); s.rect(43, 0, 45, 53, metal)
+    for i, y in enumerate((14, 30, 46)):
+        s.rect(0, y, 45, y + 2, metal)
+        x = 4
+        while x < 40:
+            if RNG.random() < 0.65:
+                m = items[int(RNG.integers(0, len(items)))]
+                hgt = 5 if medicine else int(RNG.integers(5, 10))
+                wid = 3 if medicine else int(RNG.integers(3, 7))
+                s.rect(x, y - hgt, x + wid - 1, y - 1, m)
+                x += wid + 1
+            else:
+                x += 4
+    # a few items knocked onto the floor
+    for x in (6, 30):
+        s.rect(x, 51, x + 4, 53, items[0])
+    s.shade_gradient('x', 0.2)
+    return s.finish(outline=0.3)
+
+
+def mannequin():
+    s = Sprite(16, 50)
+    body = s.material('#b8ae9a', 10, 0.05); stand = s.material('#3a3a3a', 8)
+    cloth = s.material('#6a2a3a', 16, 0.08)
+    s.ellipse(5, 0, 11, 7, body); s.rect(7, 7, 8, 9, body)
+    s.rect(3, 9, 12, 28, cloth); s.rect(1, 10, 2, 22, body)          # one arm missing
+    s.rect(5, 28, 10, 34, body)
+    s.rect(7, 34, 8, 46, stand); s.rect(3, 46, 12, 48, stand)
+    return s.finish(outline=0.35)
+
+
+def sofa():
+    s = Sprite(56, 28)
+    fab = s.material('#5a3a3a', 18, 0.12); cush = s.material('#6e4a44', 16, 0.1)
+    wood = _wood(s, '#3a2614'); tear = s.material('#b0a080', 10)
+    s.rect(2, 2, 53, 16, fab); s.rect(0, 8, 6, 24, fab); s.rect(49, 8, 55, 24, fab)
+    s.rect(6, 14, 49, 22, cush); s.rect(27, 14, 28, 22, fab)
+    s.ellipse(34, 15, 40, 19, tear)
+    s.rect(2, 24, 5, 27, wood); s.rect(50, 24, 53, 27, wood)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def table_chairs():
+    s = Sprite(56, 30)
+    wood = _wood(s, '#5a3c22'); wood2 = _wood(s, '#4a3018')
+    cloth = s.material('#7a6a50', 14, 0.08); can = s.material('#8a8a80', 10)
+    s.rect(12, 12, 43, 15, wood); s.rect(14, 15, 16, 29, wood); s.rect(39, 15, 41, 29, wood)
+    s.rect(18, 9, 22, 11, can); s.rect(30, 10, 34, 11, cloth)
+    for x0, back in ((0, 0), (46, 9)):
+        s.rect(x0, 17, x0 + 9, 19, wood2)
+        s.rect(x0 + back, 4, x0 + back + 1, 29, wood2)
+        s.rect(x0 + (9 - back), 19, x0 + (9 - back) + 1, 29, wood2)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def bookshelf():
+    s = Sprite(34, 52)
+    wood = _wood(s, '#4a3018'); back = s.material('#22160c', 8)
+    books = [s.material(c, 14, 0.05) for c in ('#6a2a22', '#2a4a6a', '#5a5a2a', '#3a5a3a', '#7a6a4a')]
+    s.rect(0, 0, 33, 51, wood); s.rect(3, 3, 30, 48, back)
+    for y in (16, 32, 48):
+        s.rect(3, y, 30, y + 1, wood)
+        x = 4
+        while x < 29:
+            if RNG.random() < 0.7:
+                hgt = int(RNG.integers(7, 12)); wid = int(RNG.integers(2, 4))
+                s.rect(x, y - hgt, x + wid - 1, y - 1, books[int(RNG.integers(0, len(books)))])
+                x += wid
+            else:
+                x += 3
+    s.line([(6, 50), (14, 46)], books[0], width=2)                 # fallen book
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def pew():
+    s = Sprite(72, 24)
+    wood = _wood(s, '#4a2e18'); dark = _wood(s, '#34200f')
+    s.rect(0, 0, 71, 4, wood); s.rect(0, 0, 3, 23, dark); s.rect(68, 0, 71, 23, dark)
+    s.rect(0, 12, 71, 15, wood); s.rect(4, 4, 67, 12, dark)
+    s.clear(30, 12, 38, 15)                                         # broken seat plank
+    s.line([(30, 15), (34, 23)], wood, width=2)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def church_cross():
+    s = Sprite(44, 88)
+    wood = _wood(s, '#4a3018'); cloth = s.material('#3a3430', 14, 0.1)
+    wax = s.material('#c8bc98', 8); flame = s.material('#ffd060', 6, 0)
+    rope = s.material('#7a6a4a', 10); body = s.material('#2a2420', 10)
+    s.rect(20, 2, 24, 87, wood); s.rect(4, 16, 40, 20, wood)
+    # slumped figure bound to the cross (Singularity cult)
+    s.ellipse(18, 18, 26, 26, body)
+    s.poly([(17, 26), (27, 26), (26, 52), (18, 52)], cloth)
+    s.line([(18, 27), (6, 20)], body, width=2); s.line([(26, 27), (38, 20)], body, width=2)
+    s.rect(19, 52, 21, 66, body); s.rect(23, 52, 25, 66, body)
+    s.rect(4, 18, 8, 21, rope); s.rect(36, 18, 40, 21, rope)
+    for x in (4, 10, 32, 38):
+        h = int(RNG.integers(6, 11))
+        s.rect(x, 87 - h, x + 2, 87, wax); s.px(x + 1, 86 - h, flame)
+    return s.finish()
+
+
+def rubble_small():
+    return debris()
+
+
+# ── Shelter furniture ──────────────────────────────────────────────────────
+
+def barrel():
+    s = Sprite(20, 26)
+    steel = s.material('#3a4e5a', 14, 0.10); band = s.material('#26343e', 8)
+    rust = s.material('#7a4a2a', 18, 0.15)
+    s.rect(1, 2, 18, 25, steel); s.rect(0, 0, 19, 3, band)
+    s.rect(1, 9, 18, 10, band); s.rect(1, 17, 18, 18, band)
+    s.ellipse(11, 19, 17, 24, rust)
+    s.shade_gradient('x', 0.3)
+    return s.finish()
+
+
+def water_jug():
+    s = Sprite(14, 22)
+    plastic = s.material('#3a6a8a', 12, 0.06); cap = s.material('#2a3a4a', 8)
+    water = s.material('#5a8aa8', 10, 0.04); label = s.material('#b0a890', 8)
+    s.rect(1, 6, 12, 21, plastic); s.rect(1, 10, 12, 21, water)
+    s.rect(4, 2, 9, 5, cap); s.rect(2, 13, 11, 16, label)
+    s.line([(2, 6), (4, 2)], cap)
+    s.shade_gradient('x', 0.3)
+    return s.finish(outline=0.35)
+
+
+def camp_stove():
+    s = Sprite(26, 20)
+    metal = s.material('#3a3a38', 12, 0.08); grate = s.material('#5a5a56', 8)
+    pot = s.material('#5a5e62', 12, 0.06); flame = s.material('#e0702a', 10, 0)
+    s.rect(1, 11, 24, 19, metal); s.rect(3, 9, 22, 10, grate)
+    s.rect(6, 2, 19, 8, pot); s.rect(4, 2, 6, 3, pot); s.rect(19, 2, 21, 3, pot)
+    s.rect(9, 9, 16, 10, flame)
+    s.shade_gradient('x', 0.25)
+    return s.finish()
+
+
+def bed(upgraded=False):
+    w = 54 if upgraded else 46
+    s = Sprite(w, 22)
+    frame = _wood(s, '#4a3420' if upgraded else '#3a2a18')
+    mat = s.material('#5a4a60' if upgraded else '#4a4038', 16, 0.1)
+    blanket = s.material('#4a5a3a' if upgraded else '#5a4a3a', 18, 0.12)
+    pillow = s.material('#8a8070', 12)
+    s.rect(0, 0, 3, 21, frame)
+    if upgraded:
+        s.rect(w - 4, 6, w - 1, 21, frame)
+    s.rect(2, 10, w - 2, 15, mat); s.rect(15, 8, w - 3, 14, blanket)
+    s.rect(4, 7, 13, 11, pillow)
+    s.rect(2, 15, w - 2, 17, frame)
+    s.rect(3, 17, 5, 21, frame); s.rect(w - 6, 17, w - 4, 21, frame)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def nightstand():
+    s = Sprite(12, 20)
+    wood = _wood(s, '#4a3420'); wax = s.material('#d0c4a0', 8); flame = s.material('#ffd060', 6, 0)
+    s.rect(0, 8, 11, 19, wood); s.rect(2, 11, 9, 12, s.material('#22160c', 6))
+    s.rect(5, 2, 7, 7, wax); s.px(6, 1, flame)
+    return s.finish()
+
+
+def storage_shelf():
+    s = Sprite(44, 58)
+    wood = _wood(s, '#5a4028'); back = s.material('#1e1610', 8)
+    can = s.material('#8a8a7a', 10); box = s.material('#7a5a32', 16, 0.1)
+    jar = s.material('#6a8a5a', 12)
+    s.rect(0, 0, 43, 57, back); s.rect(0, 0, 2, 57, wood); s.rect(41, 0, 43, 57, wood)
+    for y in (18, 37, 56):
+        s.rect(0, y, 43, y + 1, wood)
+    for x in range(4, 38, 5):
+        s.rect(x, 12, x + 3, 17, can)
+    s.rect(4, 26, 18, 36, box); s.rect(21, 29, 34, 36, box)
+    for x in (5, 12, 19, 26):
+        s.rect(x, 48, x + 4, 55, jar)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def crates():
+    s = Sprite(40, 34)
+    wood = _wood(s, '#6a4a2a'); slat = _wood(s, '#4a3018')
+    s.rect(0, 12, 22, 33, wood); s.rect(22, 18, 39, 33, wood); s.rect(5, 0, 21, 12, wood)
+    for (x0, y0, x1, y1) in ((0, 12, 22, 33), (22, 18, 39, 33), (5, 0, 21, 12)):
+        s.rect(x0, y0, x1, y0 + 1, slat); s.rect(x0, y1 - 1, x1, y1, slat)
+        s.line([(x0, y0), (x1, y1)], slat)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def workbench():
+    s = Sprite(60, 40)
+    wood = _wood(s, '#5a3e22'); metal = s.material('#6a6e72', 10); dark = s.material('#1e1a14', 8)
+    board = s.material('#3a2c1c', 12)
+    s.rect(4, 0, 55, 14, board)                                    # pegboard
+    for x in range(8, 52, 6):
+        s.px(x, 3, dark); s.px(x, 9, dark)
+    s.line([(10, 2), (10, 12)], metal, width=2); s.rect(16, 4, 22, 6, metal)
+    s.line([(30, 3), (36, 11)], metal); s.rect(44, 2, 46, 12, wood)
+    s.rect(0, 16, 59, 20, wood); s.rect(2, 20, 5, 39, wood); s.rect(54, 20, 57, 39, wood)
+    s.rect(6, 30, 53, 32, wood)
+    s.rect(40, 12, 48, 16, metal)                                   # vice
+    s.rect(10, 26, 20, 29, s.material('#8a3a2a', 12))               # toolbox
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def med_cabinet():
+    s = Sprite(26, 44)
+    body = s.material('#9a9a8e', 10, 0.06); glass = s.material('#3a4a4a', 12, 0.15)
+    red = s.material('#a02a22', 8, 0); bottle = s.material('#7a5a2a', 12)
+    s.rect(0, 0, 25, 43, body); s.rect(3, 10, 22, 40, glass)
+    s.rect(10, 2, 15, 8, red); s.rect(8, 4, 17, 6, red)
+    for y in (20, 30, 40):
+        s.rect(3, y, 22, y, body)
+    for x in (5, 9, 15):
+        s.rect(x, 14, x + 2, 19, bottle)
+    s.shade_gradient('x', 0.2)
+    return s.finish()
+
+
+def cot():
+    s = Sprite(50, 18)
+    canvas = s.material('#5a6448', 16, 0.1); metal = s.material('#6a6e66', 10)
+    blanket = s.material('#8a7a5a', 14, 0.1)
+    s.rect(0, 6, 49, 10, canvas); s.rect(24, 4, 46, 9, blanket)
+    s.line([(2, 10), (8, 17)], metal); s.line([(8, 10), (2, 17)], metal)
+    s.line([(41, 10), (47, 17)], metal); s.line([(47, 10), (41, 17)], metal)
+    return s.finish(outline=0.3)
+
+
+def radio_desk():
+    s = Sprite(52, 38)
+    wood = _wood(s, '#4a3a2a'); radio = s.material('#3a3e34', 12, 0.08)
+    dial = s.material('#c0a040', 8); screen = s.material('#2a4a2a', 10, 0.1)
+    led = s.material('#40c040', 6, 0); dark = s.material('#161410', 8)
+    s.rect(0, 16, 51, 19, wood); s.rect(2, 19, 5, 37, wood); s.rect(46, 19, 49, 37, wood)
+    s.rect(4, 4, 26, 15, radio); s.ellipse(7, 7, 13, 13, dark); s.ellipse(9, 9, 11, 11, dial)
+    s.rect(16, 7, 24, 10, screen); s.px(22, 12, led)
+    s.line([(24, 4), (30, 0)], dark)                                 # antenna
+    s.rect(30, 6, 46, 15, radio); s.rect(32, 8, 44, 13, screen)      # monitor
+    return s.finish()
+
+
+def gun_rack():
+    s = Sprite(30, 44)
+    wood = _wood(s, '#4a3018'); metal = s.material('#3a3c3e', 10); stock = _wood(s, '#6a4424')
+    s.rect(0, 0, 29, 3, wood); s.rect(0, 38, 29, 43, wood)
+    for x in (5, 14, 23):
+        s.rect(x, 4, x + 1, 30, metal); s.rect(x - 1, 28, x + 2, 38, stock)
+    s.rect(0, 0, 2, 43, wood); s.rect(27, 0, 29, 43, wood)
+    return s.finish()
+
+
+def sandbags():
+    s = Sprite(44, 18)
+    bag = s.material('#7a6a4a', 16, 0.1); bag2 = s.material('#6a5a3a', 16, 0.1)
+    for i, x in enumerate(range(0, 40, 11)):
+        s.ellipse(x, 9, x + 12, 17, bag if i % 2 else bag2)
+    for i, x in enumerate(range(5, 34, 11)):
+        s.ellipse(x, 1, x + 12, 10, bag2 if i % 2 else bag)
+    s.shade_gradient('y', 0.25)
+    return s.finish()
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# Tileable textures (walls / floors). Grain is per-pixel so tiles seam cleanly;
+# any lines repeat with periods that divide the tile size.
+# ════════════════════════════════════════════════════════════════════════════
+
+def tex(size, base, joint, pattern, grain=10):
+    s = Sprite(size, size)
+    a = s.material(base, grain, 0.06)
+    j = s.material(joint, 6, 0.02)
+    s.rect(0, 0, size - 1, size - 1, a)
+    pattern(s, j, size)
+    return s.finish(outline=0.0, grain_scale=0.8)
+
+
+def _bricks(bw, bh):
+    def f(s, j, n):
+        for y in range(0, n, bh):
+            s.rect(0, y, n - 1, y, j)
+            off = 0 if (y // bh) % 2 == 0 else bw // 2
+            for x in range(off, n, bw):
+                s.rect(x, y, x, y + bh - 1, j)
+    return f
+
+
+def _tiles(t):
+    def f(s, j, n):
+        for k in range(0, n, t):
+            s.rect(0, k, n - 1, k, j); s.rect(k, 0, k, n - 1, j)
+    return f
+
+
+def _planks(ph, vertical=False):
+    def f(s, j, n):
+        for k in range(0, n, ph):
+            if vertical:
+                s.rect(k, 0, k, n - 1, j)
+            else:
+                s.rect(0, k, n - 1, k, j)
+                s.px((k * 7) % n, k + ph // 2, j)               # nail / knot
+    return f
+
+
+def _plain(s, j, n):
+    for _ in range(6):
+        x, y = int(RNG.integers(0, n)), int(RNG.integers(0, n))
+        s.rect(x, y, min(n - 1, x + 1), y, j)
+
+
+if __name__ == '__main__':
+    only = set(sys.argv[1:])
+    jobs = {
+        'enemy_human.png': raider,
+        'enemy_robot.png': robot,
+        'enemy_drone.png': drone,
+        'enemy_wolf.png': wolf,
+        'dog.png': dog,
+        'car_wreck.png': car_wreck,
+        'tent.png': tent,
+        'debris.png': debris,
+        'bld_house_1.png': lambda: house(0),
+        'bld_house_2.png': lambda: house(1),
+        'bld_apartment.png': apartment,
+        'bld_office.png': office,
+        'bld_police.png': lambda: office('POLICE', '#22305a', (), True),
+        'bld_church.png': church,
+        'bld_factory.png': factory,
+        'bld_hospital.png': hospital,
+        'bld_pharmacy.png': pharmacy,
+        'bld_mall.png': mall,
+        'bld_cabin.png': cabin,
+        # interior furniture
+        'f_hospital_bed.png': hospital_bed, 'f_iv_stand.png': iv_stand, 'f_wheelchair.png': wheelchair,
+        'f_desk.png': desk_monitor, 'f_office_chair.png': office_chair, 'f_filing.png': filing_cabinet,
+        'f_machine.png': machine, 'f_conveyor.png': conveyor,
+        'f_store_shelf.png': store_shelf,
+        'f_med_shelf.png': lambda: store_shelf(('#e0dcc8', '#c04a3a', '#d8b040', '#4a8aa0'), medicine=True),
+        'f_mannequin.png': mannequin, 'f_sofa.png': sofa, 'f_table.png': table_chairs,
+        'f_bookshelf.png': bookshelf, 'f_pew.png': pew, 'f_church_cross.png': church_cross,
+        # shelter furniture
+        's_barrel.png': barrel, 's_water.png': water_jug, 's_stove.png': camp_stove,
+        's_bed.png': bed, 's_bed_good.png': lambda: bed(True), 's_nightstand.png': nightstand,
+        's_shelf.png': storage_shelf, 's_crates.png': crates, 's_workbench.png': workbench,
+        's_medcab.png': med_cabinet, 's_cot.png': cot, 's_radio.png': radio_desk,
+        's_gunrack.png': gun_rack, 's_sandbags.png': sandbags,
+        # textures
+        'tex_bunker.png': lambda: tex(48, '#3e3c36', '#2a2824', _bricks(24, 12)),
+        'tex_wall_plaster.png': lambda: tex(48, '#4a443a', '#3a342c', _plain),
+        'tex_wall_brick.png': lambda: tex(48, '#4e2e24', '#321c16', _bricks(12, 6)),
+        'tex_wall_tile.png': lambda: tex(48, '#5a5e58', '#424640', _tiles(8)),
+        'tex_wall_concrete.png': lambda: tex(48, '#3e4040', '#2c2e2e', _tiles(24)),
+        'tex_wall_wood.png': lambda: tex(48, '#3e2a18', '#28180c', _planks(8, vertical=True)),
+        'tex_wall_stone.png': lambda: tex(48, '#4a463e', '#34302a', _bricks(16, 8)),
+        'tex_floor_wood.png': lambda: tex(48, '#3a2816', '#24180c', _planks(6)),
+        'tex_floor_tile.png': lambda: tex(48, '#4e504a', '#363832', _tiles(12)),
+        'tex_floor_concrete.png': lambda: tex(48, '#34332e', '#262520', _plain),
+    }
+    for name, fn in jobs.items():
+        if not only or name in only:
+            save(fn(), name)

@@ -265,7 +265,7 @@ function drawEnvSprite(ctx, key, cx, groundY, drawW, drawH) {
  * baseH is the logical height at s=1; sprite aspect ratio is preserved.
  * Returns true if sprite was drawn, false if not yet loaded.
  */
-function drawCharSprite(ctx, key, x, y, s, facing, baseH) {
+function drawCharSprite(ctx, key, x, y, s, facing, baseH, weapon) {
   const img = _envSpr[key];
   if (!img || !img.complete || !img.naturalWidth) return false;
   // Always draw at natural pixel size — no rescaling
@@ -275,6 +275,13 @@ function drawCharSprite(ctx, key, x, y, s, facing, baseH) {
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);
   ctx.drawImage(img, -Math.round(w / 2), -h, w, h);
+  const hand = CHAR_HAND[key];
+  if (weapon && weapon.id && hand) {
+    const lx = -Math.round(w / 2) + hand[0], ly = -h + hand[1];
+    if (_drawWeaponAt(ctx, weapon.id, lx, ly, weapon.t0)) {
+      ctx.drawImage(img, hand[0] - 1, hand[1] - 2, 3, 3, lx - 1, ly - 2, 3, 3);
+    }
+  }
   ctx.restore();
   return true;
 }
@@ -378,7 +385,63 @@ function _shadowOval(ctx, rx, ry, alpha) {
   ctx.restore();
 }
 
-function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
+// ── Held weapons ─────────────────────────────────────────────────────────────
+// Weapons are the item sprites (Assets/item_<id>.png) drawn in a character's
+// front hand, rotated around a grip point. No per-weapon character art needed.
+
+// Where the hand holds each weapon sprite (sprite pixel coords)
+const WEAPON_GRIP = {
+  knife: [2, 2], bat: [2, 2], crowbar: [1, 3], pipe: [2, 1], machete: [2, 2],
+  spear: [14, 2], pistol: [2, 4], rifle: [8, 5], shotgun: [7, 5],
+};
+const WEAPON_GUNS = new Set(['pistol', 'rifle', 'shotgun']);
+const WEAPON_ANIM_MS = 450;
+
+// Front-hand position in each frame of the hand-drawn player sheets
+// (measured from the art; frames read left→right, top→bottom)
+const HAND_IDLE = [24, 32];
+const HAND_WALK = [[25,33],[25,33],[25,33],[27,33],[27,33],[25,34],[26,34],[26,33],
+                   [26,34],[26,33],[25,34],[26,33],[27,34],[25,34],[26,34],[26,33]];
+const HAND_RUN  = [[24,29],[28,28],[28,28],[25,29],[25,29],[25,27],[28,28],[26,29],
+                   [24,30],[26,28],[25,29],[24,30],[23,30],[28,29],[22,30],[22,30]];
+// Front hand of other character sprites drawn via drawCharSprite
+const CHAR_HAND = { enemy_human: [18, 27] };
+
+// Rotation (degrees, clockwise, for a character facing right) for a weapon
+// at time t0 of its last attack. Melee: hang → wind-up → strike. Guns: low → level.
+function _weaponPose(id, t0) {
+  const gun = WEAPON_GUNS.has(id);
+  const t = t0 ? (Date.now() - t0) / WEAPON_ANIM_MS : 2;
+  if (gun) return { angle: t < 1 ? 0 : 35, flash: t >= 0 && t < 0.3 };
+  if (t >= 1) return { angle: 65 + Math.sin(Date.now() / 600) * 3, flash: false };
+  if (t < 0.35) return { angle: 65 + (-115 - 65) * (t / 0.35), flash: false };   // raise overhead
+  return { angle: -115 + (-25 + 115) * ((t - 0.35) / 0.65), flash: false };       // strike forward
+}
+
+/**
+ * Draw a weapon held at (hx, hy) in the *current* transform (already flipped
+ * for facing). Returns true if drawn.
+ */
+function _drawWeaponAt(ctx, id, hx, hy, t0) {
+  const img = _itemArt[id];
+  const grip = WEAPON_GRIP[id];
+  if (!img || !grip) return false;
+  const pose = _weaponPose(id, t0);
+  ctx.save();
+  ctx.translate(hx, hy);
+  ctx.rotate(pose.angle * Math.PI / 180);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, -grip[0], -grip[1]);
+  if (pose.flash) {
+    const fx = img.naturalWidth - grip[0], fy = -grip[1] + 1;
+    ctx.fillStyle = '#ffd25a'; ctx.fillRect(fx, fy - 1, 3, 2);
+    ctx.fillStyle = '#ff963c'; ctx.fillRect(fx + 3, fy - 1, 1, 1); ctx.fillRect(fx + 1, fy - 2, 1, 1); ctx.fillRect(fx + 1, fy + 1, 1, 1);
+  }
+  ctx.restore();
+  return true;
+}
+
+function drawParent(ctx, x, y, s, facing, animFrame, gender, pose, weapon) {
   // s = scale factor (e.g. 2 for shelter view)
   // facing: 1=right, -1=left
   // pose: 'front'(default) | 'side' | 'back' | 'sleep'
@@ -391,6 +454,7 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
   const _isSpritepose = (pose === 'front' || pose === 'walk' || pose === 'run' || pose === 'back');
   if (_isSpritepose) {
     let _sheet, sx, sy;
+    let hand = HAND_IDLE;
     if ((pose === 'front' || pose === 'back') && _idleStaticSprite) {
       _sheet = _idleStaticSprite;
       sx = 0; sy = 0;
@@ -399,12 +463,14 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
       const frame = animFrame % _SPRITE_TOTAL_FRAMES;
       sx = (frame % _SPRITE_COLS) * _sheet.fw;
       sy = Math.floor(frame / _SPRITE_COLS) * _sheet.fh;
+      hand = HAND_WALK[frame];
     } else if (pose === 'run') {
       if (_runSprite) {
         _sheet = _runSprite;
         const frame = animFrame % _SPRITE_TOTAL_FRAMES;
         sx = (frame % _SPRITE_COLS) * _sheet.fw;
         sy = Math.floor(frame / _SPRITE_COLS) * _sheet.fh;
+        hand = HAND_RUN[frame];
       }
     }
     if (_sheet) {
@@ -417,6 +483,13 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose) {
       if (facing < 0) ctx.scale(-1, 1);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(_sheet.img, sx, sy, dw, dh, -Math.round(dw / 2), yOff, dw, dh);
+      // Held weapon (not while sleeping / facing away), then redraw the hand over the grip
+      if (weapon && weapon.id && pose !== 'back') {
+        const lx = -Math.round(dw / 2) + hand[0], ly = yOff + hand[1];
+        if (_drawWeaponAt(ctx, weapon.id, lx, ly, weapon.t0)) {
+          ctx.drawImage(_sheet.img, sx + hand[0] - 1, sy + hand[1] - 2, 3, 3, lx - 1, ly - 2, 3, 3);
+        }
+      }
       ctx.restore();
       return;
     }
@@ -1052,8 +1125,8 @@ function drawRobotSprite(ctx, x, y, s, facing) {
   ctx.restore();
 }
 
-function drawHumanEnemy(ctx, x, y, s, facing, animFrame) {
-  if (drawCharSprite(ctx, 'enemy_human', x, y, s, facing, 24)) return;
+function drawHumanEnemy(ctx, x, y, s, facing, animFrame, weapon) {
+  if (drawCharSprite(ctx, 'enemy_human', x, y, s, facing, 24, weapon)) return;
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (facing < 0) ctx.scale(-1, 1);

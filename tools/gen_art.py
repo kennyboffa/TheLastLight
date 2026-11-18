@@ -141,7 +141,6 @@ def raider():
     strap = s.material('#22180f', 10)
     pants = s.material('#3e412c', 22, 0.14)
     boot = s.material('#1e150e', 10)
-    pipe = s.material('#77726a', 14)
     rag = s.material('#8a2c22', 16)
     # legs
     s.rect(8, 29, 10, 45, pants); s.rect(13, 29, 15, 45, pants)
@@ -150,10 +149,9 @@ def raider():
     s.rect(6, 13, 17, 29, jacket)
     s.line([(7, 13), (16, 27)], strap)              # bandolier
     s.rect(6, 27, 17, 28, strap)                    # belt
-    # back arm, front arm raised with pipe
+    # both arms hang; the game draws the held weapon in the front hand (18, 27)
     s.rect(4, 14, 5, 26, jacket); s.rect(4, 26, 5, 28, skin)
-    s.rect(18, 14, 19, 21, jacket); s.rect(19, 20, 21, 22, jacket); s.rect(21, 20, 22, 22, skin)
-    s.line([(21, 25), (24, 6)], pipe, width=2)
+    s.rect(18, 14, 19, 26, jacket); s.rect(18, 26, 19, 28, skin)
     # head: hood, face, rag over mouth
     s.ellipse(8, 1, 16, 12, hood)
     s.rect(11, 4, 16, 11, skin)

@@ -173,6 +173,7 @@ function playerAttack(gs, targetIdx) {
   hit += p.agility * 1.5;
   hit  = clamp(hit, 10, 96);
 
+  c.playerAnimT0 = Date.now();   // swing / muzzle flash on the held weapon
   if (chance(hit)) {
     const raw    = randInt(dmgMin, dmgMax);
     const damage = Math.max(1, raw - (target.armor || 0));
@@ -287,6 +288,7 @@ function enemyTurn(gs) {
       if (canAttack && ap >= 2) {
         ap -= 2;
         const hit = clamp(enemy.accuracy || 60, 10, 90);
+        enemy._atkT0 = Date.now();
         if (chance(hit)) {
           const dmg   = randInt(enemy.damage[0], enemy.damage[1]);
           const dealt = Math.max(1, dmg);

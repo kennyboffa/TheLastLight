@@ -1125,8 +1125,9 @@ function renderOutdoor(ctx, gs, es) {
   // Enemies — patrol in world before combat, static positions during combat
   if (gs.inCombat && gs.combat) {
     for (const en of gs.combat.enemies) {
-      if (en.dead) { ctx.globalAlpha = 0.2; _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite); ctx.globalAlpha = 1; continue; }
-      _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite);
+      const enFacing = gs.combat.playerWx >= en.worldX ? 1 : -1;
+      if (en.dead) { ctx.globalAlpha = 0.2; _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite, null, enFacing); ctx.globalAlpha = 1; continue; }
+      _drawWorldEnemy(ctx, en.worldX, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing);
       // HP bar above enemy
       drawStatBar(ctx, en.worldX - 22, GROUND_Y - 52, 44, 5,
         en.hp, en.maxHp, (en.hp / en.maxHp) > 0.5 ? '#aa2222' : '#dd1010');
@@ -1146,7 +1147,7 @@ function renderOutdoor(ctx, gs, es) {
       const patrolWx = enc.wx + Math.sin(Date.now() / 1400 + i * 2.1) * 35;
       ctx.save();
       ctx.globalAlpha = 0.82;
-      _drawWorldEnemy(ctx, patrolWx, GROUND_Y, enc.previewSprite || 'human_hostile');
+      _drawWorldEnemy(ctx, patrolWx, GROUND_Y, enc.previewSprite || 'human_hostile', { id: 'pipe' });
       ctx.globalAlpha = 1;
       ctx.restore();
     }
@@ -1163,7 +1164,14 @@ function renderOutdoor(ctx, gs, es) {
   const _combatPx = (gs.inCombat && gs.combat) ? gs.combat.playerWx : es.px;
   const _outSearching = es.containers.some(c => c.searching);
   const _outPose = Math.abs(es.velX) > 0.1 ? 'run' : (_outSearching ? 'back' : 'front');
-  drawParent(ctx, _combatPx, PLAYER_FOOT, 2, es.facing, es.animFrame, gs.parent.gender, _outPose);
+  // In combat, face the current target
+  let _pFacing = es.facing;
+  if (gs.inCombat && gs.combat) {
+    const tg = gs.combat.enemies.filter(e => !e.dead)[gs.combat.targetIdx] || gs.combat.enemies.find(e => !e.dead);
+    if (tg) _pFacing = tg.worldX >= gs.combat.playerWx ? 1 : -1;
+  }
+  const _pWeapon = { id: gs.parent.equipped.weapon, t0: gs.inCombat && gs.combat ? gs.combat.playerAnimT0 : 0 };
+  drawParent(ctx, _combatPx, PLAYER_FOOT, 2, _pFacing, es.animFrame, gs.parent.gender, _outPose, _pWeapon);
   // In-combat player HP bar + AP indicator above player
   if (gs.inCombat && gs.combat) {
     const cp = gs.combat;
@@ -1289,7 +1297,8 @@ function renderBuildingInterior(ctx, gs, es) {
   // Player
   const _biSearching = fl.containers.some(c => c.searching);
   const _biPose = Math.abs(bi.velX) > 0.1 ? 'run' : (_biSearching ? 'back' : 'front');
-  drawParent(ctx, bi.px, PLAYER_FOOT, 2, bi.facing, bi.animFrame || 0, gs.parent.gender, _biPose);
+  drawParent(ctx, bi.px, PLAYER_FOOT, 2, bi.facing, bi.animFrame || 0, gs.parent.gender, _biPose,
+             { id: gs.parent.equipped.weapon });
 
   // Companion in building
   if (gs.exploreCompanionId) {
@@ -1630,14 +1639,29 @@ function _drawCombatBanner(ctx, timeLeft) {
 
 // ── World enemy sprite helper ─────────────────────────────────────────────────
 
-function _drawWorldEnemy(ctx, wx, groundY, sprite) {
+// Weapon each human enemy type carries (machines and animals carry none)
+const ENEMY_WEAPONS = {
+  raider: ['pipe', 'knife', 'bat'],
+  raider_armed: ['pistol'],
+  survivor_bandit: ['knife', 'crowbar'],
+  singularity_cultist: ['machete'],
+  boss_raider_chief: ['shotgun'],
+};
+function enemyWeaponId(en) {
+  const list = ENEMY_WEAPONS[en.id];
+  if (!list) return null;
+  return list[(en.index || 0) % list.length];   // stable per enemy, varied within a group
+}
+
+function _drawWorldEnemy(ctx, wx, groundY, sprite, weapon, facing) {
   const frame = Math.floor(Date.now() / 300) % 2;
+  const f = facing || -1;
   switch (sprite) {
     case 'drone':
     case 'drone_heavy': drawDroneSprite(ctx, wx, groundY - 28, 2, frame); break;
-    case 'robot':       drawRobotSprite(ctx, wx, groundY, 2, -1); break;
-    case 'wolf':        drawDog(ctx, wx, groundY, 2, -1, frame); break;
-    default:            drawHumanEnemy(ctx, wx, groundY, 2, -1, frame); break;
+    case 'robot':       drawRobotSprite(ctx, wx, groundY, 2, f); break;
+    case 'wolf':        drawWolfSprite(ctx, wx, groundY, 2, f, frame); break;
+    default:            drawHumanEnemy(ctx, wx, groundY, 2, f, frame, weapon); break;
   }
 }
 

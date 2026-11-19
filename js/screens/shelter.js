@@ -366,6 +366,56 @@ function updateCharWander(gs) {
 
 // ── Characters in rooms ───────────────────────────────────────────────────────
 
+// Sleeping characters: their standing sprite rendered once, trimmed and turned
+// on its side (head toward the pillow on the left), cached per character.
+const _lyingCache = {};
+function drawLyingDown(ctx, key, drawStanding, cx, mattressY) {
+  let img = _lyingCache[key];
+  if (!img) {
+    if (!_idleStaticSprite || !_childIdleSprite || !_envSpr['survivor_1']) return false;   // sprites still loading
+    const tmp = document.createElement('canvas');
+    tmp.width = 96; tmp.height = 96;
+    const tc = tmp.getContext('2d');
+    drawStanding(tc, 48, 80);
+    let data;
+    try { data = tc.getImageData(0, 0, 96, 96).data; } catch (e) { return false; }
+    let x0 = 96, y0 = 96, x1 = -1, y1 = -1;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) {
+      if (data[(y * 96 + x) * 4 + 3] > 10) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) return false;                       // sprite not loaded yet
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    img = document.createElement('canvas');
+    img.width = h; img.height = w;
+    const ic = img.getContext('2d');
+    ic.translate(0, w);
+    ic.rotate(-Math.PI / 2);                        // head ends up on the left
+    ic.drawImage(tmp, x0, y0, w, h, 0, 0, w, h);
+    _lyingCache[key] = img;
+  }
+  ctx.drawImage(img, Math.round(cx - img.width / 2), Math.round(mattressY - img.height + 3));
+  return true;
+}
+
+// Name tag drawn at the character's feet
+// Drifting "z z z" above a sleeper's head
+function _drawZzz(ctx, x, y) {
+  const t = Date.now() / 900;
+  for (let k = 0; k < 3; k++) {
+    const ph = (t + k / 3) % 1;
+    ctx.save();
+    ctx.globalAlpha = Math.sin(ph * Math.PI) * 0.8;
+    drawText(ctx, 'z', x + k * 4 + ph * 4, y - ph * 12, '#a8b0c8', 6 + k, 'left');
+    ctx.restore();
+  }
+}
+
+function drawFeetName(ctx, name, x, feetY, color) {
+  const nw = name.length * 5 + 6;
+  fillRect(ctx, x - nw / 2, feetY - 1, nw, 9, '#000000aa');
+  drawText(ctx, name, x, feetY + 6, color, 6, 'center');
+}
+
 function drawShelterCharacters(ctx, gs) {
   updateCharWander(gs);
 
@@ -410,10 +460,11 @@ function drawShelterCharacters(ctx, gs) {
       ctx.globalAlpha = 1; ctx.restore();
       strokeRect(ctx, drawPX - 10, drawPY - 24, 22, 28, '#8888ff');
     }
-    drawParent(ctx, drawPX, drawPY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender, pPose);
-    if (p.isSleeping) {
-      drawText(ctx, 'zzz', drawPX + 14, drawPY - 28, C.textDim, 7);
+    if (!(pPose === 'sleep' && drawLyingDown(ctx, 'parent_' + p.gender,
+          (c2, x, y) => drawParent(c2, x, y, 2, 1, 0, p.gender, 'front'), drawPX + 3, drawPY))) {
+      drawParent(ctx, drawPX, drawPY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender, pPose);
     }
+    if (p.isSleeping) _drawZzz(ctx, drawPX - 14, drawPY - 12);
     if (p.isWorking && p.task) {
       const prog = p.taskProgress / p.taskDuration;
       drawStatBar(ctx, pStandX - 12, groundY - 32, 32, 4, prog * 100, 100, C.textGood);
@@ -421,10 +472,7 @@ function drawShelterCharacters(ctx, gs) {
       fillRect(ctx, pStandX - 18, groundY - 44, 36, 10, '#00000099');
       drawText(ctx, taskLabelMap[p.task.type] || 'Working', pStandX, groundY - 36, C.textDim, 6, 'center');
     }
-    // Name label with dark background for readability
-    { const nm = p.name; const nw = nm.length * 5 + 6;
-      fillRect(ctx, drawPX - nw/2, drawPY - 42, nw, 10, '#000000bb');
-      drawText(ctx, nm, drawPX, drawPY - 34, sel ? '#aaaaff' : '#c8c8d8', 7, 'center'); }
+    drawFeetName(ctx, p.name, drawPX, p.isSleeping ? drawPY + 2 : drawPY + 6, sel ? '#aaaaff' : '#c8c8d8');
     gs._charHitBounds.push({ id: 'parent', x: drawPX - 10, y: drawPY - 24, w: 22, h: 28 });
   }
 
@@ -448,11 +496,12 @@ function drawShelterCharacters(ctx, gs) {
     ctx.globalAlpha = 1; ctx.restore();
     strokeRect(ctx, drawCX - 8, drawCY - 20, 18, 24, '#cc88cc');
   }
-  drawChild(ctx, drawCX, drawCY, 2, ch.facing, ch.animFrame, chPose);
-  if (ch.isSleeping) drawText(ctx, 'zzz', drawCX + 12, drawCY - 22, C.textDim, 7);
-  { const nm = ch.name; const nw = nm.length * 5 + 6;
-    fillRect(ctx, drawCX - nw/2, drawCY - 38, nw, 10, '#000000bb');
-    drawText(ctx, nm, drawCX, drawCY - 30, csel ? '#ffaaff' : '#c8c8d8', 7, 'center'); }
+  if (!(chPose === 'sleep' && drawLyingDown(ctx, 'child',
+        (c2, x, y) => drawChild(c2, x, y, 2, 1, 0, 'front'), drawCX + 3, drawCY))) {
+    drawChild(ctx, drawCX, drawCY, 2, ch.facing, ch.animFrame, chPose);
+  }
+  if (ch.isSleeping) _drawZzz(ctx, drawCX - 10, drawCY - 10);
+  drawFeetName(ctx, ch.name, drawCX, ch.isSleeping ? drawCY + 2 : drawCY + 6, csel ? '#ffaaff' : '#c8c8d8');
   gs._charHitBounds.push({ id: 'child', x: drawCX - 8, y: drawCY - 20, w: 18, h: 24 });
 
   // ── Dog ─────────────────────────────────────────────────────────────────────
@@ -484,15 +533,16 @@ function drawShelterCharacters(ctx, gs) {
       ctx.globalAlpha = 1; ctx.restore();
       strokeRect(ctx, drawSX - 9, drawSY - 22, 20, 26, '#88cc88');
     }
-    drawSurvivor(ctx, drawSX, drawSY, 2, s.facing, s.animFrame, i, sPose);
-    if (s.isSleeping) drawText(ctx, 'zzz', drawSX + 12, drawSY - 26, C.textDim, 7);
+    if (!(sPose === 'sleep' && drawLyingDown(ctx, 'survivor_' + i,
+          (c2, x, y) => drawSurvivor(c2, x, y, 2, 1, 0, i, 'front'), drawSX + 3, drawSY))) {
+      drawSurvivor(ctx, drawSX, drawSY, 2, s.facing, s.animFrame, i, sPose);
+    }
+    if (s.isSleeping) _drawZzz(ctx, drawSX - 12, drawSY - 12);
     if (s.task && s.taskDuration > 0) {
       const prog = s.taskProgress / s.taskDuration;
       drawStatBar(ctx, sStandX - 12, groundY - 30, 28, 3, prog * 100, 100, C.textGood);
     }
-    { const nm = s.name; const nw = nm.length * 5 + 6;
-      fillRect(ctx, drawSX - nw/2, drawSY - 40, nw, 10, '#000000bb');
-      drawText(ctx, nm, drawSX, drawSY - 32, ssel ? '#aaffaa' : '#c8c8d8', 7, 'center'); }
+    drawFeetName(ctx, s.name, drawSX, s.isSleeping ? drawSY + 2 : drawSY + 6, ssel ? '#aaffaa' : '#c8c8d8');
     gs._charHitBounds.push({ id: s.id, x: drawSX - 9, y: drawSY - 22, w: 20, h: 26 });
   });
 }

@@ -831,14 +831,14 @@ def store_shelf(stock=('#8a3a2a', '#3a6a8a', '#c4a43a', '#4a7a3a'), medicine=Fal
         s.rect(0, y, 45, y + 2, metal)
         x = 4
         while x < 40:
-            if RNG.random() < 0.65:
+            if RNG.random() < 0.28:                      # mostly looted already
                 m = items[int(RNG.integers(0, len(items)))]
                 hgt = 5 if medicine else int(RNG.integers(5, 10))
                 wid = 3 if medicine else int(RNG.integers(3, 7))
                 s.rect(x, y - hgt, x + wid - 1, y - 1, m)
                 x += wid + 1
             else:
-                x += 4
+                x += 7
     # a few items knocked onto the floor
     for x in (6, 30):
         s.rect(x, 51, x + 4, 53, items[0])
@@ -892,12 +892,12 @@ def bookshelf():
         s.rect(3, y, 30, y + 1, wood)
         x = 4
         while x < 29:
-            if RNG.random() < 0.7:
+            if RNG.random() < 0.33:
                 hgt = int(RNG.integers(7, 12)); wid = int(RNG.integers(2, 4))
                 s.rect(x, y - hgt, x + wid - 1, y - 1, books[int(RNG.integers(0, len(books)))])
                 x += wid
             else:
-                x += 3
+                x += 5
     s.line([(6, 50), (14, 46)], books[0], width=2)                 # fallen book
     s.shade_gradient('x', 0.2)
     return s.finish()
@@ -1595,6 +1595,18 @@ def stairs(up=True):
     return img if up else img.transpose(Image.FLIP_LEFT_RIGHT)
 
 
+
+def room_door():
+    s = Sprite(22, 36)
+    frame = s.material('#3a322a', 10); door = s.material('#5a4028', 16, 0.1)
+    dark = s.material('#0e0b08', 6); knob = s.material('#a09070', 6)
+    s.rect(0, 0, 21, 35, frame); s.rect(2, 2, 19, 35, dark)
+    s.rect(2, 2, 13, 35, door)                       # door left ajar
+    s.rect(4, 5, 11, 15, s.material('#4a3420', 12)); s.rect(4, 19, 11, 31, s.material('#4a3420', 12))
+    s.px(12, 20, knob)
+    return s.finish(outline=0.35)
+
+
 if __name__ == '__main__':
     only = set(sys.argv[1:])
     jobs = {
@@ -1653,7 +1665,7 @@ if __name__ == '__main__':
         'tex_ground_concrete.png': lambda: ground('#3a3a36', '#26261f', 'concrete'),
         'tex_field.png': lambda: ground('#2a2620', '#1a1712', 'dirt', 128, 64),
     })
-    jobs.update({'f_exit_door.png': exit_door, 'f_stairs_up.png': lambda: stairs(True),
+    jobs.update({'f_door.png': room_door, 'f_exit_door.png': exit_door, 'f_stairs_up.png': lambda: stairs(True),
                  'f_stairs_down.png': lambda: stairs(False)})
     for _id, _fn in ITEM_ART.items():
         jobs['item_%s.png' % _id] = _fn

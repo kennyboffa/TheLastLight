@@ -104,7 +104,7 @@ function startExploration(gs, loc) {
       const nFloors = bdef.numFloors || 1;
       const floors  = [];
       for (let fi = 0; fi < nFloors; fi++) {
-        floors.push(genBuildingFloor(fi, nFloors, bdef));
+        floors.push(genBuildingFloorArea(fi, nFloors, bdef, loc.difficulty || 1));
       }
       buildings.push({
         bx, bw, bh,
@@ -129,7 +129,7 @@ function startExploration(gs, loc) {
         label: zone.name,
         theme: 'urban',
         numFloors: 1,
-        floors: [genBuildingFloor(0, 1, { lootQuality: 'light', theme: 'urban' })],
+        floors: [genBuildingFloorArea(0, 1, { lootQuality: 'light', theme: 'urban', enemyChance: zone.enemyChance || 15 }, loc.difficulty || 1)],
         doorX: bx + Math.floor(bw / 2) - 8,
         sprite: facade.key,
       });
@@ -268,7 +268,8 @@ function startExploration(gs, loc) {
   const saved = (!RANDOM_AREAS.includes(loc.id)) && gs.locationStates && gs.locationStates[loc.id];
   if (saved) {
     saved.containers.forEach((sc, i) => {
-      if (exploreState.containers[i]) exploreState.containers[i].searched = sc.searched;
+      const c = exploreState.containers[i];
+      if (c) { c.searched = sc.searched; if (sc.loot) c.loot = sc.loot; }
     });
     saved.loot.forEach((sl, i) => {
       if (exploreState.loot[i]) exploreState.loot[i].taken = sl.taken;
@@ -288,10 +289,19 @@ function startExploration(gs, loc) {
         if (!exploreState.buildings[bi]) return;
         sb.floors.forEach((sf, fi) => {
           if (!exploreState.buildings[bi].floors[fi]) return;
-          sf.containers.forEach((sc, ci) => {
-            const c = exploreState.buildings[bi].floors[fi].containers[ci];
-            if (c) c.searched = sc.searched;
-          });
+          const fl = exploreState.buildings[bi].floors[fi];
+          const restoreArea = (area, sa) => {
+            if (!area || !sa) return;
+            sa.containers.forEach((sc, ci) => {
+              const c = area.containers[ci];
+              if (!c) return;
+              c.searched = sc.searched;
+              if (sc.loot) c.loot = sc.loot;
+            });
+            (sa.cleared || []).forEach((cl, ei) => { const e = area.encounters[ei]; if (e && cl) { e.triggered = true; e.killed = true; } });
+          };
+          restoreArea(fl, sf);
+          (sf.rooms || []).forEach((sr, ri) => restoreArea(fl.rooms && fl.rooms[ri], sr));
         });
       });
     }
@@ -360,50 +370,6 @@ function startExploration(gs, loc) {
 }
 
 // Generate one floor of a building
-function genBuildingFloor(floorIdx, totalFloors, bdef) {
-  const theme   = bdef.theme    || 'urban';
-  const quality = bdef.lootQuality || 'light';
-  const cCount  = 1 + randInt(0, 2);
-  const containers = [];
-  const usedX = [];
-  // Keep containers clear of the exit door and stairs (centres of those sprites)
-  const reserved = [];
-  if (floorIdx === 0) reserved.push(64);
-  if (floorIdx > 0) reserved.push(134);
-  if (floorIdx < totalFloors - 1) reserved.push(BUILDING_W - 86);
-  for (let i = 0; i < cCount; i++) {
-    let cx;
-    let attempts = 0;
-    do { cx = 90 + randInt(0, BUILDING_W - 180); attempts++; }
-    while ((usedX.some(p => Math.abs(p - cx) < 70) || reserved.some(r => Math.abs(r - cx) < 60)) && attempts < 30);
-    usedX.push(cx);
-    const typesByTheme = {
-      hospital: ['cabinet', 'locker', 'box'],
-      factory:  ['crate', 'box', 'barrel'],
-      mall:     ['shelf', 'locker', 'bag'],
-      house:    ['locker', 'chest', 'bag'],
-      cabin:    ['chest', 'bag', 'crate'],
-      office:   ['locker', 'cabinet', 'box'],
-    };
-    const types = typesByTheme[theme] || ['locker', 'crate', 'chest', 'bag'];
-    containers.push({
-      wx: cx, wy: GROUND_Y,
-      type: randChoice(types),
-      searched: false, searching: false,
-      searchProgress: 0,
-      searchDuration: 1.5 + randFloat(0.5, 2.5),
-      // 25% chance a building container is empty — already looted by others
-      loot: chance(25) ? [] : rollBuildingLoot(theme, quality),
-    });
-  }
-  return {
-    containers,
-    stairsUpX:   floorIdx < totalFloors - 1 ? BUILDING_W - 110 : null,
-    stairsDownX: floorIdx > 0               ? 110              : null,
-    exitX:       floorIdx === 0             ? 55                : null,
-    width:       BUILDING_W,
-  };
-}
 
 // ── Update ────────────────────────────────────────────────────────────────────
 
@@ -445,16 +411,8 @@ function updateExplore(gs, dt) {
   p.facing    = es.facing;
 
   // Container search tick
-  for (const c of es.containers) {
-    if (c.searching) {
-      c.searchProgress += dt;
-      const dur = c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration;
-      if (c.searchProgress >= dur) {
-        c.searching = false; c.searched = true;
-        finishSearch(c, gs);
-      }
-    }
-  }
+  // Searching: moving away aborts it
+  _tickSearches(gs, es.containers, Math.abs(es.velX) > 0.1, dt);
 
   // Enemy encounters — stealth affects detection range
   const stealth    = gs.parent.skills?.stealth || 0;
@@ -530,11 +488,19 @@ function updateExplore(gs, dt) {
 }
 
 function updateBuildingInterior(gs, dt) {
-  const es  = exploreState;
-  const bi  = es.building;
-  const bld = es.buildings[bi.bldgIdx];
-  const fl  = bld.floors[bi.floorIdx];
-  const p   = gs.parent;
+  const es   = exploreState;
+  const bi   = es.building;
+  const area = curArea(es);
+  const p    = gs.parent;
+
+  // In combat: camera follows the fight, normal movement is off
+  if (gs.inCombat && gs.combat) {
+    const targetScroll = gs.combat.playerWx - EXPLORE_VIEW_W * 0.4;
+    bi.scrollX = areaScroll(area, lerp(bi.scrollX, targetScroll, 0.12));
+    bi.px = gs.combat.playerWx;
+    bi.velX = 0;
+    return;
+  }
 
   const biDpadLeft  = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
   const biDpadRight = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
@@ -545,10 +511,10 @@ function updateBuildingInterior(gs, dt) {
   else if (right) { bi.velX =  CFG.PLAYER_SPEED * biSpeedMult; bi.facing =  1; }
   else bi.velX = 0;
 
-  bi.px = clamp(bi.px + bi.velX * dt * 60, 10, fl.width - 10);
+  bi.px = clamp(bi.px + bi.velX * dt * 60, 10, area.width - 10);
 
   const targetScroll = bi.px - EXPLORE_VIEW_W * 0.45;
-  bi.scrollX = clamp(lerp(bi.scrollX, targetScroll, 0.15), 0, Math.max(0, fl.width - EXPLORE_VIEW_W));
+  bi.scrollX = areaScroll(area, lerp(bi.scrollX, targetScroll, 0.15));
 
   bi.animTimer = (bi.animTimer || 0) + 1;
   if (Math.abs(bi.velX) > 0.1 && bi.animTimer % 12 === 0) bi.animFrame = ((bi.animFrame || 0) + 1);
@@ -556,22 +522,15 @@ function updateBuildingInterior(gs, dt) {
   p.animFrame = bi.animFrame || 0;
   p.facing    = bi.facing;
 
-  // Container search tick
-  for (const c of fl.containers) {
-    if (c.searching) {
-      c.searchProgress += dt;
-      const dur = c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration;
-      if (c.searchProgress >= dur) {
-        c.searching = false; c.searched = true;
-        finishSearch(c, gs);
-      }
-    }
-  }
+  // Searching: moving away aborts it, otherwise it ticks on
+  _tickSearches(gs, area.containers, Math.abs(bi.velX) > 0.1, dt);
+
+  // Enemies inside
+  if (checkIndoorEncounters(gs, area, bi.px)) return;
 
   // Tiredness warning / collapse (same thresholds as outdoor)
-  const es2 = exploreState;
-  if (p.tiredness >= 80 && !es2._tiredWarned) {
-    es2._tiredWarned = true;
+  if (p.tiredness >= 80 && !es._tiredWarned) {
+    es._tiredWarned = true;
     notify(`${p.name} is exhausted. Head home soon.`, 'warn');
     addLog(`${p.name} is running on empty — should return home.`, 'warn');
   }
@@ -583,6 +542,40 @@ function updateBuildingInterior(gs, dt) {
     addLog(`${p.name} collapsed inside a building and went missing.`, 'danger');
     endExploration(gs);
   }
+}
+
+// Search progress for a list of containers; moving cancels a search in progress
+function _tickSearches(gs, containers, moving, dt) {
+  for (const c of containers) {
+    if (!c.searching) continue;
+    if (moving) {
+      c.searching = false; c.searchProgress = 0;
+      notify('Search interrupted.', 'warn');
+      continue;
+    }
+    c.searchProgress += dt;
+    const dur = c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration;
+    if (c.searchProgress >= dur) {
+      c.searching = false; c.searched = true;
+      finishSearch(c, gs);
+    }
+  }
+}
+
+// Open the take-what-you-want dialog for a container's items
+function openContainerLoot(gs, container) {
+  const names = { box: 'Box', crate: 'Crate', chest: 'Chest', locker: 'Locker', cabinet: 'Cabinet',
+                  shelf: 'Shelf', bookshelf: 'Bookshelf', bag: 'Bag', barrel: 'Barrel', tent: 'Tent' };
+  gs.lootSource = {
+    items: container.loot,
+    title: (names[container.type] || 'Container').toUpperCase(),
+    onTake: (item) => {
+      if (item.id === 'area_map_1' || item.id === 'area_map_2') handleMapPickup(item.id, gs);
+    },
+  };
+  gs.mouse.down = false;
+  lootPickupUI.scroll = 0;
+  gs.screen = 'lootPickup';
 }
 
 function finishSearch(container, gs) {
@@ -634,37 +627,11 @@ function finishSearch(container, gs) {
     }
   }
 
-  let added = 0;
-  let tooHeavy = 0;
-  const names = [];
-  for (const item of loot) {
-    const def  = getItemDef(item.id);
-    const maxW = parentMaxCarry();
-    const curW = calcWeight(gs.parent.inventory);
-    if (def && curW + def.weight * item.qty <= maxW) {
-      addToInventory(gs.parent.inventory, item.id, item.qty);
-      if (names.length < 2) names.push(def.name);
-      added++;
-    } else if (def) {
-      tooHeavy++;
-    }
-  }
-  if (tooHeavy > 0 && added === 0) {
-    notify('Too heavy to carry — drop something first.', 'warn');
-    return;
-  }
-  if (added > 0) {
-    addLog(`Found: ${names.join(', ')}${container.loot.length > 2 ? '...' : ''}`, 'good');
-    giveXP(gs.parent, added * 2, gs); // +2 XP per item found
-    // Check for map items
-    for (const item of container.loot) {
-      if (item.id === 'area_map_1' || item.id === 'area_map_2') {
-        handleMapPickup(item.id, gs);
-      }
-    }
-  } else {
-    notify('Too heavy to carry.', 'warn');
-  }
+  // Show what was found and let the player pick; leftovers stay in the container
+  container.loot = loot;
+  if (loot.length === 0) { notify('Nothing useful found.', 'info'); return; }
+  giveXP(gs.parent, loot.length * 2, gs); // +2 XP per item found
+  openContainerLoot(gs, container);
 }
 
 // ── Key handling ──────────────────────────────────────────────────────────────
@@ -697,6 +664,7 @@ function exploreKeyPress(key, gs) {
     else             interactOutdoor(gs);
     return;
   }
+  if (key === 'h') { startHunt(gs); return; }
   if (key === 'escape') {
     if (es.building) notify('Find the exit door to leave the building.', 'info');
     else if (es.showReturnPrompt) endExploration(gs);
@@ -721,41 +689,19 @@ function interactOutdoor(gs) {
     return;
   }
 
-  // Cancel an in-progress search
-  const searchingC = es.containers.find(c => c.searching && Math.abs(es.px - c.wx) < 30);
-  if (searchingC) { searchingC.searching = false; searchingC.searchProgress = 0; return; }
-
-  // Start searching a container
-  const nearC = es.containers.find(c => !c.searched && !c.searching && Math.abs(es.px - c.wx) < 30);
-  if (nearC) {
-    nearC.searching = true; nearC.searchProgress = 0;
-    if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
-    notify('Searching...', 'info'); return;
-  }
+  // Search / re-open / cancel an outdoor container
+  if (_interactContainers(gs, es.containers, es.px)) return;
 
   // Search a tent (not enterable — just a search prompt)
-  const nearTent = es.buildings.find(b => b.isTent && !b._tentSearched && Math.abs(es.px - (b.bx + b.bw / 2)) < 30);
+  const nearTent = es.buildings.find(b => b.isTent && Math.abs(es.px - (b.bx + b.bw / 2)) < 30
+                                         && !(b._tentSearched && !(b._tentLoot && b._tentLoot.length)));
   if (nearTent) {
-    nearTent._tentSearched = true;
-    const loot = nearTent.floors[0].containers[0]?.loot || [];
-    if (loot.length === 0) {
-      notify('The tent has been picked clean — nothing left.', 'info');
-    } else {
-      let added = 0;
-      const names = [];
-      for (const item of loot) {
-        const def  = getItemDef(item.id);
-        const maxW = parentMaxCarry();
-        const curW = calcWeight(gs.parent.inventory);
-        if (def && curW + def.weight * item.qty <= maxW) {
-          addToInventory(gs.parent.inventory, item.id, item.qty);
-          if (names.length < 3) names.push(def.name);
-          added++;
-        }
-      }
-      if (added > 0) notify(`Found in tent: ${names.join(', ')}.`, 'good');
-      else notify('Too heavy to carry what\'s in the tent.', 'warn');
+    if (!nearTent._tentSearched) {
+      nearTent._tentSearched = true;
+      nearTent._tentLoot = (nearTent.floors[0].containers || []).flatMap(c => c.loot || []);
     }
+    if (!nearTent._tentLoot.length) { notify('The tent has been picked clean — nothing left.', 'info'); return; }
+    openContainerLoot(gs, { type: 'tent', loot: nearTent._tentLoot });
     return;
   }
 
@@ -764,7 +710,7 @@ function interactOutdoor(gs) {
   if (nearB) {
     const bldgIdx = es.buildings.indexOf(nearB);
     es.building = {
-      bldgIdx, floorIdx: 0,
+      bldgIdx, floorIdx: 0, roomIdx: null,
       px: (nearB.floors[0].exitX || 60) + 24,
       scrollX: 0, velX: 0, facing: 1, animFrame: 0, animTimer: 0,
     };
@@ -776,47 +722,75 @@ function interactOutdoor(gs) {
 }
 
 function interactBuilding(gs) {
-  const es  = exploreState;
-  const bi  = es.building;
-  const bld = es.buildings[bi.bldgIdx];
-  const fl  = bld.floors[bi.floorIdx];
+  const es   = exploreState;
+  const bi   = es.building;
+  const bld  = es.buildings[bi.bldgIdx];
+  const fl   = bld.floors[bi.floorIdx];
+  const area = curArea(es);
 
-  // Exit door (floor 0 only)
-  if (fl.exitX !== null && Math.abs(bi.px - fl.exitX) < 30) {
-    es.building = null;
-    notify('Exited building.', 'info');
-    return;
+  if (area.isRoom) {
+    // Back out to the hallway, in front of this room's door
+    if (Math.abs(bi.px - (area.backDoorX + DOOR_W / 2)) < 26) {
+      const door = fl.doors.find(d => d.roomIdx === bi.roomIdx);
+      bi.roomIdx = null;
+      bi.px = door ? door.x + DOOR_W / 2 : 120;
+      bi.scrollX = clamp(bi.px - EXPLORE_VIEW_W * 0.45, 0, Math.max(0, fl.width - EXPLORE_VIEW_W));
+      return;
+    }
+  } else {
+    // Exit door (floor 0 only)
+    if (fl.exitX !== null && Math.abs(bi.px - fl.exitX) < 30) {
+      es.building = null;
+      notify('Exited building.', 'info');
+      return;
+    }
+    // Stairs up
+    if (fl.stairsUpX !== null && Math.abs(bi.px - fl.stairsUpX) < 30 && bi.floorIdx + 1 < bld.numFloors) {
+      bi.floorIdx++;
+      bi.roomIdx = null;
+      bi.px = bld.floors[bi.floorIdx].stairsDownX || 110;
+      bi.scrollX = 0;
+      notify(`Floor ${bi.floorIdx + 1} / ${bld.numFloors}`, 'info');
+      return;
+    }
+    // Stairs down
+    if (fl.stairsDownX !== null && Math.abs(bi.px - fl.stairsDownX) < 30 && bi.floorIdx > 0) {
+      bi.floorIdx--;
+      bi.roomIdx = null;
+      bi.px = bld.floors[bi.floorIdx].stairsUpX || BUILDING_W - 110;
+      bi.scrollX = clamp(bi.px - EXPLORE_VIEW_W * 0.45, 0, Math.max(0, BUILDING_W - EXPLORE_VIEW_W));
+      notify(`Floor ${bi.floorIdx + 1} / ${bld.numFloors}`, 'info');
+      return;
+    }
+    // Room doorways
+    const door = (fl.doors || []).find(d => Math.abs(bi.px - (d.x + DOOR_W / 2)) < 20);
+    if (door) {
+      bi.roomIdx = door.roomIdx;
+      const room = fl.rooms[door.roomIdx];
+      bi.px = room.backDoorX + DOOR_W / 2 + 24;
+      bi.scrollX = areaScroll(room, 0);
+      return;
+    }
   }
 
-  // Stairs up
-  if (fl.stairsUpX !== null && Math.abs(bi.px - fl.stairsUpX) < 30 && bi.floorIdx + 1 < bld.numFloors) {
-    bi.floorIdx++;
-    bi.px = bld.floors[bi.floorIdx].stairsDownX || 110;
-    bi.scrollX = 0;
-    notify(`Floor ${bi.floorIdx + 1} / ${bld.numFloors}`, 'info');
-    return;
-  }
+  _interactContainers(gs, area.containers, bi.px);
+}
 
-  // Stairs down
-  if (fl.stairsDownX !== null && Math.abs(bi.px - fl.stairsDownX) < 30 && bi.floorIdx > 0) {
-    bi.floorIdx--;
-    bi.px = bld.floors[bi.floorIdx].stairsUpX || BUILDING_W - 110;
-    bi.scrollX = 0;
-    notify(`Floor ${bi.floorIdx + 1} / ${bld.numFloors}`, 'info');
-    return;
-  }
-
-  // Cancel in-progress search
-  const searchingC = fl.containers.find(c => c.searching && Math.abs(bi.px - c.wx) < 30);
-  if (searchingC) { searchingC.searching = false; searchingC.searchProgress = 0; return; }
-
-  // Start searching
-  const nearC = fl.containers.find(c => !c.searched && !c.searching && Math.abs(bi.px - c.wx) < 30);
+// Search / re-open / cancel the nearest container
+function _interactContainers(gs, containers, px) {
+  const searchingC = containers.find(c => c.searching && Math.abs(px - c.wx) < 30);
+  if (searchingC) { searchingC.searching = false; searchingC.searchProgress = 0; return true; }
+  // Items left behind earlier can be picked up without searching again
+  const leftover = containers.find(c => c.searched && c.loot && c.loot.length && Math.abs(px - c.wx) < 30);
+  if (leftover) { openContainerLoot(gs, leftover); return true; }
+  const nearC = containers.find(c => !c.searched && !c.searching && Math.abs(px - c.wx) < 30);
   if (nearC) {
     nearC.searching = true; nearC.searchProgress = 0;
     if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
-    notify('Searching...', 'info');
+    notify('Searching... (moving cancels)', 'info');
+    return true;
   }
+  return false;
 }
 
 // ── Click handling ────────────────────────────────────────────────────────────
@@ -954,6 +928,10 @@ function exploreClick(mx, my, gs) {
     exploreKeyPress('e', gs); return;
   }
 
+  // HUNT button
+  if (gs._exploreHuntBtn && hitTest(mx, my, gs._exploreHuntBtn.x, gs._exploreHuntBtn.y, gs._exploreHuntBtn.w, gs._exploreHuntBtn.h)) {
+    startHunt(gs); return;
+  }
   // INV button
   if (gs._exploreInvBtn && hitTest(mx, my, gs._exploreInvBtn.x, gs._exploreInvBtn.y, gs._exploreInvBtn.w, gs._exploreInvBtn.h)) {
     es.invOpen = !es.invOpen; if (!es.invOpen) es.invSelected = null; return;
@@ -969,16 +947,13 @@ function exploreClick(mx, my, gs) {
   }
 
   if (es.building) {
+    // Clicking a container within reach acts like pressing E on it
     const bi  = es.building;
-    const fl  = es.buildings[bi.bldgIdx].floors[bi.floorIdx];
-    const wx  = mx + bi.scrollX;
-    const nearC = fl.containers.find(c => !c.searched && !c.searching &&
-      Math.abs(wx - c.wx) < 24 && my > GROUND_Y - 35 && my < GROUND_Y + 10);
-    if (nearC) {
-      nearC.searching = true; nearC.searchProgress = 0;
-      if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
-      notify('Searching...', 'info');
-    }
+    const area = curArea(es);
+    const wx  = mx / EXPLORE_VIEW_ZOOM + bi.scrollX;
+    const wy  = my / EXPLORE_VIEW_ZOOM;
+    const hit = area.containers.find(c => Math.abs(wx - c.wx) < 24 && wy > GROUND_Y - 60 && wy < GROUND_Y + 12);
+    if (hit && Math.abs(bi.px - hit.wx) < 30) _interactContainers(gs, [hit], bi.px);
     return;
   }
 
@@ -1094,7 +1069,9 @@ function renderOutdoor(ctx, gs, es) {
     if (bld.isTent) {
       drawExploreTent(ctx, bld.bx + bld.bw / 2, GROUND_Y, bld.bw, bld.bh, bld.label);
       if (Math.abs(es.px - (bld.bx + bld.bw / 2)) < 30) {
-        if (bld._tentSearched) {
+        if (bld._tentSearched && bld._tentLoot && bld._tentLoot.length) {
+          drawText(ctx, '[E] Take items', bld.bx + bld.bw / 2, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
+        } else if (bld._tentSearched) {
           drawText(ctx, 'Searched', bld.bx + bld.bw / 2, GROUND_Y - bld.bh - 8, C.textDim, 6, 'center');
         } else {
           drawText(ctx, '[E] Search Tent', bld.bx + bld.bw / 2, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
@@ -1114,14 +1091,8 @@ function renderOutdoor(ctx, gs, es) {
 
   // Outdoor containers
   for (const c of es.containers) {
-    if (c.searched) continue;
-    const near = Math.abs(es.px - c.wx) < 30;
-    drawExploreContainer(ctx, c.wx, GROUND_Y, c.type, near);
-    if (c.searching) {
-      drawSearchBar(ctx, c.wx, GROUND_Y - 22, c.searchProgress / (c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration));
-    } else if (near) {
-      drawText(ctx, '[E] Search', c.wx, GROUND_Y - 24, C.textBright, 7, 'center');
-    }
+    if (c.searched && !(c.loot && c.loot.length)) continue;
+    drawAreaContainer(ctx, c, Math.abs(es.px - c.wx) < 30);
   }
 
   // Ground loot
@@ -1140,47 +1111,6 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
-  // Bodies from earlier fights
-  _fxStore();
-  const _now = Date.now();
-  for (const cp of es.corpses) _drawCorpse(ctx, cp.x, cp.sprite, cp.dir, cp.t0, cp.weapon, _now);
-
-  // Enemies — patrol in world before combat, static positions during combat
-  if (gs.inCombat && gs.combat) {
-    for (const en of gs.combat.enemies) {
-      const enFacing = gs.combat.playerWx >= en.worldX ? 1 : -1;
-      if (en.dead) {
-        // still standing until its death effect fires, then it falls
-        if (en._deathT0) { _drawCorpse(ctx, en.worldX, en.sprite, en._deathDir || -enFacing, en._deathT0, enemyWeaponId(en), _now); continue; }
-      }
-      const _ex = en.worldX + _hitOffset(en._hitT0, en._hitDir || -enFacing);
-      _drawWorldEnemy(ctx, _ex, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing);
-      if (en.dead) continue;
-      // HP bar above enemy
-      drawStatBar(ctx, en.worldX - 22, GROUND_Y - 52, 44, 5,
-        en.hp, en.maxHp, (en.hp / en.maxHp) > 0.5 ? '#aa2222' : '#dd1010');
-      drawText(ctx, en.name, en.worldX, GROUND_Y - 57, '#cc4444', 7, 'center');
-      // Target indicator
-      if (gs.combat.targetIdx === en.index && gs.combat.turn === 'player') {
-        ctx.save(); ctx.strokeStyle = '#cc4433'; ctx.lineWidth = 1.5;
-        ctx.strokeRect(en.worldX - 18, GROUND_Y - 95, 36, 95);
-        ctx.restore();
-      }
-    }
-  } else {
-    for (let i = 0; i < es.encounters.length; i++) {
-      const enc = es.encounters[i];
-      if (enc.triggered || enc.killed) continue;
-      // Patrol oscillation (visual only — detection still uses enc.wx)
-      const patrolWx = enc.wx + Math.sin(Date.now() / 1400 + i * 2.1) * 35;
-      ctx.save();
-      ctx.globalAlpha = 0.82;
-      _drawWorldEnemy(ctx, patrolWx, GROUND_Y, enc.previewSprite || 'human_hostile', { id: 'pipe' });
-      ctx.globalAlpha = 1;
-      ctx.restore();
-    }
-  }
-
   // Hunt spot markers
   for (const spot of es.huntSpots) {
     if (!spot.used) {
@@ -1188,42 +1118,13 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
-  // Player
-  const _combatPx = (gs.inCombat && gs.combat) ? gs.combat.playerWx : es.px;
+  // Bodies, enemies, player (incl. combat reactions)
   const _outSearching = es.containers.some(c => c.searching);
-  const _outPose = Math.abs(es.velX) > 0.1 ? 'run' : (_outSearching ? 'back' : 'front');
-  // In combat, face the current target
-  let _pFacing = es.facing;
-  if (gs.inCombat && gs.combat) {
-    const tg = gs.combat.enemies.filter(e => !e.dead)[gs.combat.targetIdx] || gs.combat.enemies.find(e => !e.dead);
-    if (tg) _pFacing = tg.worldX >= gs.combat.playerWx ? 1 : -1;
-  }
-  const _pWeapon = { id: gs.parent.equipped.weapon, t0: gs.inCombat && gs.combat ? gs.combat.playerAnimT0 : 0 };
-  const _pc = gs.inCombat && gs.combat ? gs.combat : null;
-  if (_pc && _pc.playerDeathT0 && Date.now() >= _pc.playerDeathT0) {
-    // falls backwards, weapon drops
-    const k = Math.min(1, (Date.now() - _pc.playerDeathT0) / FX_FALL_MS);
-    const e = 1 - (1 - k) * (1 - k);
-    const dir = _pc.playerDeathDir || -_pFacing;
-    ctx.save();
-    ctx.translate(_combatPx, PLAYER_FOOT - 6 * e);
-    ctx.rotate(dir * e * Math.PI / 2);
-    drawParent(ctx, 0, 0, 2, _pFacing, 0, gs.parent.gender, 'front', null);
-    ctx.restore();
-  } else {
-    const _px = _combatPx + (_pc ? _hitOffset(_pc.playerHitT0, _pc.playerHitDir || -_pFacing) : 0);
-    drawParent(ctx, _px, PLAYER_FOOT, 2, _pFacing, es.animFrame, gs.parent.gender, _outPose, _pWeapon);
-  }
-  // In-combat player HP bar + AP indicator above player
-  if (gs.inCombat && gs.combat) {
-    const cp = gs.combat;
-    drawStatBar(ctx, _combatPx - 22, PLAYER_FOOT - 52, 44, 5,
-      cp.player.hp, cp.player.maxHp, (cp.player.hp / cp.player.maxHp) > 0.4 ? '#3a8a3a' : '#cc2020');
-    drawText(ctx, gs.parent.name, _combatPx, PLAYER_FOOT - 57, '#88cc88', 7, 'center');
-    // AP dots
-    const apStr = '▪'.repeat(cp.playerAp) + '▫'.repeat(Math.max(0, cp.player.maxAp - cp.playerAp));
-    drawText(ctx, apStr, _combatPx, PLAYER_FOOT - 63, '#d4c888', 7, 'center');
-  }
+  drawExploreActors(ctx, gs, es, {
+    px: es.px, facing: es.facing, animFrame: es.animFrame,
+    pose: Math.abs(es.velX) > 0.1 ? 'run' : (_outSearching ? 'back' : 'front'),
+    encounters: es.encounters, patrolAmp: 35, where: 'out',
+  });
 
   // Companion following player (uses combat world-x during combat)
   if (gs.exploreCompanionId) {
@@ -1248,116 +1149,192 @@ function renderOutdoor(ctx, gs, es) {
   drawExploreWeather(ctx, gs);
 }
 
-function renderBuildingInterior(ctx, gs, es) {
-  const bi  = es.building;
-  const bld = es.buildings[bi.bldgIdx];
-  const fl  = bld.floors[bi.floorIdx];
-  const vz  = EXPLORE_VIEW_ZOOM;
-
-  ctx.save();
-  ctx.scale(vz, vz);
-
-  // Indoor background
-  fillRect(ctx, 0, 0, CFG.W, CFG.H, '#0c0c14');
-
-  ctx.save();
-  ctx.translate(-bi.scrollX, 0);
-
-  // Floor
-  fillRect(ctx, 0, GROUND_Y, fl.width, CFG.H - GROUND_Y, '#171215');
-  fillRect(ctx, 0, GROUND_Y, fl.width, 2, '#2e2028');
-
-  // Ceiling
-  fillRect(ctx, 0, 0, fl.width, 28, '#080810');
-  fillRect(ctx, 0, 26, fl.width, 2, '#181820');
-
-  // Textured back wall + floor for the building type
-  const tx = INTERIOR_TEXTURES[bld.theme] || INTERIOR_TEXTURES.urban;
-  fillTexture(ctx, tx[0], 0, 28, fl.width, GROUND_Y - 28, 0.30);
-  fillTexture(ctx, tx[1], 0, GROUND_Y + 2, fl.width, CFG.H - GROUND_Y, 0.35);
-  fillRect(ctx, 0, GROUND_Y - 6, fl.width, 6, '#000', 0.35);   // skirting shadow
-
-  // Walls (boundary)
-  fillRect(ctx, 0, 0, 8, GROUND_Y, '#161620');
-  fillRect(ctx, fl.width - 8, 0, 8, GROUND_Y, '#161620');
-
-  // Floor number label (top centre)
-  drawText(ctx, `${bld.label}  —  Floor ${bi.floorIdx + 1} / ${bld.numFloors}`,
-    fl.width / 2, 20, C.textDim, 7, 'center');
-
-  // Ambient wall lamps (flickering, some broken)
-  for (let lx = 130; lx < fl.width - 100; lx += 200) {
-    fillRect(ctx, lx - 4, 28, 8, 3, '#303040');
-    const lit = (lx / 200 + bi.floorIdx) % 3 !== 0;
-    if (lit) fillRect(ctx, lx - 2, 31, 4, 3, '#b0a050', 0.45);
+// Bodies, enemies (patrolling or in combat) and the player, with combat
+// reactions. Shared by outdoors and building floors/rooms. `o.where` keys
+// bodies to the place they fell.
+function drawExploreActors(ctx, gs, es, o) {
+  _fxStore();
+  const _now = Date.now();
+  for (const cp of es.corpses) {
+    if ((cp.where || 'out') === o.where) _drawCorpse(ctx, cp.x, cp.sprite, cp.dir, cp.t0, cp.weapon, _now);
   }
 
-  // Theme-relevant interior decoration (sprites, falling back to the drawn version)
-  if (!drawInteriorFurniture(ctx, bld.theme, fl, GROUND_Y)) {
-    drawBuildingInteriorDecor(ctx, bld.theme, fl.width, GROUND_Y);
-  }
-
-  // Exit door
-  if (fl.exitX !== null) {
-    const ex = fl.exitX;
-    if (!drawEnvSprite(ctx, 'f_exit_door', ex + 9, GROUND_Y)) {
-      fillRect(ctx, ex, GROUND_Y - 30, 18, 30, '#070710');
-      strokeRect(ctx, ex, GROUND_Y - 30, 18, 30, '#2a2a40');
-      drawText(ctx, 'EXIT', ex + 9, GROUND_Y - 33, '#3a6a3a', 7, 'center');
+  if (gs.inCombat && gs.combat) {
+    for (const en of gs.combat.enemies) {
+      const enFacing = gs.combat.playerWx >= en.worldX ? 1 : -1;
+      if (en.dead && en._deathT0) {
+        _drawCorpse(ctx, en.worldX, en.sprite, en._deathDir || -enFacing, en._deathT0, enemyWeaponId(en), _now);
+        continue;
+      }
+      const _ex = en.worldX + _hitOffset(en._hitT0, en._hitDir || -enFacing);
+      _drawWorldEnemy(ctx, _ex, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing);
+      if (en.dead) continue;
+      drawStatBar(ctx, en.worldX - 22, GROUND_Y - 52, 44, 5,
+        en.hp, en.maxHp, (en.hp / en.maxHp) > 0.5 ? '#aa2222' : '#dd1010');
+      drawText(ctx, en.name, en.worldX, GROUND_Y - 57, '#cc4444', 7, 'center');
+      if (gs.combat.targetIdx === en.index && gs.combat.turn === 'player') {
+        ctx.save(); ctx.strokeStyle = '#cc4433'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(en.worldX - 18, GROUND_Y - 95, 36, 95);
+        ctx.restore();
+      }
     }
-    if (Math.abs(bi.px - ex) < 30) {
-      drawText(ctx, '[E] Exit', ex + 9, GROUND_Y - 46, C.textBright, 7, 'center');
-    }
-  }
-
-  // Stairs
-  if (fl.stairsUpX !== null) {
-    drawBuildingStairs(ctx, fl.stairsUpX, GROUND_Y, 'up');
-    if (Math.abs(bi.px - fl.stairsUpX) < 30) {
-      drawText(ctx, '[E] Up', fl.stairsUpX + 12, GROUND_Y - 86, C.textBright, 7, 'center');
-    }
-  }
-  if (fl.stairsDownX !== null) {
-    drawBuildingStairs(ctx, fl.stairsDownX, GROUND_Y, 'down');
-    if (Math.abs(bi.px - fl.stairsDownX) < 30) {
-      drawText(ctx, '[E] Down', fl.stairsDownX + 12, GROUND_Y - 86, C.textBright, 7, 'center');
-    }
-  }
-
-  // Containers
-  for (const c of fl.containers) {
-    if (c.searched) {
-      drawExploreContainerEmpty(ctx, c.wx, GROUND_Y);
-      continue;
-    }
-    const near = Math.abs(bi.px - c.wx) < 30;
-    drawExploreContainer(ctx, c.wx, GROUND_Y, c.type, near);
-    if (c.searching) {
-      drawSearchBar(ctx, c.wx, GROUND_Y - 22, c.searchProgress / (c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration));
-    } else if (near) {
-      drawText(ctx, '[E] Search', c.wx, GROUND_Y - 24, C.textBright, 7, 'center');
+  } else {
+    for (let i = 0; i < o.encounters.length; i++) {
+      const enc = o.encounters[i];
+      if (enc.triggered || enc.killed) continue;
+      // Patrol oscillation (visual only — detection still uses enc.wx)
+      const patrolWx = enc.wx + Math.sin(_now / 1400 + i * 2.1) * o.patrolAmp;
+      const weapon = enc.ids ? enemyWeaponId({ id: enc.ids[0], index: 0 }) : 'pipe';
+      ctx.save();
+      ctx.globalAlpha = 0.82;
+      _drawWorldEnemy(ctx, patrolWx, GROUND_Y, enc.previewSprite || 'human_hostile', { id: weapon });
+      ctx.restore();
     }
   }
 
   // Player
-  const _biSearching = fl.containers.some(c => c.searching);
-  const _biPose = Math.abs(bi.velX) > 0.1 ? 'run' : (_biSearching ? 'back' : 'front');
-  drawParent(ctx, bi.px, PLAYER_FOOT, 2, bi.facing, bi.animFrame || 0, gs.parent.gender, _biPose,
-             { id: gs.parent.equipped.weapon });
+  const pc = gs.inCombat && gs.combat ? gs.combat : null;
+  const px = pc ? pc.playerWx : o.px;
+  let facing = o.facing;
+  if (pc) {
+    const tg = pc.enemies.filter(e => !e.dead)[pc.targetIdx] || pc.enemies.find(e => !e.dead);
+    if (tg) facing = tg.worldX >= pc.playerWx ? 1 : -1;
+  }
+  const weapon = { id: gs.parent.equipped.weapon, t0: pc ? pc.playerAnimT0 : 0 };
+  if (pc && pc.playerDeathT0 && _now >= pc.playerDeathT0) {
+    // falls backwards
+    const k = Math.min(1, (_now - pc.playerDeathT0) / FX_FALL_MS);
+    const e = 1 - (1 - k) * (1 - k);
+    const dir = pc.playerDeathDir || -facing;
+    ctx.save();
+    ctx.translate(px, PLAYER_FOOT - 6 * e);
+    ctx.rotate(dir * e * Math.PI / 2);
+    drawParent(ctx, 0, 0, 2, facing, 0, gs.parent.gender, 'front', null);
+    ctx.restore();
+  } else {
+    const hx = px + (pc ? _hitOffset(pc.playerHitT0, pc.playerHitDir || -facing) : 0);
+    drawParent(ctx, hx, PLAYER_FOOT, 2, facing, o.animFrame, gs.parent.gender, o.pose, weapon);
+  }
+  if (pc) {
+    drawStatBar(ctx, px - 22, PLAYER_FOOT - 52, 44, 5,
+      pc.player.hp, pc.player.maxHp, (pc.player.hp / pc.player.maxHp) > 0.4 ? '#3a8a3a' : '#cc2020');
+    drawText(ctx, gs.parent.name, px, PLAYER_FOOT - 57, '#88cc88', 7, 'center');
+    const apStr = '▪'.repeat(pc.playerAp) + '▫'.repeat(Math.max(0, pc.player.maxAp - pc.playerAp));
+    drawText(ctx, apStr, px, PLAYER_FOOT - 63, '#d4c888', 7, 'center');
+  }
+}
 
-  // Companion in building
-  if (gs.exploreCompanionId) {
+function renderBuildingInterior(ctx, gs, es) {
+  const bi   = es.building;
+  const bld  = es.buildings[bi.bldgIdx];
+  const area = curArea(es);
+  const W    = area.width;
+  const vz   = EXPLORE_VIEW_ZOOM;
+
+  ctx.save();
+  ctx.scale(vz, vz);
+  fillRect(ctx, 0, 0, CFG.W, CFG.H, '#0c0c14');
+  ctx.save();
+  ctx.translate(-bi.scrollX, 0);
+
+  // Solid wall beyond the ends (visible when a small room is centred)
+  fillRect(ctx, -400, 0, 400, CFG.H, '#0d0d12');
+  fillRect(ctx, W, 0, 400, CFG.H, '#0d0d12');
+  // Floor, ceiling, textured walls
+  fillRect(ctx, 0, GROUND_Y, W, CFG.H - GROUND_Y, '#171215');
+  fillRect(ctx, 0, GROUND_Y, W, 2, '#2e2028');
+  fillRect(ctx, 0, 0, W, 28, '#080810');
+  fillRect(ctx, 0, 26, W, 2, '#181820');
+  const tx = INTERIOR_TEXTURES[bld.theme] || INTERIOR_TEXTURES.urban;
+  fillTexture(ctx, tx[0], 0, 28, W, GROUND_Y - 28, area.isRoom ? 0.38 : 0.30);
+  fillTexture(ctx, tx[1], 0, GROUND_Y + 2, W, CFG.H - GROUND_Y, 0.35);
+  fillRect(ctx, 0, GROUND_Y - 6, W, 6, '#000', 0.35);   // skirting shadow
+  fillRect(ctx, 0, 0, 8, GROUND_Y, '#161620');
+  fillRect(ctx, W - 8, 0, 8, GROUND_Y, '#161620');
+
+  const where = area.isRoom ? `${bld.label}  —  ${area.label}` : `${bld.label}  —  Floor ${bi.floorIdx + 1} / ${bld.numFloors}`;
+  drawText(ctx, where, W / 2, 20, C.textDim, 7, 'center');
+
+  // Ceiling lamps (some broken)
+  for (let lx = 130; lx < W - 100; lx += 200) {
+    fillRect(ctx, lx - 4, 28, 8, 3, '#303040');
+    if ((lx / 200 + bi.floorIdx) % 3 !== 0) fillRect(ctx, lx - 2, 31, 4, 3, '#b0a050', 0.45);
+  }
+
+  drawAreaFurniture(ctx, area, GROUND_Y);
+
+  const near = (x, r) => Math.abs(bi.px - x) < r;
+  if (area.isRoom) {
+    drawRoomDoor(ctx, area.backDoorX, GROUND_Y, 'Hallway', near(area.backDoorX + DOOR_W / 2, 26), '[E] Leave');
+  } else {
+    // Room doorways along the hallway
+    for (const d of area.doors || []) {
+      drawRoomDoor(ctx, d.x, GROUND_Y, d.label, near(d.x + DOOR_W / 2, 20), '[E] Enter');
+    }
+    // Exit door
+    if (area.exitX !== null) {
+      const ex = area.exitX;
+      if (!drawEnvSprite(ctx, 'f_exit_door', ex + 9, GROUND_Y)) {
+        fillRect(ctx, ex, GROUND_Y - 30, 18, 30, '#070710');
+        strokeRect(ctx, ex, GROUND_Y - 30, 18, 30, '#2a2a40');
+        drawText(ctx, 'EXIT', ex + 9, GROUND_Y - 33, '#3a6a3a', 7, 'center');
+      }
+      if (near(ex, 30)) drawText(ctx, '[E] Exit', ex + 9, GROUND_Y - 46, C.textBright, 7, 'center');
+    }
+    // Stairs
+    if (area.stairsUpX !== null) {
+      drawBuildingStairs(ctx, area.stairsUpX, GROUND_Y, 'up');
+      if (near(area.stairsUpX, 30)) drawText(ctx, '[E] Up', area.stairsUpX + 12, GROUND_Y - 86, C.textBright, 7, 'center');
+    }
+    if (area.stairsDownX !== null) {
+      drawBuildingStairs(ctx, area.stairsDownX, GROUND_Y, 'down');
+      if (near(area.stairsDownX, 30)) drawText(ctx, '[E] Down', area.stairsDownX + 12, GROUND_Y - 86, C.textBright, 7, 'center');
+    }
+  }
+
+  // Containers (searchable furniture is drawn by the furniture pass)
+  for (const c of area.containers) drawAreaContainer(ctx, c, near(c.wx, 30));
+
+  // Bodies, enemies, player
+  const searching = area.containers.some(c => c.searching);
+  drawExploreActors(ctx, gs, es, {
+    px: bi.px, facing: bi.facing, animFrame: bi.animFrame || 0,
+    pose: Math.abs(bi.velX) > 0.1 ? 'run' : (searching ? 'back' : 'front'),
+    encounters: area.encounters || [], patrolAmp: 18, where: areaKey(es),
+  });
+
+  // Companion
+  if (gs.exploreCompanionId && !gs.inCombat) {
     const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
     if (compIdx >= 0) {
       drawSurvivor(ctx, bi.px - bi.facing * 22, PLAYER_FOOT, 2, -bi.facing, bi.animFrame || 0, compIdx, Math.abs(bi.velX) > 0.1 ? 'side' : 'front');
     }
   }
 
+  _updateDrawFx(ctx, gs, es);
+
   ctx.restore(); // end world translate
   ctx.restore(); // end view zoom
-
-  // Indoor fog (tighter radius)
   renderFog(ctx, (bi.px - bi.scrollX) * vz, PLAYER_FOOT * vz - 12, gs, true);
+}
+
+// One container: sprite (unless it's a piece of furniture), prompt, progress
+function drawAreaContainer(ctx, c, isNear) {
+  const isFurn = !!c.furnitureKey;
+  const top = isFurn ? GROUND_Y - ((FURN_SIZE[c.furnitureKey] || [0, 40])[1]) : GROUND_Y - 24;
+  const left = c.loot && c.loot.length;
+  if (c.searched && !left) {
+    if (!isFurn) drawExploreContainerEmpty(ctx, c.wx, GROUND_Y);
+    else if (isNear) drawText(ctx, 'empty', c.wx, top - 4, '#5a5a5a', 6, 'center');
+    return;
+  }
+  if (!isFurn && !c.searched) drawExploreContainer(ctx, c.wx, GROUND_Y, c.type, isNear);
+  if (!isFurn && c.searched) drawExploreContainerEmpty(ctx, c.wx, GROUND_Y);
+  if (c.searching) {
+    drawSearchBar(ctx, c.wx, top - 4, c.searchProgress / (c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration));
+  } else if (isNear) {
+    drawText(ctx, c.searched ? '[E] Take items' : `[E] Search${isFurn ? ' ' + c.type : ''}`, c.wx, top - 4, C.textBright, 7, 'center');
+  }
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
@@ -1372,7 +1349,8 @@ function drawExploreHUD(ctx, gs, es) {
   if (es.building) {
     const bi  = es.building;
     const bld = es.buildings[bi.bldgIdx];
-    drawText(ctx, `${bld.label} — Floor ${bi.floorIdx + 1}`, 12, 32, C.textDim, 9);
+    const _a = curArea(es);
+    drawText(ctx, _a.isRoom ? `${bld.label} — ${_a.label}` : `${bld.label} — Floor ${bi.floorIdx + 1}`, 12, 32, C.textDim, 9);
   } else {
     const curZone = loc.zones.find(z => es.px >= z.x && es.px < z.x + z.w);
     if (curZone) drawText(ctx, curZone.name, 12, 32, C.textDim, 9);
@@ -1484,6 +1462,56 @@ function drawExploreHUD(ctx, gs, es) {
   const invHov = hitTest(mx, my, invBtnX, invBtnY, 50, 22);
   drawButton(ctx, invBtnX, invBtnY, 50, 22, 'INV', invHov, es.invOpen);
   gs._exploreInvBtn = { x: invBtnX, y: invBtnY, w: 50, h: 22 };
+
+  // HUNT button (huntable areas, outdoors, not fighting)
+  gs._exploreHuntBtn = null;
+  if (canHuntHere(gs)) {
+    const hx = CFG.W - 60, hy = 60;
+    drawButton(ctx, hx, hy, 50, 22, 'HUNT', hitTest(mx, my, hx, hy, 50, 22));
+    drawText(ctx, '1 hour [H]', hx + 25, hy + 31, C.textDim, 6, 'center');
+    gs._exploreHuntBtn = { x: hx, y: hy, w: 50, h: 22 };
+  }
+}
+
+function canHuntHere(gs) {
+  const es = exploreState;
+  return !!(es && es.location.canHunt && !es.building && !gs.inCombat && !es.invOpen);
+}
+
+// Spend an hour hunting: fade out, pass time, roll for meat, show the result, fade in
+function startHunt(gs) {
+  if (!canHuntHere(gs) || (gs.screenFade && gs.screenFade.active)) return;
+  gs.mouse.down = false;
+  gs.keys = {};
+  const fade = { active: true, alpha: 0, phase: 'out', titleText: null };
+  fade.pendingFn = () => {
+    // An hour passes in 10-minute steps (hunger, thirst, nightfall all apply)
+    for (let i = 0; i < 6; i++) {
+      tickStats(gs, 10 / CFG.MINS_PER_REAL_SEC);
+      if (gs.screen !== 'explore' || !exploreState) return;   // night fell: run ended
+    }
+    const p = gs.parent;
+    const skill = (p.skills.stealth || 1) * 6 + (p.skills.exploration || 1) * 4 + (p.perception || 5) * 2;
+    const odds = clamp(10 + skill, 15, 85);
+    p.tiredness = clamp(p.tiredness + 6, 0, 100);
+    if (chance(odds)) {
+      const qty = randInt(1, 2 + Math.floor(skill / 30));
+      const def = getItemDef('raw_meat');
+      if (calcWeight(p.inventory) + def.weight * qty <= parentMaxCarry()) {
+        addToInventory(p.inventory, 'raw_meat', qty);
+        addLog(`Hunting paid off: ${qty} raw meat.`, 'good');
+      } else {
+        exploreState.loot.push({ id: 'raw_meat', qty, wx: exploreState.px + 20, wy: GROUND_Y, taken: false });
+        addLog(`Hunted ${qty} raw meat — too heavy, left it on the ground.`, 'warn');
+      }
+      giveXP(p, 6, gs);
+      fade.titleText = `Caught ${qty} raw meat`;
+    } else {
+      addLog('An hour of hunting, nothing caught.', 'warn');
+      fade.titleText = 'Nothing caught';
+    }
+  };
+  gs.screenFade = fade;
 }
 
 // ── In-world combat HUD ───────────────────────────────────────────────────────
@@ -1725,7 +1753,7 @@ function _spray(es, x, y, dir, machine, n) {
       vx: dir * (25 + Math.random() * 95) + (Math.random() - 0.5) * 30,
       vy: -(15 + Math.random() * 85),
       life: machine ? 0.45 + Math.random() * 0.3 : 1.5,
-      machine,
+      machine, where: areaKey(es),
       size: Math.random() < 0.3 ? 2 : 1,
       color: machine ? ['#ffd060', '#ffa030', '#fff4c0'][i % 3] : ['#8a1010', '#a01a14', '#6a0a0a'][i % 3],
     });
@@ -1765,7 +1793,7 @@ function archiveCorpses(gs, c) {
   for (const en of c.enemies) {
     if (!en.dead) continue;
     es.corpses.push({ x: en.worldX, sprite: en.sprite, dir: en._deathDir || 1,
-                      t0: en._deathT0 || 0, weapon: enemyWeaponId(en) });
+                      t0: en._deathT0 || 0, weapon: enemyWeaponId(en), where: areaKey(es) });
   }
 }
 
@@ -1832,19 +1860,21 @@ function _updateDrawFx(ctx, gs, es) {
     for (const q of due) combatFx(...q.args);
   }
   // ground stains
-  for (const d of es.decals) fillRect(ctx, d.x, GROUND_Y + d.y, d.w, 1, d.color, 0.9);
+  const here = areaKey(es);
+  for (const d of es.decals) if ((d.where || 'out') === here) fillRect(ctx, d.x, GROUND_Y + d.y, d.w, 1, d.color, 0.9);
   // particles
   const keep = [];
   for (const p of es.fx) {
     p.vy += FX_GRAVITY * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
     if (p.y >= GROUND_Y) {
       if (!p.machine) {
-        es.decals.push({ x: Math.round(p.x), y: Math.floor(Math.random() * 3), w: 1 + Math.floor(Math.random() * 3), color: p.color });
+        es.decals.push({ x: Math.round(p.x), y: Math.floor(Math.random() * 3), w: 1 + Math.floor(Math.random() * 3), color: p.color, where: p.where });
         if (es.decals.length > 400) es.decals.shift();
       }
       continue;
     }
     if (p.life <= 0) continue;
+    if ((p.where || 'out') !== here) { keep.push(p); continue; }
     fillRect(ctx, Math.round(p.x), Math.round(p.y), p.size, p.size, p.color);
     keep.push(p);
   }
@@ -2215,223 +2245,24 @@ const INTERIOR_TEXTURES = {
   tent:     ['tex_wall_brick', 'tex_floor_concrete'],
 };
 
-// Furniture sprites per theme, repeated across the floor. Each entry is a
-// group of sprites laid out left→right with the given gaps.
-const INTERIOR_SETS = {
-  hospital: [['f_hospital_bed', 6, 'f_iv_stand'], ['f_wheelchair'], ['f_hospital_bed', 6, 'f_iv_stand']],
-  office:   [['f_desk', 4, 'f_office_chair'], ['f_filing', 2, 'f_filing'], ['f_desk', 4, 'f_office_chair']],
-  factory:  [['f_machine'], ['conveyor'], ['f_machine']],
-  mall:     [['f_store_shelf', 4, 'f_store_shelf'], ['f_mannequin', 8, 'f_mannequin'], ['f_store_shelf']],
-  house:    [['f_sofa'], ['f_table'], ['f_bookshelf']],
-  cabin:    [['f_table'], ['f_bookshelf'], ['f_sofa']],
-  pharmacy: [['f_med_shelf', 4, 'f_med_shelf'], ['f_med_shelf'], ['f_med_shelf', 4, 'f_med_shelf']],
-  church:   [['f_church_cross'], ['f_pew'], ['f_pew'], ['f_pew']],
-  urban:    [['debris'], ['f_table'], ['debris']],
-  tent:     [['debris']],
-};
 
-// Lays furniture in the gaps between containers, stairs and exits so nothing
-// important is hidden. Returns false if the sprites aren't loaded yet.
-function drawInteriorFurniture(ctx, theme, fl, groundY) {
-  if (!_envSpr['f_table']) return false;
-  const W = fl.width;
-  const sets = INTERIOR_SETS[theme] || INTERIOR_SETS.urban;
-  // Spots to keep clear: containers, stairs, exit door
-  const busy = [];
-  for (const c of fl.containers) busy.push(c.wx);
-  for (const k of ['exitX', 'stairsUpX', 'stairsDownX']) if (fl[k] !== null && fl[k] !== undefined) busy.push(fl[k] + 10);
-  const clear = (x0, x1) => busy.every(b => b < x0 - 26 || b > x1 + 26);
-
-  ctx.save();
-  ctx.globalAlpha = 0.9;
-  let x = 70, i = 0;
-  while (x < W - 70) {
-    const group = sets[i % sets.length];
-    // Measure the group
-    let gw = 0;
-    const parts = [];
-    for (let j = 0; j < group.length; j++) {
-      const it = group[j];
-      if (typeof it === 'number') { gw += it; continue; }
-      if (it === 'conveyor') { parts.push({ conveyor: true, x: gw, w: 96 }); gw += 96; continue; }
-      const img = _envSpr[it];
-      if (!img || !img.naturalWidth) continue;
-      parts.push({ key: it, x: gw, w: img.naturalWidth });
-      gw += img.naturalWidth;
-    }
-    if (x + gw < W - 70 && clear(x, x + gw)) {
-      for (const pt of parts) {
-        if (pt.conveyor) {
-          for (let cx2 = 0; cx2 < pt.w; cx2 += 32) drawEnvSprite(ctx, 'f_conveyor', x + pt.x + cx2 + 16, groundY);
-        } else {
-          drawEnvSprite(ctx, pt.key, x + pt.x + pt.w / 2, groundY);
-        }
-      }
-      x += gw + 70 + (i * 37) % 60;   // irregular spacing so rooms don't look stamped
-      i++;
-    } else {
-      x += 24;
-    }
-  }
-  ctx.restore();
-  return true;
-}
-
-function drawBuildingInteriorDecor(ctx, theme, floorW, groundY) {
-  const W = floorW;
-  const G = groundY;
-  ctx.save();
-  ctx.globalAlpha = 0.55;
-  switch (theme) {
-    case 'hospital': {
-      // Hospital beds along walls
-      for (let bx = 120; bx < W - 100; bx += 220) {
-        fillRect(ctx, bx, G - 24, 60, 20, '#1c1c28');
-        fillRect(ctx, bx, G - 30, 60, 8,  '#151520'); // pillow
-        strokeRect(ctx, bx, G - 30, 60, 26, '#2a2a3a');
-        drawText(ctx, '———', bx + 30, G - 17, '#2a2a44', 6, 'center');
-        // Medical drip stand
-        fillRect(ctx, bx + 65, G - 45, 2, 45, '#2a2a3a');
-        fillRect(ctx, bx + 62, G - 46, 8, 3,  '#3a3a4a');
-      }
-      // Overturned wheelchair
-      fillRect(ctx, W * 0.6, G - 14, 22, 12, '#1a1a28');
-      strokeRect(ctx, W * 0.6, G - 14, 22, 12, '#2a2a3a');
-      break;
-    }
-    case 'office': {
-      // Desks with monitors
-      for (let dx = 100; dx < W - 80; dx += 180) {
-        fillRect(ctx, dx, G - 22, 55, 18, '#181820');
-        strokeRect(ctx, dx, G - 22, 55, 18, '#242430');
-        // Monitor
-        fillRect(ctx, dx + 10, G - 44, 28, 22, '#0e0e18');
-        strokeRect(ctx, dx + 10, G - 44, 28, 22, '#1c1c2c');
-        fillRect(ctx, dx + 22, G - 22, 4, 4, '#181820'); // monitor stand
-        // Chair
-        fillRect(ctx, dx + 15, G - 12, 18, 14, '#141420');
-        strokeRect(ctx, dx + 15, G - 12, 18, 14, '#1e1e2e');
-      }
-      // Filing cabinet
-      fillRect(ctx, W * 0.75, G - 38, 24, 38, '#161622');
-      strokeRect(ctx, W * 0.75, G - 38, 24, 38, '#222230');
-      for (let i = 0; i < 3; i++) fillRect(ctx, W * 0.75 + 2, G - 36 + i * 13, 20, 10, '#0e0e18');
-      break;
-    }
-    case 'factory': {
-      // Heavy machinery and conveyor belts
-      for (let mx2 = 80; mx2 < W - 80; mx2 += 230) {
-        fillRect(ctx, mx2, G - 50, 60, 50, '#141418');
-        strokeRect(ctx, mx2, G - 50, 60, 50, '#202028');
-        fillRect(ctx, mx2 + 10, G - 44, 40, 20, '#0e0e14');
-        fillRect(ctx, mx2 + 20, G - 48, 18, 6,  '#2a2a38'); // exhaust
-        fillRect(ctx, mx2 + 22, G - 54, 4, 8,   '#2a2a38');
-      }
-      // Conveyor belt
-      fillRect(ctx, 150, G - 12, W - 300, 10, '#1a1820');
-      strokeRect(ctx, 150, G - 12, W - 300, 10, '#28283a');
-      for (let sx2 = 160; sx2 < W - 300; sx2 += 30)
-        fillRect(ctx, sx2, G - 12, 2, 10, '#222230');
-      break;
-    }
-    case 'mall': {
-      // Shop shelves and mannequins
-      for (let sx2 = 80; sx2 < W - 80; sx2 += 200) {
-        fillRect(ctx, sx2, G - 50, 8, 50, '#181818');   // shelf post
-        for (let sh = 1; sh <= 3; sh++) fillRect(ctx, sx2, G - sh * 16, 60, 4, '#1c1c24');
-        fillRect(ctx, sx2 + 65, G - 40, 12, 40, '#161620'); // mannequin body
-        fillRect(ctx, sx2 + 67, G - 52, 8, 12,  '#161620'); // mannequin head
-      }
-      break;
-    }
-    case 'house': case 'cabin': {
-      // Furniture: table, chairs, broken shelves
-      fillRect(ctx, W * 0.35, G - 28, 60, 20, '#1a1410');
-      strokeRect(ctx, W * 0.35, G - 28, 60, 20, '#242018');
-      fillRect(ctx, W * 0.35 + 5,  G - 14, 12, 14, '#141210');
-      fillRect(ctx, W * 0.35 + 43, G - 14, 12, 14, '#141210');
-      // Couch / sofa
-      fillRect(ctx, W * 0.6, G - 26, 52, 22, '#1c1818');
-      fillRect(ctx, W * 0.6, G - 34, 52, 10, '#141414'); // backrest
-      strokeRect(ctx, W * 0.6, G - 34, 52, 30, '#242020');
-      break;
-    }
-    case 'pharmacy': {
-      // Medicine shelves
-      for (let sx2 = 80; sx2 < W - 60; sx2 += 100) {
-        fillRect(ctx, sx2, G - 52, 50, 50, '#121216');
-        strokeRect(ctx, sx2, G - 52, 50, 50, '#1c1c24');
-        for (let sh = 0; sh < 3; sh++) {
-          fillRect(ctx, sx2 + 2, G - 48 + sh * 16, 46, 12, '#0e0e18');
-          // Pill bottles (some knocked over)
-          for (let b = 0; b < 3; b++)
-            fillRect(ctx, sx2 + 5 + b * 14, G - 48 + sh * 16 + 2, 6, 8, '#1a2030');
-        }
-      }
-      break;
-    }
-    case 'church': {
-      // Crucifixion cross near entry — Singularity cult scene
-      const cx2 = Math.round(W * 0.25);
-      // Vertical beam
-      fillRect(ctx, cx2 - 3, G - 90, 6, 90, '#1e1610');
-      strokeRect(ctx, cx2 - 3, G - 90, 6, 90, '#2e261a');
-      // Horizontal beam
-      fillRect(ctx, cx2 - 28, G - 74, 56, 5, '#1e1610');
-      strokeRect(ctx, cx2 - 28, G - 74, 56, 5, '#2e261a');
-      // Crucified figure (stick figure, dark)
-      ctx.globalAlpha = 0.70;
-      // Body
-      fillRect(ctx, cx2 - 2, G - 68, 4, 22, '#2a1c10');
-      // Head
-      ctx.fillStyle = '#3a2818';
-      ctx.beginPath(); ctx.arc(cx2, G - 72, 5, 0, Math.PI * 2); ctx.fill();
-      // Arms along crossbeam
-      fillRect(ctx, cx2 - 26, G - 72, 22, 3, '#2a1c10');
-      fillRect(ctx, cx2 + 4,  G - 72, 22, 3, '#2a1c10');
-      // Legs
-      fillRect(ctx, cx2 - 4, G - 46, 3, 16, '#2a1c10');
-      fillRect(ctx, cx2 + 1, G - 46, 3, 16, '#2a1c10');
-      ctx.globalAlpha = 0.55;
-      // Candles at base of cross
-      for (let ci = -1; ci <= 1; ci++) {
-        const cx3 = cx2 + ci * 14;
-        fillRect(ctx, cx3 - 2, G - 14, 4, 14, '#c8a840');
-        fillRect(ctx, cx3 - 1, G - 14, 2, 2,  '#ffe880'); // flame
-        ctx.fillStyle = '#ff8820';
-        ctx.beginPath(); ctx.arc(cx3, G - 15, 2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#c8a840';
-      }
-      // Note on floor near cross
-      fillRect(ctx, cx2 + 22, G - 8, 14, 10, '#c8b870');
-      strokeRect(ctx, cx2 + 22, G - 8, 14, 10, '#a09050');
-      drawText(ctx, '✉', cx2 + 29, G - 2, '#a09050', 6, 'center');
-      // Pews (benches) further back
-      ctx.globalAlpha = 0.55;
-      for (let px2 = 80; px2 < W - 80; px2 += 180) {
-        if (Math.abs(px2 - cx2) < 100) continue;
-        fillRect(ctx, px2, G - 18, 70, 12, '#1a1208');
-        strokeRect(ctx, px2, G - 18, 70, 12, '#2a1e10');
-        fillRect(ctx, px2, G - 22, 70, 5,  '#141008'); // backrest
-      }
-      break;
-    }
-    default: {
-      // Generic: some rubble and debris
-      for (let rx = 100; rx < W - 100; rx += 180) {
-        fillRect(ctx, rx, G - 10, 30, 10, '#141418');
-        fillRect(ctx, rx + 5, G - 16, 20, 8,  '#101014');
-      }
-      break;
-    }
-  }
-  ctx.restore();
-}
+// How far below the wall line the walking floor is (characters' shoes)
+const STAIR_FLOOR = 12;
 
 function drawBuildingStairs(ctx, sx, groundY, dir) {
-  // Bottom step on the walking floor (feet stand ~10px in front of the wall line)
-  if (drawEnvSprite(ctx, dir === 'up' ? 'f_stairs_up' : 'f_stairs_down', sx + 24, groundY + 10)) {
-    drawText(ctx, dir === 'up' ? '▲ UP' : '▼ DOWN', sx + 24, groundY - 76, '#8a7aaa', 7, 'center');
+  // Up: bottom step on the walking floor (feet stand ~10px in front of the wall line).
+  // Down: the flight sinks into a dark stairwell cut into the floor.
+  if (dir === 'down' && _envSpr['f_stairs_down']) {
+    const sink = 40;
+    fillRect(ctx, sx - 6, groundY + 2, 74, 60, '#050404', 0.9);       // stairwell opening
+    fillRect(ctx, sx - 6, groundY + 2, 74, 2, '#2a2420');
+    drawEnvSprite(ctx, 'f_stairs_down', sx + 24, groundY + STAIR_FLOOR + sink);
+    drawText(ctx, '▼ DOWN', sx + 24, groundY - 76 + sink, '#8a7aaa', 7, 'center');
+    return;
+  }
+  // bottom step level with the walking floor (where the character's shoes are)
+  if (drawEnvSprite(ctx, dir === 'up' ? 'f_stairs_up' : 'f_stairs_down', sx + 24, groundY + STAIR_FLOOR)) {
+    drawText(ctx, dir === 'up' ? '▲ UP' : '▼ DOWN', sx + 24, groundY - 76 + STAIR_FLOOR - 10, '#8a7aaa', 7, 'center');
     return;
   }
   const col = '#30283c';
@@ -2628,13 +2459,17 @@ function endExploration(gs) {
   const _RANDOM_AREAS = ['forest', 'factory', 'village'];
   if (!_RANDOM_AREAS.includes(es.location.id)) {
     gs.locationStates[es.location.id] = {
-      containers: es.containers.map(c => ({ searched: c.searched })),
+      containers: es.containers.map(c => ({ searched: c.searched, loot: c.searched ? c.loot : undefined })),
       loot:       es.loot.map(l => ({ taken: l.taken })),
       encounters: es.encounters.map(e => ({ triggered: e.triggered, killed: e.killed })),
       buildings:  es.buildings.map(b => ({
-        floors: b.floors.map(f => ({
-          containers: f.containers.map(c => ({ searched: c.searched })),
-        })),
+        floors: b.floors.map(f => {
+          const saveArea = a => ({
+            containers: a.containers.map(c => ({ searched: c.searched, loot: c.searched ? c.loot : undefined })),
+            cleared: (a.encounters || []).map(e => !!(e.killed || e.triggered)),
+          });
+          return { ...saveArea(f), rooms: (f.rooms || []).map(saveArea) };
+        }),
       })),
     };
   }

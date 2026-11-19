@@ -121,7 +121,7 @@ function playerMoveRight(gs) {
   if (c.turn !== 'player' || c.phase !== 'action') return;
   if (c.playerAp < 1) { combatLog(gs, 'No AP left to move.', 'warn'); return; }
   c.playerAp--;
-  c.playerWx = Math.min(CFG.WORLD_W - 10, c.playerWx + COMBAT_STEP);
+  c.playerWx = Math.min(typeof combatMaxX === 'function' ? combatMaxX(gs) : CFG.WORLD_W - 10, c.playerWx + COMBAT_STEP);
   combatLog(gs, 'Moved right.', 'normal');
   if (c.playerAp <= 0) { c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 0.6; }
 }
@@ -458,9 +458,10 @@ function endCombat(gs, result) {
   if (result === 'fled') {
     const enc = c._encRef || null;
     // Survivors retain current HP; shove them away from player
+    const maxX = typeof combatMaxX === 'function' ? combatMaxX(gs) - 20 : CFG.WORLD_W - 30;
     const survivors = c.enemies.filter(e => !e.dead).map(e => {
       const dir = e.worldX >= c.playerWx ? 1 : -1;
-      return { ...e, worldX: e.worldX + dir * 320 };
+      return { ...e, worldX: clamp(e.worldX + dir * 320, 30, maxX) };
     });
     if (enc) {
       if (survivors.length > 0) {

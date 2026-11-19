@@ -329,7 +329,8 @@ function renderShelter(ctx, gs) {
   if (shelterUI.tooltip) drawTooltip(ctx, shelterUI.tooltip, shelterUI.tooltipX, shelterUI.tooltipY);
 
   // Notifications
-  drawNotifications(ctx, gs);
+  // keep clear of the 2x/4x buttons at the top right of the world view
+  drawNotifications(ctx, gs, 10, 20, false, MAIN_W - 110);
 
   // Day transition
   drawDayTransition(ctx, gs);

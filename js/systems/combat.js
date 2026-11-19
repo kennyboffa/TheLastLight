@@ -398,11 +398,13 @@ function enemyTurn(gs) {
 
 // ── Loot & end ────────────────────────────────────────────────────────────────
 
+// Drops stay on the body; search it afterwards (E) to take them
 function collectLoot(gs, enemy) {
+  enemy._loot = [];
   if (!enemy.drops) return;
   for (const [id, min, max] of enemy.drops) {
     const qty = randInt(min, max);
-    if (qty > 0) gs.combat.victoryLoot.push({ id, qty });
+    if (qty > 0) enemy._loot.push({ id, qty });
   }
 }
 
@@ -487,12 +489,8 @@ function endCombat(gs, result) {
 
   // Victory — restart explore music
   Audio.startMusic();
-  if (c.victoryLoot.length > 0) {
-    gs.inCombat = false;
-    gs.screen   = 'lootPickup';
-  } else {
-    gs.inCombat = false;
-    gs.combat   = null;
-    gs.screen   = 'explore';
-  }
+  gs.inCombat = false;
+  gs.combat   = null;
+  gs.screen   = 'explore';
+  if (c.enemies.some(e => e._loot && e._loot.length)) notify('Search the bodies for loot [E].', 'info');
 }

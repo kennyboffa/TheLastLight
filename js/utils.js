@@ -9,6 +9,24 @@ function randInt(lo, hi)   { return Math.floor(Math.random() * (hi - lo + 1)) + 
 function randFloat(lo, hi) { return Math.random() * (hi - lo) + lo; }
 function randChoice(arr)   { return arr[Math.floor(Math.random() * arr.length)]; }
 function chance(pct)       { return Math.random() * 100 < pct; }
+
+// Temporarily make Math.random deterministic (mulberry32). Returns a function
+// that restores the real Math.random. Used so a place is laid out the same
+// way on every visit.
+function seedRandom(seedText) {
+  let h = 2166136261;
+  for (let i = 0; i < seedText.length; i++) h = Math.imul(h ^ seedText.charCodeAt(i), 16777619);
+  let a = h >>> 0;
+  const real = Math.random;
+  Math.random = function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return () => { Math.random = real; };
+}
 function uid()             { return Math.random().toString(36).substr(2, 9); }
 
 function formatTime(mins) {

@@ -14,7 +14,7 @@ const GS = {
   parent: {
     name:    'Alex',
     gender:  'father',   // 'father' | 'mother'
-    health:  25, maxHealth: 25,
+    health:  35, maxHealth: 35,
     hunger:  20,
     thirst:  20,
     tiredness: 20,

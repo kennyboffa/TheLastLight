@@ -166,7 +166,7 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
 
 // ── Notification popups (floating messages) ───────────────────────────────────
 
-function drawNotifications(ctx, gs, startX, startY, centered) {
+function drawNotifications(ctx, gs, startX, startY, centered, maxWidth) {
   const notifs = gs.notifications.filter(n => n.ttl > 0);
   const nx     = startX  !== undefined ? startX  : 10;
   let   ny     = startY  !== undefined ? startY  : 20;
@@ -176,8 +176,25 @@ function drawNotifications(ctx, gs, startX, startY, centered) {
                     : n.type === 'warn'   ? C.textWarn
                     : n.type === 'good'   ? C.textGood
                     : C.text;
-    drawTextShadow(ctx, n.text, nx, ny, typeColor, '#000000aa', 11, align);
-    ny += 15;
+    // Optional word-wrap so long messages don't run under other UI
+    let lines = [n.text];
+    if (maxWidth) {
+      const perLine = Math.max(10, Math.floor(maxWidth / 6.7));
+      lines = [];
+      let cur = '';
+      for (const word of String(n.text).split(' ')) {
+        if ((cur + ' ' + word).trim().length > perLine) { if (cur) lines.push(cur); cur = word; }
+        else cur = (cur + ' ' + word).trim();
+      }
+      if (cur) lines.push(cur);
+      const w = Math.min(maxWidth, Math.max(...lines.map(l => l.length)) * 6.7) + 8;
+      fillRect(ctx, centered ? nx - w / 2 : nx - 4, ny - 11, w, lines.length * 14 + 3, '#000000', 0.45);
+    }
+    for (const line of lines) {
+      drawTextShadow(ctx, line, nx, ny, typeColor, '#000000aa', 11, align);
+      ny += 14;
+    }
+    ny += 1;
     n.ttl--;
   }
   gs.notifications = notifs;

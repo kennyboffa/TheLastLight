@@ -85,6 +85,12 @@ function renderFog(ctx, playerScreenX, playerScreenY, gs, isIndoor) {
 function startExploration(gs, loc) {
   if (!loc) loc = randChoice(LOCATIONS_DB);
 
+  // Places that remember progress are generated from a fixed seed (per run),
+  // so buildings, rooms, furniture and containers are the same every visit.
+  if (!gs.worldSeed) gs.worldSeed = Math.floor(Math.random() * 1e9);
+  const _unseed = ['forest', 'factory', 'village'].includes(loc.id) ? null
+                : seedRandom(loc.id + ':' + gs.worldSeed);
+
   // Pre-generate buildings (MUST be done here — never call randInt in render)
   const buildings = [];
   for (const zone of loc.zones) {
@@ -241,6 +247,8 @@ function startExploration(gs, loc) {
       bonesPiles.push({ wx: zone.x + 30 + randInt(0, zone.w - 60) });
     }
   }
+
+  if (_unseed) _unseed();
 
   exploreState = {
     location:  loc,
@@ -565,10 +573,10 @@ function _tickSearches(gs, containers, moving, dt) {
 // Open the take-what-you-want dialog for a container's items
 function openContainerLoot(gs, container) {
   const names = { box: 'Box', crate: 'Crate', chest: 'Chest', locker: 'Locker', cabinet: 'Cabinet',
-                  shelf: 'Shelf', bookshelf: 'Bookshelf', bag: 'Bag', barrel: 'Barrel', tent: 'Tent' };
+                  shelf: 'Shelf', bookshelf: 'Bookshelf', bag: 'Bag', barrel: 'Barrel', tent: 'Tent', body: 'Body' };
   gs.lootSource = {
     items: container.loot,
-    title: (names[container.type] || 'Container').toUpperCase(),
+    title: (container.label ? `${container.label} (${names[container.type] || ''})` : (names[container.type] || 'Container')).toUpperCase(),
     onTake: (item) => {
       if (item.id === 'area_map_1' || item.id === 'area_map_2') handleMapPickup(item.id, gs);
     },
@@ -697,7 +705,8 @@ function interactOutdoor(gs) {
     return;
   }
 
-  // Search / re-open / cancel an outdoor container
+  // Bodies, then outdoor containers
+  if (_interactBodies(gs, es.px)) return;
   if (_interactContainers(gs, es.containers, es.px)) return;
 
   // Search a tent (not enterable — just a search prompt)
@@ -781,7 +790,19 @@ function interactBuilding(gs) {
     }
   }
 
+  if (_interactBodies(gs, bi.px)) return;
   _interactContainers(gs, area.containers, bi.px);
+}
+
+// Search a nearby body (drops from a fight). Returns true if it did.
+function _interactBodies(gs, px) {
+  const es = exploreState;
+  if (!es || !es.corpses) return false;
+  const here = areaKey(es);
+  const body = es.corpses.find(cp => (cp.where || 'out') === here && cp.loot && cp.loot.length && Math.abs(px - cp.x) < 28);
+  if (!body) return false;
+  openContainerLoot(gs, { type: 'body', loot: body.loot, label: body.name });
+  return true;
 }
 
 // Search / re-open / cancel the nearest container
@@ -1164,7 +1185,11 @@ function drawExploreActors(ctx, gs, es, o) {
   _fxStore();
   const _now = Date.now();
   for (const cp of es.corpses) {
-    if ((cp.where || 'out') === o.where) _drawCorpse(ctx, cp.x, cp.sprite, cp.dir, cp.t0, cp.weapon, _now);
+    if ((cp.where || 'out') !== o.where) continue;
+    _drawCorpse(ctx, cp.x, cp.sprite, cp.dir, cp.t0, cp.weapon, _now);
+    if (!gs.inCombat && cp.loot && cp.loot.length && Math.abs(o.px - cp.x) < 28) {
+      drawText(ctx, '[E] Search body', cp.x, GROUND_Y - 22, C.textBright, 7, 'center');
+    }
   }
 
   if (gs.inCombat && gs.combat) {
@@ -1852,7 +1877,8 @@ function archiveCorpses(gs, c) {
   for (const en of c.enemies) {
     if (!en.dead) continue;
     es.corpses.push({ x: en.worldX, sprite: en.sprite, dir: en._deathDir || 1,
-                      t0: en._deathT0 || 0, weapon: enemyWeaponId(en), where: areaKey(es) });
+                      t0: en._deathT0 || 0, weapon: enemyWeaponId(en), where: areaKey(es),
+                      loot: en._loot || [], name: en.name });
   }
 }
 

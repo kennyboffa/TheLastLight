@@ -428,6 +428,7 @@ function finalizeCharacter(gs) {
 
   // Apply difficulty
   gs.difficulty = cc.difficulty || 'normal';
+  gs.worldSeed  = Math.floor(Math.random() * 1e9);   // layout seed for this run
 
   Object.assign(gs.parent, {
     name:    cc.name.trim() || (cc.gender === 'father' ? 'Mark' : 'Amanda'),

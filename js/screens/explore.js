@@ -56,7 +56,9 @@ function renderFog(ctx, playerScreenX, playerScreenY, gs, isIndoor) {
   const baseIn  = CFG.FOG_RADIUS_IN  + Math.round(60  * df);
   const nightShrinkOut = Math.round(120 * nf);
   const nightShrinkIn  = Math.round(80  * nf);
-  const radius = (isIndoor ? baseIn - nightShrinkIn : baseOut - nightShrinkOut);
+  let radius = (isIndoor ? baseIn - nightShrinkIn : baseOut - nightShrinkOut);
+  // Flashlight pushes the darkness back (most useful indoors and at night)
+  if (gs.parent.lightOn) radius += isIndoor ? 95 : 40 + Math.round(110 * nf);
 
   fc.clearRect(0, 0, CFG.W, CFG.H);
   // Lighter by day so the scenery is visible; as dark as before at night
@@ -383,6 +385,7 @@ function startExploration(gs, loc) {
 
 function updateExplore(gs, dt) {
   if (!exploreState) return;
+  _tickFlashlight(gs, dt);
   if (exploreState.building) { updateBuildingInterior(gs, dt); return; }
 
   const es = exploreState;
@@ -401,7 +404,7 @@ function updateExplore(gs, dt) {
   const dpadRight = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || dpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || dpadRight;
-  const speedMult = (gs.parent.wounded ? 0.55 : 1.0) * (gs.timeScale || 1);
+  const speedMult = (gs.parent.wounded ? 0.55 : 1.0) * (gs.parent.sneaking ? 0.5 : 1) * (gs.timeScale || 1);
   if (left)       { es.velX = -CFG.PLAYER_SPEED * speedMult; es.facing = -1; }
   else if (right) { es.velX =  CFG.PLAYER_SPEED * speedMult; es.facing =  1; }
   else es.velX = 0;
@@ -424,7 +427,7 @@ function updateExplore(gs, dt) {
 
   // Enemy encounters — stealth affects detection range
   const stealth    = gs.parent.skills?.stealth || 0;
-  const alertRange = Math.max(50, 150 - stealth * 12);
+  const alertRange = Math.max(50, 150 - stealth * 12) * detectionMult(gs, false);
   const nightMult  = 1 + nightFactor(gs.time) * 0.3;
   for (const enc of es.encounters) {
     if (!enc.triggered && Math.abs(es.px - enc.wx) < alertRange * nightMult) {
@@ -514,7 +517,7 @@ function updateBuildingInterior(gs, dt) {
   const biDpadRight = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || biDpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || biDpadRight;
-  const biSpeedMult = gs.timeScale || 1;
+  const biSpeedMult = (gs.timeScale || 1) * (gs.parent.sneaking ? 0.5 : 1);
   if (left)       { bi.velX = -CFG.PLAYER_SPEED * biSpeedMult; bi.facing = -1; }
   else if (right) { bi.velX =  CFG.PLAYER_SPEED * biSpeedMult; bi.facing =  1; }
   else bi.velX = 0;
@@ -681,6 +684,8 @@ function exploreKeyPress(key, gs) {
     return;
   }
   if (key === 'h') { startHunt(gs); return; }
+  if (key === 'c') { toggleSneak(gs); return; }
+  if (key === 'l') { toggleFlashlight(gs); return; }
   if (key === 'escape') {
     if (es.building) notify('Find the exit door to leave the building.', 'info');
     else if (es.showReturnPrompt) endExploration(gs);
@@ -899,6 +904,11 @@ function exploreClick(mx, my, gs) {
             gs.parent.equipped.weapon = slot.id;
             removeFromInventory(gs.parent.inventory, slot.id, 1);
             notify(`Equipped ${def.name}.`, 'good');
+          } else if (def.type === 'light') {
+            if (gs.parent.equipped.light) addToInventory(gs.parent.inventory, gs.parent.equipped.light, 1);
+            gs.parent.equipped.light = slot.id;
+            removeFromInventory(gs.parent.inventory, slot.id, 1);
+            notify(`Equipped ${def.name}. Press L to switch it on.`, 'good');
           } else if (def.type === 'backpack') {
             if (gs.parent.backpackId) {
               addToInventory(gs.parent.inventory, gs.parent.backpackId, 1);
@@ -957,6 +967,13 @@ function exploreClick(mx, my, gs) {
     exploreKeyPress('e', gs); return;
   }
 
+  // LIGHT / SNEAK buttons
+  if (gs._exploreLightBtn && hitTest(mx, my, gs._exploreLightBtn.x, gs._exploreLightBtn.y, gs._exploreLightBtn.w, gs._exploreLightBtn.h)) {
+    toggleFlashlight(gs); return;
+  }
+  if (gs._exploreSneakBtn && hitTest(mx, my, gs._exploreSneakBtn.x, gs._exploreSneakBtn.y, gs._exploreSneakBtn.w, gs._exploreSneakBtn.h)) {
+    toggleSneak(gs); return;
+  }
   // HUNT button
   if (gs._exploreHuntBtn && hitTest(mx, my, gs._exploreHuntBtn.x, gs._exploreHuntBtn.y, gs._exploreHuntBtn.w, gs._exploreHuntBtn.h)) {
     startHunt(gs); return;
@@ -1246,7 +1263,10 @@ function drawExploreActors(ctx, gs, es, o) {
     ctx.restore();
   } else {
     const hx = px + (pc ? _hitOffset(pc.playerHitT0, pc.playerHitDir || -facing) : 0);
+    ctx.save();
+    if (gs.parent.sneaking && !pc) ctx.globalAlpha = 0.72;      // keeping to the shadows
     drawParent(ctx, hx, PLAYER_FOOT, 2, facing, o.animFrame, gs.parent.gender, o.pose, weapon);
+    ctx.restore();
   }
   if (pc) {
     drawStatBar(ctx, px - 22, PLAYER_FOOT - 52, 44, 5,
@@ -1496,13 +1516,104 @@ function drawExploreHUD(ctx, gs, es) {
   drawButton(ctx, invBtnX, invBtnY, 50, 22, 'INV', invHov, es.invOpen);
   gs._exploreInvBtn = { x: invBtnX, y: invBtnY, w: 50, h: 22 };
 
+  // Side buttons under INV: LIGHT (if a flashlight is equipped), SNEAK, HUNT
+  let sideY = 60;
+  gs._exploreLightBtn = null; gs._exploreSneakBtn = null;
+  if (!gs.inCombat) {
+    if (gs.parent.equipped.light) {
+      const on = !!gs.parent.lightOn;
+      drawButton(ctx, CFG.W - 60, sideY, 50, 22, on ? 'LIGHT ✓' : 'LIGHT', hitTest(mx, my, CFG.W - 60, sideY, 50, 22), on);
+      const mins = Math.max(0, Math.round(gs.parent.lightCharge || 0));
+      const spare = countInInventory(gs.parent.inventory, 'batteries');
+      drawText(ctx, `[L] ${mins}m +${spare}`, CFG.W - 35, sideY + 31, mins < 10 && on ? C.textWarn : C.textDim, 6, 'center');
+      gs._exploreLightBtn = { x: CFG.W - 60, y: sideY, w: 50, h: 22 };
+      sideY += 38;
+    }
+    const sn = !!gs.parent.sneaking;
+    drawButton(ctx, CFG.W - 60, sideY, 50, 22, sn ? 'SNEAK ✓' : 'SNEAK', hitTest(mx, my, CFG.W - 60, sideY, 50, 22), sn);
+    drawText(ctx, '[C]', CFG.W - 35, sideY + 31, C.textDim, 6, 'center');
+    gs._exploreSneakBtn = { x: CFG.W - 60, y: sideY, w: 50, h: 22 };
+    sideY += 38;
+  }
+
   // HUNT button (huntable areas, outdoors, not fighting)
   gs._exploreHuntBtn = null;
   if (canHuntHere(gs)) {
-    const hx = CFG.W - 60, hy = 60;
+    const hx = CFG.W - 60, hy = sideY;
     drawButton(ctx, hx, hy, 50, 22, 'HUNT', hitTest(mx, my, hx, hy, 50, 22));
     drawText(ctx, '1 hour [H]', hx + 25, hy + 31, C.textDim, 6, 'center');
     gs._exploreHuntBtn = { x: hx, y: hy, w: 50, h: 22 };
+  }
+}
+
+// ── Sneaking & flashlight ────────────────────────────────────────────────────
+
+function toggleSneak(gs) {
+  if (gs.inCombat) return;
+  gs.parent.sneaking = !gs.parent.sneaking;
+  notify(gs.parent.sneaking ? 'Sneaking: slower, harder to spot, first strike bonus.' : 'Stopped sneaking.', 'info');
+}
+
+const BATTERY_MINUTES = 90;   // game minutes of light per set of batteries
+
+function toggleFlashlight(gs) {
+  const p = gs.parent;
+  if (!p.equipped.light) { notify('No flashlight equipped.', 'warn'); return; }
+  if (p.lightOn) { p.lightOn = false; notify('Flashlight off.', 'info'); return; }
+  if ((p.lightCharge || 0) <= 0 && !_loadBatteries(p)) { notify('No batteries for the flashlight.', 'warn'); return; }
+  p.lightOn = true;
+  notify('Flashlight on.', 'info');
+}
+
+function _loadBatteries(p) {
+  if (countInInventory(p.inventory, 'batteries') < 1) return false;
+  removeFromInventory(p.inventory, 'batteries', 1);
+  p.lightCharge = (p.lightCharge || 0) + BATTERY_MINUTES;
+  return true;
+}
+
+function _tickFlashlight(gs, dt) {
+  const p = gs.parent;
+  if (!p.lightOn) return;
+  if (!p.equipped.light) { p.lightOn = false; return; }
+  p.lightCharge = (p.lightCharge || 0) - dt * CFG.MINS_PER_REAL_SEC;
+  if (p.lightCharge <= 0) {
+    p.lightCharge = 0;
+    if (_loadBatteries(p)) notify('Swapped in fresh batteries.', 'info');
+    else { p.lightOn = false; notify('The flashlight dies — out of batteries.', 'warn'); }
+  }
+}
+
+// How far away enemies notice you, relative to normal: sneaking halves it,
+// a flashlight outside at night makes you stand out
+function detectionMult(gs, indoors) {
+  let m = gs.parent.sneaking ? 0.55 : 1;
+  if (gs.parent.lightOn && !indoors && nightFactor(gs.time) > 0.5) m *= 1.35;
+  return m;
+}
+
+// Gunfire pulls in any other enemies within earshot of the fight
+function gunNoise(gs) {
+  const es = exploreState, c = gs.combat;
+  if (!es || !c) return;
+  const list = es.building ? curArea(es).encounters : es.encounters;
+  let joined = 0;
+  for (const enc of list || []) {
+    if (enc.triggered || enc.killed) continue;
+    if (Math.abs(enc.wx - c.playerWx) > 520) continue;
+    enc.triggered = true;
+    let enemies = enc._savedEnemies
+      || (enc.ids ? enc.ids.map(id => deepClone(ENEMY_TEMPLATES[id])) : buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day));
+    enc._savedEnemies = null;
+    for (const e of (enemies || []).filter(Boolean)) {
+      c.enemies.push({ ...e, isPlayer: false, index: c.enemies.length, dead: false, aiTimer: 0,
+                       worldX: e.worldX !== undefined ? e.worldX : enc.wx + (Math.random() - 0.5) * 40 });
+      joined++;
+    }
+  }
+  if (joined) {
+    combatLog(gs, 'The gunfire draws more of them!', 'danger');
+    notify('Gunshots attracted attention!', 'danger');
   }
 }
 
@@ -1616,7 +1727,11 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   const atkLabel  = isEmpty ? '⚠ EMPTY' : (tooFar ? 'Too far' : `${wd ? 'Attack' : 'Punch'} ${hitPct}%`);
   const atkHov    = hitTest(mx, my, bx, _COMBAT_BAR_Y, 80, 24);
   drawButton(ctx, bx, _COMBAT_BAR_Y, 80, 24, atkLabel, atkHov, false, isEmpty || tooFar);
-  if (wd) drawText(ctx, wd.name.slice(0,10), bx + 40, _COMBAT_BAR_Y - 2, C.textDim, 7, 'center');
+  if (wd) {
+    const cond = weaponCondition(gs.parent, wd.id);
+    const label = cond === null ? wd.name.slice(0, 10) : `${wd.name.slice(0, 8)} ${cond}/${WEAPON_DURABILITY[wd.id]}`;
+    drawText(ctx, label, bx + 40, _COMBAT_BAR_Y - 2, cond !== null && cond <= WEAPON_DURABILITY[wd.id] * 0.2 ? C.textWarn : C.textDim, 7, 'center');
+  }
   gs._combatAtk = { x: bx, y: _COMBAT_BAR_Y, w: 80, h: 24 };
   bx += 86;
 
@@ -2402,7 +2517,7 @@ function drawExploreInventory(ctx, gs, es) {
     let bx = px + 10;
     const by = ay + 16;
     const bh = 14;
-    const isEquippable = def => def.type === 'weapon' || def.type === 'backpack' || def.type === 'armor';
+    const isEquippable = def => def.type === 'weapon' || def.type === 'backpack' || def.type === 'armor' || def.type === 'light';
     const isConsumable = def => def.type === 'food' || def.type === 'drink' || def.type === 'medicine' || def.type === 'water';
     if (selDef.type === 'note') {
       const bw = 36;
@@ -2560,6 +2675,8 @@ function endExploration(gs) {
   }
 
   gs.parent.isExploring = false;
+  gs.parent.sneaking    = false;
+  gs.parent.lightOn     = false;
   gs.child.isAlone      = false;
   gs.inCombat           = false;
   gs.combat             = null;

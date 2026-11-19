@@ -288,7 +288,14 @@ function finishTask(gs, who, task) {
     }
     case 'craft': {
       const recipe = RECIPES_DB.find(r => r.id === task.recipeId);
-      if (recipe) {
+      if (recipe && recipe.special === 'repairWeapon') {
+        const w = gs.parent.equipped.weapon;
+        if (w && WEAPON_DURABILITY[w]) {
+          gs.parent.weaponWear = gs.parent.weaponWear || {};
+          gs.parent.weaponWear[w] = WEAPON_DURABILITY[w];
+          notify(`${getItemDef(w).name} repaired.`, 'good');
+        }
+      } else if (recipe) {
         const outQty = task.qty || recipe.qty || 1;
         addToInventory(gs.shelter.storage, recipe.output, outQty);
         notify(`Crafted ${outQty}x ${getItemDef(recipe.output)?.name || recipe.output}.`, 'good');
@@ -693,6 +700,12 @@ function useItem(who, inv, itemId, gs) {
   if (!def) return false;
   if (countInInventory(inv, itemId) < 1) return false;
   removeFromInventory(inv, itemId, 1);
+  // Raw meat fills you up but can make you sick — cook it at the shelter stove
+  if (itemId === 'raw_meat' && Math.random() < 0.35) {
+    who.health = clamp(who.health - 6, 1, who.maxHealth);
+    who.thirst = clamp(who.thirst + 12, 0, 100);
+    notify(`${who.name} feels sick from the raw meat. Cook it next time.`, 'warn');
+  }
   const hm = _healMult(who);
   who.hunger     = clamp(who.hunger     + (def.hunger     || 0), 0, 100);
   who.thirst     = clamp(who.thirst     + (def.thirst     || 0), 0, 100);

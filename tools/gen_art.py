@@ -1342,6 +1342,9 @@ def it_simple(kind):
         s.rect(0, 0, 7, 8, p_)
         for y in (2, 4, 6):
             s.rect(1, y, 6, y, ln)
+    elif kind == 'flashlight':
+        s = _item(14, 6); body = s.material('#3a3c40', 10); lens = s.material('#e8e0a0', 6, 0); grip = s.material('#2a2a2a', 8)
+        s.rect(0, 1, 9, 4, body); s.rect(9, 0, 12, 5, body); s.rect(13, 1, 13, 4, lens); s.rect(2, 1, 6, 4, grip)
     elif kind == 'blueprint':
         s = _item(12, 6); b = s.material('#2a4a7a', 10); ln = s.material('#a8c0e0', 6)
         s.rect(0, 0, 11, 5, b); s.ellipse(0, 0, 3, 5, s.material('#3a5a8a', 10)); s.line([(4, 1), (10, 4)], ln)
@@ -1370,7 +1373,7 @@ ITEM_ART = {
 for _k in ('bat', 'crowbar', 'knife', 'machete', 'pipe', 'pistol', 'rifle', 'shotgun', 'spear'):
     ITEM_ART[_k] = (lambda k: lambda: it_weapon(k))(_k)
 for _k in ('chemicals', 'cloth', 'electronics', 'fuel', 'metal', 'tools', 'batteries', 'book',
-           'matches', 'photograph', 'toy'):
+           'matches', 'photograph', 'toy', 'flashlight'):
     ITEM_ART[_k] = (lambda k: lambda: it_simple(k))(_k)
 # shared by whole categories (looked up by type in the game)
 for _k in ('map', 'note', 'blueprint'):

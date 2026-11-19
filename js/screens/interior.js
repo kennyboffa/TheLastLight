@@ -272,7 +272,7 @@ function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
 /** Check indoor enemies against the player; starts combat. Returns true if it did. */
 function checkIndoorEncounters(gs, area, px) {
   const stealth = gs.parent.skills?.stealth || 0;
-  const alertRange = Math.max(45, 120 - stealth * 10);
+  const alertRange = Math.max(45, 120 - stealth * 10) * detectionMult(gs, true);
   for (const enc of area.encounters) {
     if (enc.triggered || enc.killed) continue;
     if (Math.abs(px - enc.wx) > alertRange) continue;

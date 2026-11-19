@@ -131,6 +131,12 @@ function craftItem(gs, recipeId, qty, who) {
 
   const recipe = RECIPES_DB.find(r => r.id === recipeId);
   if (!recipe) return { ok: false, msg: 'Unknown recipe.' };
+  if (recipe.special === 'repairWeapon') {
+    const w = gs.parent.equipped.weapon;
+    if (!w || !WEAPON_DURABILITY[w]) return { ok: false, msg: 'Equip a melee weapon to repair.' };
+    if (weaponCondition(gs.parent, w) >= WEAPON_DURABILITY[w]) return { ok: false, msg: 'Weapon is already in good shape.' };
+    qty = 1;
+  }
   if (recipe.needsWorkshop && !getRoomUnlocked('workshop')) {
     return { ok: false, msg: 'Requires Workshop.' };
   }

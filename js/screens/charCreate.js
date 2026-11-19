@@ -458,6 +458,8 @@ function finalizeCharacter(gs) {
   addToInventory(storage, 'metal', 4);
   addToInventory(storage, 'cloth', 3);
   addToInventory(storage, 'matches', 2);
+  addToInventory(storage, 'flashlight', 1);
+  addToInventory(storage, 'batteries', 2);
 
   setScreen('shelter');
   Audio.startShelterMusic();

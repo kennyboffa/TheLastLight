@@ -27,6 +27,7 @@ function renderPackScreen(ctx, gs) {
     { label: 'Weapon', val: weapDef ? weapDef.name : 'none', x: 18 },
     { label: 'Armor',  val: armDef  ? armDef.name  : 'none', x: 190 },
     { label: 'Pack',   val: bpDef   ? bpDef.name   : 'none', x: 370 },
+    { label: 'Light',  val: eq.light ? getItemDef(eq.light).name : 'none', x: 540 },
   ];
   for (const sl of slots) {
     drawText(ctx, `${sl.label}: `, sl.x, equipY + 13, C.textDim, 7);
@@ -72,9 +73,10 @@ function renderPackScreen(ctx, gs) {
 
       if (packUI.selectedSide === 'inv') {
         // Equip option for weapons/armor/backpack
-        if (def && (def.type === 'weapon' || def.type === 'armor' || def.type === 'backpack')) {
+        if (def && (def.type === 'weapon' || def.type === 'armor' || def.type === 'backpack' || def.type === 'light')) {
           const bw = 46;
           const isEq = (def.type === 'weapon' && gs.parent.equipped.weapon === row.slot.id)
+                    || (def.type === 'light'   && gs.parent.equipped.light  === row.slot.id)
                     || (def.type === 'armor'   && gs.parent.equipped.armor  === row.slot.id)
                     || (def.type === 'backpack' && gs.parent.backpackId      === row.slot.id);
           const hov = hitTest(mx, my, bx, by, bw, bh);
@@ -172,11 +174,13 @@ function packScreenClick(mx, my, gs) {
       if (!def) { packUI.selected = null; return; }
       if (b.action === 'equip') {
         if (def.type === 'weapon')   gs.parent.equipped.weapon = slot.id;
+        else if (def.type === 'light') gs.parent.equipped.light = slot.id;
         else if (def.type === 'armor') gs.parent.equipped.armor = slot.id;
         else if (def.type === 'backpack') gs.parent.backpackId = slot.id;
         notify(`Equipped ${def.name}.`, 'good');
       } else {
         if (def.type === 'weapon'   && gs.parent.equipped.weapon    === slot.id) gs.parent.equipped.weapon = null;
+        if (def.type === 'light'    && gs.parent.equipped.light     === slot.id) gs.parent.equipped.light  = null;
         if (def.type === 'armor'    && gs.parent.equipped.armor     === slot.id) gs.parent.equipped.armor  = null;
         if (def.type === 'backpack' && gs.parent.backpackId         === slot.id) gs.parent.backpackId      = null;
         notify(`Unequipped ${def.name}.`);

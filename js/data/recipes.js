@@ -117,6 +117,8 @@ const RECIPES_DB = [
     cost:{ cloth:3 },         needsWorkshop:false, craftTime:0.25, desc:'Tear cloth into bandages. Stops bleeding.' },
   { id:'r_torch',     name:'Torch',          output:'matches',      qty:3,
     cost:{ wood:2, cloth:1 }, needsWorkshop:false, craftTime:0.25, desc:'Improvised torch / matches. Provides light.' },
+  { id:'r_repair',    name:'Repair Weapon',  output:'tools',        qty:0, special:'repairWeapon',
+    cost:{ metal:2 }, needsWorkshop:true, needsTools:true, craftTime:0.5, desc:'Restore your equipped melee weapon to full durability.' },
   { id:'r_spear',     name:'Spear',          output:'spear',        qty:1,
     cost:{ wood:3, metal:2 }, needsWorkshop:false, craftTime:0.75, desc:'A wooden shaft with a sharpened metal tip. Good reach.' },
 

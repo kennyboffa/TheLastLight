@@ -107,6 +107,8 @@ const ITEMS_DB = {
     depression:-4, desc:'A memory.', stackable:true },
   matches:       { id:'matches',       name:'Matches',        type:'misc', weight:0.05, value:5,
     desc:'For fire.', stackable:true },
+  flashlight:    { id:'flashlight',    name:'Flashlight',     type:'light', weight:0.4, value:30,
+    desc:'Lights the way indoors and at night. Uses batteries. Equip alongside any weapon; L toggles it. Easy to spot outside at night.' },
   batteries:     { id:'batteries',     name:'Batteries',      type:'misc', weight:0.1, value:10,
     desc:'AA batteries.', stackable:true },
   dog_food:      { id:'dog_food',      name:'Dog Food',       type:'misc', weight:0.8, value:5,

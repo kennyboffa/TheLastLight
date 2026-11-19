@@ -6,6 +6,33 @@ const FLEE_MIN_DIST  = 110;  // px — min distance from any enemy to attempt fl
 const COMBAT_STEP    = 40;   // px — distance per Move action
 const CFG_COMBAT_INTRO = 1.2; // s — freeze with "COMBAT" banner when a fight starts
 
+// Melee weapons wear out: number of swings before they break (repair at the workshop)
+const WEAPON_DURABILITY = { knife: 40, machete: 45, crowbar: 70, pipe: 50, bat: 35, spear: 30 };
+
+function weaponCondition(p, id) {
+  if (!WEAPON_DURABILITY[id]) return null;
+  p.weaponWear = p.weaponWear || {};
+  if (p.weaponWear[id] === undefined) p.weaponWear[id] = WEAPON_DURABILITY[id];
+  return p.weaponWear[id];
+}
+
+function _wearWeapon(gs, id) {
+  const p = gs.parent;
+  if (weaponCondition(p, id) === null) return;
+  p.weaponWear[id] -= 1;
+  const left = p.weaponWear[id];
+  const name = getItemDef(id).name;
+  if (left === Math.floor(WEAPON_DURABILITY[id] * 0.2)) notify(`${name} is badly worn — repair it at the workshop.`, 'warn');
+  if (left <= 0) {
+    combatLog(gs, `${name} breaks!`, 'danger');
+    notify(`Your ${name} broke!`, 'danger');
+    if (typeof Audio.breakWeapon === 'function') Audio.breakWeapon();
+    if (p.equipped.weapon === id) p.equipped.weapon = null;
+    if (countInInventory(p.inventory, id) > 0) removeFromInventory(p.inventory, id, 1);
+    delete p.weaponWear[id];
+  }
+}
+
 // AP per enemy turn: 2 + floor(agility / 3)
 function enemyMaxAp(enemy) {
   return 2 + Math.floor((enemy.agility || 3) / 3);
@@ -77,6 +104,7 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     // World-space positions
     playerWx: playerWx || 80,
     playerAp: 4,   // AP remaining this player turn
+    ambush: !!gs.parent.sneaking,   // snuck up on them: first strike bonus
     introTimer: CFG_COMBAT_INTRO, // brief freeze + "COMBAT" banner before anyone acts
   };
 
@@ -88,7 +116,7 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     exploreState.animFrame = 0;
   }
 
-  combatLog(gs, 'Combat started!', 'warn');
+  combatLog(gs, gs.parent.sneaking ? 'You catch them off guard! First strike bonus.' : 'Combat started!', gs.parent.sneaking ? 'good' : 'warn');
   Audio.startCombatMusic();
 }
 
@@ -146,6 +174,7 @@ function playerHitChance(gs, target) {
   hit += p.agility;
   hit -= (target.agility || 3) * 2;
   if (nightFactor(gs.time) > 0.5 && p.trait !== 'night_owl') hit -= 10;
+  if (c && c.ambush) hit += 20;                      // they haven't noticed you yet
   if (isRanged && c && target.worldX !== undefined) {
     const dist = Math.abs(c.playerWx - target.worldX);
     if (dist > 150) hit -= (dist - 150) / 10;
@@ -200,8 +229,16 @@ function playerAttack(gs, targetIdx) {
 
   c.playerAnimT0 = Date.now();   // swing / muzzle flash on the held weapon
   c.lastShotTo   = target.worldX;
+  const ambushHit = c.ambush;
+  c.ambush = false;
+  if (weapDef && !isRanged) _wearWeapon(gs, weapDef.id);
+  // Gunfire is loud: nearby enemies come running, and the AI hears it too
+  if (isRanged) {
+    gs.suspicion = clamp(gs.suspicion + 1, 0, CFG.SUSPICION_MAX);
+    if (typeof gunNoise === 'function') gunNoise(gs);
+  }
   if (chance(hit)) {
-    const raw    = randInt(dmgMin, dmgMax);
+    const raw    = Math.round(randInt(dmgMin, dmgMax) * (ambushHit ? 1.5 : 1));
     // armor absorbs half its value, so light weapons still matter against armored targets
     const damage = Math.max(1, raw - Math.floor((target.armor || 0) / 2));
     target.hp   -= damage;
@@ -304,6 +341,7 @@ function enemyTurn(gs) {
   const c = gs.combat;
   if (!c || c.phase !== 'action') return;
 
+  c.ambush = false;
   let attackOrder = 0;   // stagger attack animations so each one is visible
   for (const enemy of c.enemies) {
     if (enemy.dead) continue;

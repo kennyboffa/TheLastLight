@@ -22,8 +22,8 @@ const _CHILD_SPRITE_FOOT_FRAC = 0.91;  // Lily sprites (her frames have feet low
 const ART_GRAIN = 9;
 const ART_SPECKLE = 0.035;   // share of pixels darkened a little, like the generated art
 
-function _grainify(img, name) {
-  if (!ART_GRAIN) return img;
+function _grainify(img, name, saturation) {
+  if (!ART_GRAIN && saturation === undefined) return img;
   const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -39,6 +39,10 @@ function _grainify(img, name) {
   const px = data.data;
   for (let i = 0; i < px.length; i += 4) {
     if (px[i + 3] === 0) continue;
+    if (saturation !== undefined) {   // baked-in desaturation (cheaper than a canvas filter every frame)
+      const l = 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
+      px[i] = l + (px[i] - l) * saturation; px[i + 1] = l + (px[i + 1] - l) * saturation; px[i + 2] = l + (px[i + 2] - l) * saturation;
+    }
     const n = (rnd() + rnd() + rnd() - 1.5) * 2 * ART_GRAIN;   // roughly normal, sd ≈ ART_GRAIN
     const k = rnd() < ART_SPECKLE ? 0.72 : 1;
     px[i]     = Math.max(0, Math.min(255, (px[i]     + n) * k));
@@ -132,6 +136,10 @@ const HAND_DRAWN = new Set(['tree_1', 'tree_2', 'tree_3', 'large_tree', 'dead_tr
   'grass_1', 'grass_2', 'bones_1', 'bones_2', 'trash', 'crate', 'box', 'chest', 'locker',
   'survivor_1', 'survivor_2']);
 
+// Trees are shown 40% desaturated; baked in at load instead of a per-draw canvas filter
+const TREE_KEYS = new Set(['tree_1', 'tree_2', 'tree_3', 'large_tree', 'dead_tree']);
+const TREE_SATURATION = 0.6;
+
 const _envSpr = {};
 (function() {
   const files = {
@@ -171,7 +179,9 @@ const _envSpr = {};
   }
   for (const [key, file] of Object.entries(files)) {
     const img = new Image();
-    img.onload = function() { _envSpr[key] = HAND_DRAWN.has(key) ? _grainify(img, file) : img; };
+    img.onload = function() {
+      _envSpr[key] = HAND_DRAWN.has(key) ? _grainify(img, file, TREE_KEYS.has(key) ? TREE_SATURATION : undefined) : img;
+    };
     img.src = 'Assets/' + file;
   }
 })();
@@ -484,8 +494,9 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose, weapon) {
       if (facing < 0) ctx.scale(-1, 1);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(_sheet.img, sx, sy, dw, dh, -Math.round(dw / 2), yOff, dw, dh);
-      // Held weapon (not while sleeping / facing away), then redraw the hand over the grip
-      if (weapon && weapon.id && pose !== 'back') {
+      // Held weapon only when standing still (hidden while walking/running or facing away),
+      // then redraw the hand over the grip
+      if (weapon && weapon.id && pose !== 'back' && pose !== 'walk' && pose !== 'run') {
         const lx = -Math.round(dw / 2) + hand[0], ly = yOff + hand[1];
         if (_drawWeaponAt(ctx, weapon.id, lx, ly, weapon.t0)) {
           ctx.drawImage(_sheet.img, sx + hand[0] - 1, sy + hand[1] - 2, 3, 3, lx - 1, ly - 2, 3, 3);

@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.36';
+const GAME_VERSION = 'v0.37';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -121,7 +121,7 @@ canvas.addEventListener('mouseup', (e) => {
 let _mobileHeld = { left: false, right: false, action: false };
 
 function _isMobileBtn(x, y) {
-  if (GS.screen !== 'explore') return false;
+  if (GS.screen !== 'explore' || !touchControlsOn(GS)) return false;
   const MB = _MOBILE_BTNS;
   return hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h)
       || hitTest(x, y, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h)
@@ -154,7 +154,8 @@ canvas.addEventListener('touchstart', (e) => {
   for (const t of e.changedTouches) {
     const x = (t.clientX - rect.left) / SCALE;
     const y = (t.clientY - rect.top)  / SCALE;
-    if (GS.screen === 'explore') {
+    _touchUsed = true;   // show on-screen controls from now on
+    if (GS.screen === 'explore' && touchControlsOn(GS)) {
       const MB = _MOBILE_BTNS;
       // Store touch identifier so touchend can release regardless of final finger position
       if (hitTest(x, y, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h))   { GS.keys['a'] = true; _mobileHeld.left   = t.identifier; continue; }

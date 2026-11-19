@@ -133,6 +133,26 @@ function playerEndTurn(gs) {
   c.pendingAction = 'enemy'; c.pendingTimer = 0.5;
 }
 
+// Player's chance to hit `target` with the equipped weapon (%, 10–90).
+// Weapon accuracy and skill help; the target's agility (dodging), darkness and
+// long gun range hurt.
+function playerHitChance(gs, target) {
+  const c = gs.combat, p = gs.parent;
+  const weapDef  = p.equipped.weapon ? getItemDef(p.equipped.weapon) : null;
+  const isRanged = weapDef && weapDef.weaponType === 'firearm';
+  let hit;
+  if (weapDef) hit = weapDef.accuracy * 0.9 + (isRanged ? p.skills.firearms : p.skills.melee) * 4;
+  else         hit = 60 + p.skills.melee * 4;
+  hit += p.agility;
+  hit -= (target.agility || 3) * 2;
+  if (nightFactor(gs.time) > 0.5 && p.trait !== 'night_owl') hit -= 10;
+  if (isRanged && c && target.worldX !== undefined) {
+    const dist = Math.abs(c.playerWx - target.worldX);
+    if (dist > 150) hit -= (dist - 150) / 10;
+  }
+  return Math.round(clamp(hit, 10, 90));
+}
+
 function playerAttack(gs, targetIdx) {
   const c  = gs.combat;
   const p  = gs.parent;
@@ -154,19 +174,19 @@ function playerAttack(gs, targetIdx) {
   let dmgMin = 4, dmgMax = 9, hit = c.player.accuracy;
 
   if (weapDef) {
-    dmgMin = weapDef.damage[0];
-    dmgMax = weapDef.damage[1];
-    hit    = weapDef.accuracy + (isRanged
-               ? p.skills.firearms * 3 : p.skills.melee * 3);
+    // melee weapons hit harder with strength (+1 per 2 STR above 4)
+    const strBonus = isRanged ? 0 : Math.max(0, Math.floor((p.strength - 4) / 2));
+    dmgMin = weapDef.damage[0] + strBonus;
+    dmgMax = weapDef.damage[1] + strBonus;
     if (isRanged) {
       if (c.player.magazine <= 0) { combatLog(gs, 'Need to reload!', 'warn'); return; }
       c.player.magazine--;
       p.loaded[weapDef.ammoType] = c.player.magazine;
     }
   } else {
-    dmgMin = 2 + Math.floor(p.strength / 2);
-    dmgMax = 6 + p.strength;
-    hit    = CFG.BASE_HIT_CHANCE + p.skills.melee * 4;
+    // fists: weaker than any weapon
+    dmgMin = 1 + Math.floor(p.strength / 3);
+    dmgMax = 2 + Math.floor(p.strength / 2);
   }
 
   if (p.trait === 'night_owl') {
@@ -176,14 +196,14 @@ function playerAttack(gs, targetIdx) {
     dmgMax = Math.max(1, Math.round(dmgMax * mult));
   }
 
-  hit += p.agility * 1.5;
-  hit  = clamp(hit, 10, 96);
+  hit = playerHitChance(gs, target);
 
   c.playerAnimT0 = Date.now();   // swing / muzzle flash on the held weapon
   c.lastShotTo   = target.worldX;
   if (chance(hit)) {
     const raw    = randInt(dmgMin, dmgMax);
-    const damage = Math.max(1, raw - (target.armor || 0));
+    // armor absorbs half its value, so light weapons still matter against armored targets
+    const damage = Math.max(1, raw - Math.floor((target.armor || 0) / 2));
     target.hp   -= damage;
     _fx(gs, 'hit', target, damage, c.playerWx, isRanged ? 60 : 200);
     combatLog(gs, `${p.name} hits ${target.name} for ${damage} dmg.`, 'good');
@@ -298,7 +318,7 @@ function enemyTurn(gs) {
 
       if (canAttack && ap >= 2) {
         ap -= 2;
-        const hit = clamp(enemy.accuracy || 60, 10, 90);
+        const hit = clamp((enemy.accuracy || 60) - (gs.parent.agility || 5), 10, 90);
         const delay = 300 * attackOrder++;
         enemy._atkT0  = Date.now() + delay;
         enemy._shotTo = c.playerWx;

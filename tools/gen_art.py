@@ -1568,21 +1568,31 @@ def exit_door():
 
 
 def stairs(up=True):
-    s = Sprite(48, 60)
-    step = s.material('#4a4440', 12, 0.08); edge = s.material('#6a625a', 10)
-    rail = s.material('#2e2a26', 8); dark = s.material('#141210', 6)
-    for i in range(6):
-        ox = i * 7 if up else (5 - i) * 7
-        y = 59 - (i + 1) * 9
-        s.rect(ox, y, ox + 47 - i * 3 - (0 if up else 0), 59, step)
-        s.rect(ox, y, ox + 47 - i * 3, y + 1, edge)
-    # handrail
-    if up:
-        s.line([(2, 44), (40, 2)], rail, width=2); s.rect(2, 44, 3, 58, rail); s.rect(39, 2, 40, 10, rail)
-    else:
-        s.line([(8, 2), (46, 44)], rail, width=2); s.rect(45, 44, 46, 58, rail); s.rect(7, 2, 8, 10, rail)
+    # Side view: bottom step sits on the walking floor (where feet are), the top
+    # flight disappears into the back wall. Mirrored for "down".
+    w, h, n = 62, 82, 8
+    s = Sprite(w, h)
+    tread = s.material('#5a524a', 12, 0.08); riser = s.material('#3e3832', 12, 0.08)
+    edge = s.material('#7a7068', 10); side = s.material('#2c2824', 10, 0.06)
+    rail = s.material('#24201c', 8); dark = s.material('#100e0c', 6)
+    step_w, step_h = 7, 9
+    for i in range(n):
+        x0 = i * step_w
+        y_top = h - 1 - (i + 1) * step_h
+        s.rect(x0, y_top, w - 1, h - 1, side)              # solid mass under the flight
+        s.rect(x0, y_top, x0 + step_w + 1, y_top + 2, tread)
+        s.rect(x0, y_top + 3, x0 + 1, y_top + step_h, riser)
+        s.rect(x0, y_top, x0 + step_w + 1, y_top, edge)
+    s.rect(w - 4, 0, w - 1, h - 1, dark)                   # where it meets the wall
+    # handrail with posts
+    s.line([(3, h - 22), (w - 6, 4)], rail, width=2)
+    for i in range(0, n, 2):
+        x = i * step_w + 3
+        y_top = h - 1 - (i + 1) * step_h
+        s.rect(x, y_top - 18 + 2, x, y_top, rail)
     s.shade_gradient('y', 0.25)
-    return s.finish(outline=0.35)
+    img = s.finish(outline=0.35)
+    return img if up else img.transpose(Image.FLIP_LEFT_RIGHT)
 
 
 if __name__ == '__main__':

@@ -8,16 +8,27 @@ const BUILDING_W  = 900;   // interior width of each building floor
 // World zoom — game world is rendered at this scale; HUD/buttons are drawn
 // AFTER ctx.restore() so they stay at 1× and never get clipped or scrolled.
 const EXPLORE_VIEW_ZOOM = 1.15;
+// Visible world width at that zoom — the camera must clamp to this, not CFG.W,
+// or the last ~96px of every map/floor can never scroll into view.
+const EXPLORE_VIEW_W = CFG.W / EXPLORE_VIEW_ZOOM;
 
 let exploreState = null;
 let fogCanvas    = null;   // offscreen canvas for fog of war
 
-// ── Mobile D-pad button rects ─────────────────────────────────────────────────
+// ── Touch controls ────────────────────────────────────────────────────────────
+// Bottom corners, below the walking area. Only shown on touch devices
+// (keyboard players use A/D/E); the first screen tap turns them on.
 const _MOBILE_BTNS = {
-  left:   { x: 8,   y: 288, w: 42, h: 30 },
-  right:  { x: 56,  y: 288, w: 42, h: 30 },
-  action: { x: 530, y: 288, w: 46, h: 30 },
+  left:   { x: 6,   y: CFG.H - 50, w: 50, h: 42 },
+  right:  { x: 60,  y: CFG.H - 50, w: 50, h: 42 },
+  action: { x: CFG.W - 62, y: CFG.H - 50, w: 56, h: 42 },
 };
+let _touchUsed = false;
+function touchControlsOn(gs) {
+  if (!_touchUsed && !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) return false;
+  const es = exploreState;
+  return !(gs.inCombat && gs.combat) && !(es && es.invOpen);
+}
 
 // ── Fog of war ────────────────────────────────────────────────────────────────
 
@@ -355,11 +366,16 @@ function genBuildingFloor(floorIdx, totalFloors, bdef) {
   const cCount  = 1 + randInt(0, 2);
   const containers = [];
   const usedX = [];
+  // Keep containers clear of the exit door and stairs (centres of those sprites)
+  const reserved = [];
+  if (floorIdx === 0) reserved.push(64);
+  if (floorIdx > 0) reserved.push(134);
+  if (floorIdx < totalFloors - 1) reserved.push(BUILDING_W - 86);
   for (let i = 0; i < cCount; i++) {
     let cx;
     let attempts = 0;
     do { cx = 90 + randInt(0, BUILDING_W - 180); attempts++; }
-    while (usedX.some(p => Math.abs(p - cx) < 70) && attempts < 20);
+    while ((usedX.some(p => Math.abs(p - cx) < 70) || reserved.some(r => Math.abs(r - cx) < 60)) && attempts < 30);
     usedX.push(cx);
     const typesByTheme = {
       hospital: ['cabinet', 'locker', 'box'],
@@ -400,15 +416,15 @@ function updateExplore(gs, dt) {
 
   // While in combat: keep scroll locked on combat player position, skip exploration
   if (gs.inCombat && gs.combat) {
-    const targetScroll = gs.combat.playerWx - CFG.W * 0.35;
-    es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.12), 0, CFG.WORLD_W - CFG.W);
+    const targetScroll = gs.combat.playerWx - EXPLORE_VIEW_W * 0.4;
+    es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.12), 0, CFG.WORLD_W - EXPLORE_VIEW_W);
     es.px = gs.combat.playerWx;
     return;
   }
 
   // Movement (keyboard + mobile D-pad)
-  const dpadLeft  = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
-  const dpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
+  const dpadLeft  = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
+  const dpadRight = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || dpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || dpadRight;
   const speedMult = (gs.parent.wounded ? 0.55 : 1.0) * (gs.timeScale || 1);
@@ -419,8 +435,8 @@ function updateExplore(gs, dt) {
   // velX is tuned in px per 60fps frame; scale by real time so slow frames don't slow walking
   es.px = clamp(es.px + es.velX * dt * 60, 10, CFG.WORLD_W - 10);
 
-  const targetScroll = es.px - CFG.W * 0.35;
-  es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.15), 0, CFG.WORLD_W - CFG.W);
+  const targetScroll = es.px - EXPLORE_VIEW_W * 0.4;
+  es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.15), 0, CFG.WORLD_W - EXPLORE_VIEW_W);
 
   es.animTimer++;
   if (Math.abs(es.velX) > 0.1 && es.animTimer % 12 === 0) es.animFrame++;
@@ -520,8 +536,8 @@ function updateBuildingInterior(gs, dt) {
   const fl  = bld.floors[bi.floorIdx];
   const p   = gs.parent;
 
-  const biDpadLeft  = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
-  const biDpadRight = gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
+  const biDpadLeft  = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.left.x,  _MOBILE_BTNS.left.y,  _MOBILE_BTNS.left.w,  _MOBILE_BTNS.left.h);
+  const biDpadRight = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || biDpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || biDpadRight;
   const biSpeedMult = gs.timeScale || 1;
@@ -531,8 +547,8 @@ function updateBuildingInterior(gs, dt) {
 
   bi.px = clamp(bi.px + bi.velX * dt * 60, 10, fl.width - 10);
 
-  const targetScroll = bi.px - CFG.W * 0.35;
-  bi.scrollX = clamp(lerp(bi.scrollX, targetScroll, 0.15), 0, Math.max(0, fl.width - CFG.W));
+  const targetScroll = bi.px - EXPLORE_VIEW_W * 0.45;
+  bi.scrollX = clamp(lerp(bi.scrollX, targetScroll, 0.15), 0, Math.max(0, fl.width - EXPLORE_VIEW_W));
 
   bi.animTimer = (bi.animTimer || 0) + 1;
   if (Math.abs(bi.velX) > 0.1 && bi.animTimer % 12 === 0) bi.animFrame = ((bi.animFrame || 0) + 1);
@@ -930,10 +946,11 @@ function exploreClick(mx, my, gs) {
   }
 
   // D-pad left/right — ignore clicks (movement handled by mouse.down in update)
-  if (hitTest(mx, my, _MOBILE_BTNS.left.x, _MOBILE_BTNS.left.y, _MOBILE_BTNS.left.w, _MOBILE_BTNS.left.h)) return;
-  if (hitTest(mx, my, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h)) return;
+  const _tc = touchControlsOn(gs);
+  if (_tc && hitTest(mx, my, _MOBILE_BTNS.left.x, _MOBILE_BTNS.left.y, _MOBILE_BTNS.left.w, _MOBILE_BTNS.left.h)) return;
+  if (_tc && hitTest(mx, my, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h)) return;
   // Action button
-  if (hitTest(mx, my, _MOBILE_BTNS.action.x, _MOBILE_BTNS.action.y, _MOBILE_BTNS.action.w, _MOBILE_BTNS.action.h)) {
+  if (_tc && hitTest(mx, my, _MOBILE_BTNS.action.x, _MOBILE_BTNS.action.y, _MOBILE_BTNS.action.w, _MOBILE_BTNS.action.h)) {
     exploreKeyPress('e', gs); return;
   }
 
@@ -944,8 +961,8 @@ function exploreClick(mx, my, gs) {
 
   // Return Home button (bottom-left) — only at area edges and outside buildings
   if (es.showReturnPrompt && !es.building) {
-    const _retBtnY = CFG.H - 30;
-    if (hitTest(mx, my, 6, _retBtnY, 96, 20)) {
+    const _rb = _returnBtnRect(gs);
+    if (hitTest(mx, my, _rb.x, _rb.y, _rb.w, _rb.h)) {
       endExploration(gs);
       return;
     }
@@ -1034,23 +1051,24 @@ function renderOutdoor(ctx, gs, es) {
     fillRect(ctx, zone.x, 0, zone.w, GROUND_Y, zone.bgColor || C.bg, 0.18);
   }
 
-  // Trees for nature/forest zones — desaturated 40%
-  ctx.filter = 'saturate(0.6)';
+  // Only draw what's on screen (plus a margin for wide sprites)
+  const _viewL = es.scrollX - 140, _viewR = es.scrollX + CFG.W / vz + 140;
+  const _onScreen = (x) => x > _viewL && x < _viewR;
+
+  // Trees for nature/forest zones (desaturation is baked into the sprites)
   for (const zone of loc.zones) {
     const isNature = zone.lootTable && zone.lootTable.startsWith('nature');
     if (isNature) {
       for (let tx = zone.x + 30; tx < zone.x + zone.w - 20; tx += 64) {
-        drawExploreTree(ctx, tx, GROUND_Y);
+        if (_onScreen(tx)) drawExploreTree(ctx, tx, GROUND_Y);
       }
     }
   }
-  ctx.filter = 'none';
 
   // Foliage / environment dressing (pre-generated positions)
   if (es.foliage) {
     for (const f of es.foliage) {
-      const _isTree = f.type === 'tall_tree' || f.type === 'dead_tree';
-      if (_isTree) ctx.filter = 'saturate(0.6)';
+      if (!_onScreen(f.wx)) continue;
       switch (f.type) {
         case 'bush':       drawExploreBush(ctx, f.wx, GROUND_Y);       break;
         case 'wide_bush':  drawExploreWideBush(ctx, f.wx, GROUND_Y);   break;
@@ -1060,19 +1078,19 @@ function renderOutdoor(ctx, gs, es) {
         case 'car_wreck':  drawExploreCarWreck(ctx, f.wx, GROUND_Y);   break;
         case 'debris':     drawExploreDebrisPile(ctx, f.wx, GROUND_Y); break;
       }
-      if (_isTree) ctx.filter = 'none';
     }
   }
 
   // Bones / skeleton piles
   if (es.bonesPiles) {
     for (const b of es.bonesPiles) {
-      drawExploreBones(ctx, b.wx, GROUND_Y);
+      if (_onScreen(b.wx)) drawExploreBones(ctx, b.wx, GROUND_Y);
     }
   }
 
   // Buildings / tents (pre-generated data — no randInt here)
   for (const bld of es.buildings) {
+    if (bld.bx + bld.bw < _viewL || bld.bx > _viewR) continue;
     if (bld.isTent) {
       drawExploreTent(ctx, bld.bx + bld.bw / 2, GROUND_Y, bld.bw, bld.bh, bld.label);
       if (Math.abs(es.px - (bld.bx + bld.bw / 2)) < 30) {
@@ -1296,13 +1314,13 @@ function renderBuildingInterior(ctx, gs, es) {
   if (fl.stairsUpX !== null) {
     drawBuildingStairs(ctx, fl.stairsUpX, GROUND_Y, 'up');
     if (Math.abs(bi.px - fl.stairsUpX) < 30) {
-      drawText(ctx, '[E] Up', fl.stairsUpX + 12, GROUND_Y - 74, C.textBright, 7, 'center');
+      drawText(ctx, '[E] Up', fl.stairsUpX + 12, GROUND_Y - 86, C.textBright, 7, 'center');
     }
   }
   if (fl.stairsDownX !== null) {
     drawBuildingStairs(ctx, fl.stairsDownX, GROUND_Y, 'down');
     if (Math.abs(bi.px - fl.stairsDownX) < 30) {
-      drawText(ctx, '[E] Down', fl.stairsDownX + 12, GROUND_Y - 74, C.textBright, 7, 'center');
+      drawText(ctx, '[E] Down', fl.stairsDownX + 12, GROUND_Y - 86, C.textBright, 7, 'center');
     }
   }
 
@@ -1419,7 +1437,8 @@ function drawExploreHUD(ctx, gs, es) {
     const wt    = calcWeight(gs.parent.inventory).toFixed(1);
     const maxWt = parentMaxCarry().toFixed(1);
     const wtCol = parseFloat(wt) > parseFloat(maxWt) * 0.9 ? C.textWarn : C.textDim;
-    drawText(ctx, `Carry: ${wt}/${maxWt}kg`, 12, CFG.H - 36, wtCol, 9);
+    // sits right of the D-pad when touch controls are shown
+    drawText(ctx, `Carry: ${wt}/${maxWt}kg`, touchControlsOn(gs) ? 118 : 12, CFG.H - 36, wtCol, 9);
   }
 
   // Night run warning
@@ -1437,16 +1456,18 @@ function drawExploreHUD(ctx, gs, es) {
 
   // Return Home button — only visible at the area edges, not inside a building
   if (es.showReturnPrompt && !es.building && !gs.inCombat) {
-    const retBtnY = CFG.H - 34;
-    drawButton(ctx, 6, retBtnY, 112, 26, 'Return Home', hitTest(mx, my, 6, retBtnY, 112, 26));
+    const rb = _returnBtnRect(gs);
+    drawButton(ctx, rb.x, rb.y, rb.w, rb.h, 'Return Home', hitTest(mx, my, rb.x, rb.y, rb.w, rb.h));
   }
 
   // ── Combat overlay HUD (replaces D-pad when in combat) ───────────────────────
   if (gs.inCombat && gs.combat) {
     _drawExploreCombatHUD(ctx, gs, mx, my);
-  } else {
-    // Mobile D-pad (only shown when not in combat)
+  } else if (touchControlsOn(gs)) {
+    // Touch D-pad + action button (touch devices only)
     const MB = _MOBILE_BTNS;
+    ctx.save();
+    ctx.globalAlpha = 0.7;
     const leftHov  = hitTest(mx, my, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h);
     const rightHov = hitTest(mx, my, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h);
     const actHov   = hitTest(mx, my, MB.action.x, MB.action.y, MB.action.w, MB.action.h);
@@ -1455,6 +1476,7 @@ function drawExploreHUD(ctx, gs, es) {
     drawButton(ctx, MB.left.x,   MB.left.y,   MB.left.w,   MB.left.h,   '◀', leftHov,  isLeft);
     drawButton(ctx, MB.right.x,  MB.right.y,  MB.right.w,  MB.right.h,  '▶', rightHov, isRight);
     drawButton(ctx, MB.action.x, MB.action.y, MB.action.w, MB.action.h, '[E]', actHov);
+    ctx.restore();
   }
 
   // INV button (top-right, below clock panel)
@@ -1529,12 +1551,13 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   const tgt       = alive[c.targetIdx] || alive[0];
   const meleeDist = (gs.inCombat && tgt) ? Math.abs(c.playerWx - tgt.worldX) : 0;
   const tooFar    = !isFirearm && meleeDist > MELEE_RANGE;
-  const atkLabel  = isEmpty ? '⚠ EMPTY' : (tooFar ? 'Too far' : (wd ? 'Attack' : 'Punch'));
-  const atkHov    = hitTest(mx, my, bx, _COMBAT_BAR_Y, 66, 24);
-  drawButton(ctx, bx, _COMBAT_BAR_Y, 66, 24, atkLabel, atkHov, false, isEmpty || tooFar);
-  if (wd) drawText(ctx, wd.name.slice(0,8), bx + 33, _COMBAT_BAR_Y - 2, C.textDim, 7, 'center');
-  gs._combatAtk = { x: bx, y: _COMBAT_BAR_Y, w: 66, h: 24 };
-  bx += 72;
+  const hitPct    = tgt ? playerHitChance(gs, tgt) : 0;
+  const atkLabel  = isEmpty ? '⚠ EMPTY' : (tooFar ? 'Too far' : `${wd ? 'Attack' : 'Punch'} ${hitPct}%`);
+  const atkHov    = hitTest(mx, my, bx, _COMBAT_BAR_Y, 80, 24);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 80, 24, atkLabel, atkHov, false, isEmpty || tooFar);
+  if (wd) drawText(ctx, wd.name.slice(0,10), bx + 40, _COMBAT_BAR_Y - 2, C.textDim, 7, 'center');
+  gs._combatAtk = { x: bx, y: _COMBAT_BAR_Y, w: 80, h: 24 };
+  bx += 86;
 
   // Reload (firearm only)
   if (isFirearm) {
@@ -1573,6 +1596,12 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
 }
 
 // ── In-world combat click handler ────────────────────────────────────────────
+
+// Return Home button: bottom-left, or left of the [E] button when touch controls are shown
+function _returnBtnRect(gs) {
+  return touchControlsOn(gs) ? { x: CFG.W - 186, y: CFG.H - 34, w: 112, h: 26 }
+                             : { x: 6, y: CFG.H - 34, w: 112, h: 26 };
+}
 
 function _handleExploreCombatClick(mx, my, gs) {
   const c = gs.combat;
@@ -2400,8 +2429,9 @@ function drawBuildingInteriorDecor(ctx, theme, floorW, groundY) {
 }
 
 function drawBuildingStairs(ctx, sx, groundY, dir) {
-  if (drawEnvSprite(ctx, dir === 'up' ? 'f_stairs_up' : 'f_stairs_down', sx + 24, groundY)) {
-    drawText(ctx, dir === 'up' ? '▲ UP' : '▼ DOWN', sx + 24, groundY - 62, '#8a7aaa', 7, 'center');
+  // Bottom step on the walking floor (feet stand ~10px in front of the wall line)
+  if (drawEnvSprite(ctx, dir === 'up' ? 'f_stairs_up' : 'f_stairs_down', sx + 24, groundY + 10)) {
+    drawText(ctx, dir === 'up' ? '▲ UP' : '▼ DOWN', sx + 24, groundY - 76, '#8a7aaa', 7, 'center');
     return;
   }
   const col = '#30283c';

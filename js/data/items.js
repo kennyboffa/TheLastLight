@@ -48,7 +48,7 @@ const ITEMS_DB = {
 
   // ── MELEE WEAPONS ─────────────────────────────────────────────────────────
   knife:         { id:'knife',         name:'Hunting Knife',  type:'weapon', weaponType:'melee',
-    weight:0.3, value:25, damage:[1,3],  accuracy:90, apCost:2, desc:'Sharp survival knife.' },
+    weight:0.3, value:25, damage:[2,4],  accuracy:90, apCost:2, desc:'Sharp survival knife.' },
   machete:       { id:'machete',       name:'Machete',        type:'weapon', weaponType:'melee',
     weight:0.6, value:38, damage:[2,5],  accuracy:80, apCost:3, desc:'Heavy blade, good reach.' },
   crowbar:       { id:'crowbar',       name:'Crowbar',        type:'weapon', weaponType:'melee',

@@ -103,7 +103,8 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     // World-space positions
     playerWx: playerWx || 80,
     playerAp: 4,   // AP remaining this player turn
-    ambush: !!gs.parent.sneaking,   // snuck up on them: first strike bonus
+    ambush: false,      // set below: snuck up on them (first strike bonus)
+    surprised: false,   // set below: they caught you sneaking badly (they go first, +2 dmg)
     // Companion stands beside you, on the side away from the enemies
     compWx: (playerWx || 80) + (((encounterWx || playerWx + 200) >= (playerWx || 80)) ? -24 : 24),
     compDown: false, compHealed: false,
@@ -118,8 +119,50 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     exploreState.animFrame = 0;
   }
 
-  combatLog(gs, gs.parent.sneaking ? 'You catch them off guard! First strike bonus.' : 'Combat started!', gs.parent.sneaking ? 'good' : 'warn');
+  _rollCombatOpening(gs, enemyCombatants);
   Audio.startCombatMusic();
+}
+
+// Who acts first. Sneaking is a stealth check: a good sneak ambushes (bonus to
+// the first hit that grows with the skill); a clumsy one can be caught by
+// surprise (enemies act first and hit 2 harder that round). Otherwise the
+// side with the highest agility starts.
+function _rollCombatOpening(gs, enemies) {
+  const c = gs.combat, p = gs.parent;
+  const stealth = (p.skills && p.skills.stealth) || 1;
+  if (p.sneaking) {
+    const sneakOk = clamp(25 + stealth * 12 + (p.agility || 5) * 2 - (gs.difficulty === 'hard' ? 10 : 0), 10, 95);
+    if (chance(sneakOk)) {
+      c.ambush = true;
+      c.ambushBonus = 10 + Math.min(30, stealth * 4);
+    } else if (chance(clamp(45 - stealth * 8, 0, 40))) {
+      c.surprised = true;
+    }
+  }
+  const pAgi = p.agility || 5;
+  const fastest = enemies.reduce((a, e) => ((e.agility || 3) > (a.agility || 3) ? e : a), enemies[0] || {});
+  const enemyAgi = fastest.agility || 3;
+  const playerFirst = c.ambush || (!c.surprised && pAgi >= enemyAgi);
+  c.firstTurn = playerFirst ? 'player' : 'enemy';
+  if (c.ambush) {
+    combatLog(gs, `You catch them off guard! First strike +${c.ambushBonus}% to hit.`, 'good');
+    c.openerText = 'AMBUSH';
+  } else if (c.surprised) {
+    combatLog(gs, 'They heard you coming. Caught by surprise!', 'danger');
+    c.openerText = 'CAUGHT BY SURPRISE';
+  } else if (!playerFirst) {
+    combatLog(gs, `${fastest.name || 'They'} ${enemies.length > 1 ? 'are' : 'is'} quicker and acts first.`, 'warn');
+    c.openerText = 'ENEMY TURN';
+  } else {
+    combatLog(gs, p.sneaking ? 'Spotted. You are quicker, though.' : 'Combat started! You are quicker.', 'warn');
+    c.openerText = 'YOUR TURN';
+  }
+  if (!playerFirst) {
+    // enemies move right after the "COMBAT" freeze
+    c.turn = 'enemy';
+    c.pendingAction = 'enemy';
+    c.pendingTimer = 0.35;
+  }
 }
 
 // Visual effects hook (blood, sparks, damage numbers, deaths) — implemented
@@ -176,7 +219,7 @@ function playerHitChance(gs, target) {
   hit += p.agility;
   hit -= (target.agility || 3) * 2;
   if (nightFactor(gs.time) > 0.5 && p.trait !== 'night_owl') hit -= 10;
-  if (c && c.ambush) hit += 20;                      // they haven't noticed you yet
+  if (c && c.ambush) hit += c.ambushBonus || 20;     // they haven't noticed you yet (better sneak, bigger bonus)
   if (isRanged && c && target.worldX !== undefined) {
     const dist = Math.abs(c.playerWx - target.worldX);
     if (dist > 150) hit -= (dist - 150) / 10;
@@ -377,7 +420,7 @@ function enemyTurn(gs) {
           break;
         }
         if (chance(hit)) {
-          const dmg   = randInt(enemy.damage[0], enemy.damage[1]);
+          const dmg   = randInt(enemy.damage[0], enemy.damage[1]) + (c.surprised ? 2 : 0);
           const { dealt, blocked } = applyArmor(gs.parent, dmg, !!enemy.isRanged);
           c.player.hp -= dealt;
           _fx(gs, 'hit', 'player', dealt, enemy.worldX, impact);
@@ -463,6 +506,7 @@ function enemyTurn(gs) {
     }
   }
 
+  c.surprised = false;   // the surprise only lasts their opening round
   // Reset player AP for next turn; input waits until the attack animations finish
   c.playerAp = c.player.maxAp;
   c.busyUntil = attackOrder ? Date.now() + 300 * (attackOrder - 1) + 550 : 0;
@@ -499,7 +543,7 @@ function collectLoot(gs, enemy) {
   enemy._loot = [];
   if (!enemy.drops) return;
   for (const [id, min, max] of enemy.drops) {
-    const qty = randInt(min, max);
+    const qty = thinLoot(randInt(min, max));
     if (qty > 0) enemy._loot.push({ id, qty });
   }
 }

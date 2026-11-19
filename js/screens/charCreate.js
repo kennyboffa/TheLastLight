@@ -53,9 +53,9 @@ const SKILL_DESCS = {
 };
 
 const DIFFICULTIES = {
-  easy:   { label: 'Easy',   desc: 'Slower stat decay. Less suspicion build-up. Recommended for new players.',  decayMult: 0.7, suspMult: 0.6, color: '#3aaa50' },
+  easy:   { label: 'Easy',   desc: 'Slower stat decay. Less suspicion build-up. More loot. Recommended for new players.',  decayMult: 0.7, suspMult: 0.6, color: '#3aaa50' },
   normal: { label: 'Normal', desc: 'Balanced challenge. The world is hard but fair.',                           decayMult: 1.0, suspMult: 1.0, color: '#c4c4b0' },
-  hard:   { label: 'Hard',   desc: 'Faster hunger and thirst. The AI is more alert. Every decision counts.',   decayMult: 1.4, suspMult: 1.5, color: '#cc4428' },
+  hard:   { label: 'Hard',   desc: 'Faster hunger and thirst. The AI is more alert. Loot is scarce. Every decision counts.',   decayMult: 1.4, suspMult: 1.5, color: '#cc4428' },
 };
 
 let CC_scroll = 0;

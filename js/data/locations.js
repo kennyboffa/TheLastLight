@@ -412,7 +412,7 @@ function rollLoot(tableId) {
   const result = [];
   for (const [id, min, max, pct] of table) {
     if (pct != null && !chance(pct)) continue;      // optional 4th field: % chance the entry appears at all
-    const qty = randInt(min, max);
+    const qty = thinLoot(randInt(min, max));        // difficulty: less turns up
     if (qty > 0) result.push({ id, qty });
   }
   return result;
@@ -424,7 +424,7 @@ function rollBuildingLoot(theme, quality) {
   const result = [];
   for (const [id, min, max, pct] of table) {
     if (pct != null && !chance(pct)) continue;      // optional 4th field: % chance the entry appears at all
-    const qty = randInt(min, max);
+    const qty = thinLoot(randInt(min, max));        // difficulty: less turns up
     if (qty > 0) result.push({ id, qty });
   }
   return result;

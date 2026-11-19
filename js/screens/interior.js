@@ -91,9 +91,9 @@ function areaKey(es) {
 
 /** Camera scroll for an area: rooms narrower than the screen are centred. */
 function areaScroll(area, x) {
-  const viewW = CFG.W / EXPLORE_VIEW_ZOOM;
-  if (area.width <= viewW) return -(viewW - area.width) / 2;
-  return clamp(x, 0, area.width - viewW);
+  const vw = CFG.W / (EXPLORE_VIEW_ZOOM * INDOOR_ZOOM_MULT);   // areas are always indoors
+  if (area.width <= vw) return -(vw - area.width) / 2;
+  return clamp(x, 0, area.width - vw);
 }
 
 /** Right-hand limit for movement in combat (indoors: the area's width). */

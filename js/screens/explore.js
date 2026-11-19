@@ -7,10 +7,18 @@ const BUILDING_W  = 900;   // interior width of each building floor
 
 // World zoom — game world is rendered at this scale; HUD/buttons are drawn
 // AFTER ctx.restore() so they stay at 1× and never get clipped or scrolled.
-const EXPLORE_VIEW_ZOOM = 1.15;
-// Visible world width at that zoom — the camera must clamp to this, not CFG.W,
-// or the last ~96px of every map/floor can never scroll into view.
-const EXPLORE_VIEW_W = CFG.W / EXPLORE_VIEW_ZOOM;
+// Outdoors 1.15 × 1.05; inside buildings a further 15% closer. The zoom keeps
+// the ground line at the same screen height (FOOT_SCREEN_Y), cropping sky or
+// ceiling instead of pushing the floor under the HUD.
+const EXPLORE_VIEW_ZOOM = 1.15 * 1.05;
+const INDOOR_ZOOM_MULT  = 1.15;
+const FOOT_SCREEN_Y     = Math.round(276 * 1.15);
+function viewZoom(es) { return EXPLORE_VIEW_ZOOM * (es && es.building ? INDOOR_ZOOM_MULT : 1); }
+/** Visible world width: the camera must clamp to this, not CFG.W. */
+function viewW(es) { return CFG.W / viewZoom(es); }
+/** Vertical offset of the world view (screen y = world y * zoom + viewOY). */
+function viewOY(es) { return Math.min(0, FOOT_SCREEN_Y - GROUND_Y * viewZoom(es)); }
+const EXPLORE_VIEW_W = CFG.W / EXPLORE_VIEW_ZOOM;   // outdoor view width
 
 let exploreState = null;
 let fogCanvas    = null;   // offscreen canvas for fog of war
@@ -394,8 +402,8 @@ function updateExplore(gs, dt) {
 
   // While in combat: keep scroll locked on combat player position, skip exploration
   if (gs.inCombat && gs.combat) {
-    const targetScroll = gs.combat.playerWx - EXPLORE_VIEW_W * 0.4;
-    es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.12), 0, CFG.WORLD_W - EXPLORE_VIEW_W);
+    const targetScroll = gs.combat.playerWx - viewW(es) * 0.4;
+    es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.12), 0, CFG.WORLD_W - viewW(es));
     es.px = gs.combat.playerWx;
     return;
   }
@@ -413,8 +421,8 @@ function updateExplore(gs, dt) {
   // velX is tuned in px per 60fps frame; scale by real time so slow frames don't slow walking
   es.px = clamp(es.px + es.velX * dt * 60, 10, CFG.WORLD_W - 10);
 
-  const targetScroll = es.px - EXPLORE_VIEW_W * 0.4;
-  es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.15), 0, CFG.WORLD_W - EXPLORE_VIEW_W);
+  const targetScroll = es.px - viewW(es) * 0.4;
+  es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.15), 0, CFG.WORLD_W - viewW(es));
 
   es.animTimer++;
   if (Math.abs(es.velX) > 0.1 && es.animTimer % (gs.parent.sneaking ? 26 : 17) === 0) Audio.step(gs.parent.sneaking);
@@ -508,7 +516,7 @@ function updateBuildingInterior(gs, dt) {
 
   // In combat: camera follows the fight, normal movement is off
   if (gs.inCombat && gs.combat) {
-    const targetScroll = gs.combat.playerWx - EXPLORE_VIEW_W * 0.4;
+    const targetScroll = gs.combat.playerWx - viewW(es) * 0.4;
     bi.scrollX = areaScroll(area, lerp(bi.scrollX, targetScroll, 0.12));
     bi.px = gs.combat.playerWx;
     bi.velX = 0;
@@ -526,7 +534,7 @@ function updateBuildingInterior(gs, dt) {
 
   bi.px = clamp(bi.px + bi.velX * dt * 60, 10, area.width - 10);
 
-  const targetScroll = bi.px - EXPLORE_VIEW_W * 0.45;
+  const targetScroll = bi.px - viewW(es) * 0.45;
   bi.scrollX = areaScroll(area, lerp(bi.scrollX, targetScroll, 0.15));
 
   bi.animTimer = (bi.animTimer || 0) + 1;
@@ -761,7 +769,7 @@ function interactBuilding(gs) {
       const door = fl.doors.find(d => d.roomIdx === bi.roomIdx);
       bi.roomIdx = null;
       bi.px = door ? door.x + DOOR_W / 2 : 120;
-      bi.scrollX = clamp(bi.px - EXPLORE_VIEW_W * 0.45, 0, Math.max(0, fl.width - EXPLORE_VIEW_W));
+      bi.scrollX = clamp(bi.px - viewW(es) * 0.45, 0, Math.max(0, fl.width - viewW(es)));
       return;
     }
   } else {
@@ -788,7 +796,7 @@ function interactBuilding(gs) {
       bi.floorIdx--;
       bi.roomIdx = null;
       bi.px = bld.floors[bi.floorIdx].stairsUpX || BUILDING_W - 110;
-      bi.scrollX = clamp(bi.px - EXPLORE_VIEW_W * 0.45, 0, Math.max(0, BUILDING_W - EXPLORE_VIEW_W));
+      bi.scrollX = clamp(bi.px - viewW(es) * 0.45, 0, Math.max(0, BUILDING_W - viewW(es)));
       notify(`Floor ${bi.floorIdx + 1} / ${bld.numFloors}`, 'info');
       return;
     }
@@ -986,8 +994,8 @@ function exploreClick(mx, my, gs) {
     // Clicking a container within reach acts like pressing E on it
     const bi  = es.building;
     const area = curArea(es);
-    const wx  = mx / EXPLORE_VIEW_ZOOM + bi.scrollX;
-    const wy  = my / EXPLORE_VIEW_ZOOM;
+    const wx  = mx / viewZoom(es) + bi.scrollX;
+    const wy  = (my - viewOY(es)) / viewZoom(es);
     const hit = area.containers.find(c => Math.abs(wx - c.wx) < 24 && wy > GROUND_Y - 60 && wy < GROUND_Y + 12);
     if (hit && Math.abs(bi.px - hit.wx) < 30) _interactContainers(gs, [hit], bi.px);
     return;
@@ -1033,7 +1041,7 @@ function renderExplore(ctx, gs) {
   drawExploreHUD(ctx, gs, es);
   if (es.invOpen) drawExploreInventory(ctx, gs, es);
   if (!es.invOpen) drawHint(ctx, gs, 428, 112, 400);   // top band, clear of the HUD panels and the fight
-  if (gs.inCombat && gs.combat && gs.combat.introTimer > 0) _drawCombatBanner(ctx, gs.combat.introTimer);
+  if (gs.inCombat && gs.combat && gs.combat.introTimer > 0) _drawCombatBanner(ctx, gs.combat.introTimer, gs.combat);
   // Notifications centered between left HUD panels and right clock to avoid overlap
   drawNotifications(ctx, gs, CFG.W / 2, 14, true);
   drawDayTransition(ctx, gs);
@@ -1041,10 +1049,11 @@ function renderExplore(ctx, gs) {
 
 function renderOutdoor(ctx, gs, es) {
   const loc = es.location;
-  const vz  = EXPLORE_VIEW_ZOOM;
+  const vz  = viewZoom(es), oy = viewOY(es);
 
-  // Outer zoom — scales game world 1.15×; HUD drawn after this restore stays 1×.
+  // Outer zoom — scales the game world; HUD drawn after this restore stays 1×.
   ctx.save();
+  ctx.translate(0, oy);
   ctx.scale(vz, vz);
 
   drawExploreBackground(ctx, es.scrollX, null, CFG.H, gs.time, loc.bgTheme);
@@ -1173,7 +1182,7 @@ function renderOutdoor(ctx, gs, es) {
   ctx.restore(); // end view zoom
 
   // Fog — centred on player's scaled screen position (drawn at 1× after zoom restore)
-  renderFog(ctx, (es.px - es.scrollX) * vz, PLAYER_FOOT * vz - 12, gs, false);
+  renderFog(ctx, (es.px - es.scrollX) * vz, PLAYER_FOOT * vz + oy - 12, gs, false);
 
   // Weather overlay (1×, over everything)
   drawExploreWeather(ctx, gs);
@@ -1266,11 +1275,12 @@ function renderBuildingInterior(ctx, gs, es) {
   const bld  = es.buildings[bi.bldgIdx];
   const area = curArea(es);
   const W    = area.width;
-  const vz   = EXPLORE_VIEW_ZOOM;
+  const vz   = viewZoom(es), oy = viewOY(es);
 
   ctx.save();
+  ctx.translate(0, oy);
   ctx.scale(vz, vz);
-  fillRect(ctx, 0, 0, CFG.W, CFG.H, '#0c0c14');
+  fillRect(ctx, 0, -oy / vz, CFG.W, CFG.H, '#0c0c14');
   ctx.save();
   ctx.translate(-bi.scrollX, 0);
 
@@ -1347,7 +1357,7 @@ function renderBuildingInterior(ctx, gs, es) {
 
   ctx.restore(); // end world translate
   ctx.restore(); // end view zoom
-  renderFog(ctx, (bi.px - bi.scrollX) * vz, PLAYER_FOOT * vz - 12, gs, true);
+  renderFog(ctx, (bi.px - bi.scrollX) * vz, PLAYER_FOOT * vz + oy - 12, gs, true);
 }
 
 // One container: sprite (unless it's a piece of furniture), prompt, progress
@@ -1894,7 +1904,7 @@ function startExploreCombat(gs, enemies) {
 }
 
 // "COMBAT" banner shown while the fight's opening freeze runs
-function _drawCombatBanner(ctx, timeLeft) {
+function _drawCombatBanner(ctx, timeLeft, c) {
   const total = CFG_COMBAT_INTRO;
   const t = 1 - timeLeft / total;                       // 0 → 1 over the freeze
   const fadeIn  = Math.min(1, t / 0.15);
@@ -1917,7 +1927,12 @@ function _drawCombatBanner(ctx, timeLeft) {
   ctx.fillStyle = '#1a0806';
   ctx.fillText('C O M B A T', 2, 2);
   ctx.fillStyle = '#d4483a';
-  ctx.fillText('C O M B A T', 0, 0);
+  ctx.fillText('C O M B A T', 0, -3);
+  if (c && c.openerText) {
+    ctx.font = 'bold 9px monospace';
+    ctx.fillStyle = c.ambush || c.firstTurn === 'player' ? '#9ad08a' : '#e0a060';
+    ctx.fillText(c.openerText.split('').join(' '), 0, 17);
+  }
   ctx.restore();
 }
 

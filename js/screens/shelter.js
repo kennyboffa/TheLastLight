@@ -19,7 +19,7 @@ function roomRect(col, row) {
 }
 
 // ── Shelter zoom & pan ────────────────────────────────────────────────────────
-const SHELTER_ZOOM = 1.2;
+const SHELTER_ZOOM = 1.26;   // 1.2 + 5%
 
 // Convert screen coords → bunker world coords
 function shelterW(sx) { return (sx + (shelterUI.scrollX || 0)) / SHELTER_ZOOM; }

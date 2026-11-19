@@ -258,15 +258,15 @@ const LOOT_TABLES = {
   food_light:      [['canned_beans',1,1],['canned_soup',1,1],['energy_bar',0,1]],
   food_heavy:      [['canned_beans',1,3],['canned_soup',1,2],['canned_meat',1,2],['canned_fruit',1,1]],
   food_rare:       [['canned_meat',1,3],['energy_bar',1,2],['canned_fruit',1,2],['jerky',0,1]],
-  mall_general:    [['cloth',1,4],['canned_beans',0,1],['energy_bar',0,1],['rope',0,1],['batteries',1,2]],
+  mall_general:    [['hoodie',1,1,15],['jeans',1,1,15],['leather_jacket',1,1,8],['padded_coat',1,1,8],['cargo_pants',1,1,10],['cloth',1,4],['canned_beans',0,1],['energy_bar',0,1],['rope',0,1],['batteries',1,2]],
   mixed_rare:      [['electronics',1,1],['chemicals',1,1],['bandage',1,2],['pistol_ammo',3,7],['water_bottle',0,1],['bp_pipe',0,1],['bp_crowbar',0,1]],
   medical_light:   [['bandage',1,2],['painkiller',1,1]],
   medical_heavy:   [['bandage',1,3],['medkit',0,1],['painkiller',1,2],['antibiotics',0,1]],
   medicine_rare:   [['medkit',1,1],['antibiotics',1,1],['chemicals',1,3]],
   mixed_light:     [['cloth',1,2],['rope',1,1],['batteries',1,1],['matches',1,2],['note_dying_words',0,1]],
   mixed_medium:    [['electronics',1,1],['batteries',1,2],['flashlight',0,1],['tools',0,1],['rope',1,2],['note_trade_list',0,1],['water_bottle',0,1],['bp_sbackpack',0,1]],
-  home_light:      [['cloth',1,3],['book',0,1],['matches',1,1],['toy',0,1],['canned_beans',0,1],['note_loved_one',0,1],['note_child',0,1]],
-  home_medium:     [['cloth',1,4],['wood',1,2],['book',0,1],['toy',0,1],['bandage',0,1],['canned_soup',0,1],['note_diary_1',0,1],['note_diary_2',0,1]],
+  home_light:      [['hoodie',1,1,10],['jeans',1,1,10],['flannel_shirt',1,1,8],['cloth',1,3],['book',0,1],['matches',1,1],['toy',0,1],['canned_beans',0,1],['note_loved_one',0,1],['note_child',0,1]],
+  home_medium:     [['jeans',1,1,12],['padded_coat',1,1,6],['leather_jacket',1,1,5],['cloth',1,4],['wood',1,2],['book',0,1],['toy',0,1],['bandage',0,1],['canned_soup',0,1],['note_diary_1',0,1],['note_diary_2',0,1]],
   materials:       [['metal',1,4],['wood',1,3],['rope',1,2],['tools',0,1]],
   heavy_mat:       [['metal',2,6],['tools',0,1],['electronics',1,2],['fuel',1,2]],
   materials_r:     [['metal',3,6],['electronics',1,3],['chemicals',1,2],['tools',1,1]],
@@ -277,12 +277,12 @@ const LOOT_TABLES = {
   water_heavy:     [['dirty_water',1,3],['raw_meat',0,1]],
   pharmacy_main:   [['bandage',1,3],['painkiller',1,2],['antibiotics',0,1],['cloth',1,2]],
   pharmacy_rare:   [['bandage',2,4],['medkit',1,1],['antibiotics',1,2],['painkiller',1,3],['chemicals',1,1]],
-  police_main:     [['cloth',1,1],['metal',1,2],['pistol_ammo',3,7],['bandage',0,1],['flashlight',0,1]],
-  police_rare:     [['pistol_ammo',6,11],['rifle_ammo',3,6],['medkit',0,1],['shotgun_ammo',1,4],['pistol',0,1]],
+  police_main:     [['cloth',1,1],['metal',1,2],['pistol_ammo',3,7],['bandage',0,1],['flashlight',0,1],['cargo_pants',1,1,15],['bulletproof_vest',1,1,4]],
+  police_rare:     [['pistol_ammo',6,11],['rifle_ammo',3,6],['medkit',0,1],['shotgun_ammo',1,4],['pistol',0,1],['bulletproof_vest',1,1,22]],
   church_main:     [['cloth',1,3],['book',1,1],['canned_beans',0,2],['bandage',1,2],['matches',1,1],['note_prayer',0,1],['note_survivor_tip',0,1],['note_singularity',0,1]],
-  village_market:  [['cloth',1,3],['canned_beans',1,2],['matches',1,1],['rope',0,1],['energy_bar',0,1]],
+  village_market:  [['flannel_shirt',1,1,12],['work_trousers',1,1,8],['cloth',1,3],['canned_beans',1,2],['matches',1,1],['rope',0,1],['energy_bar',0,1]],
   bunker_main:     [['electronics',1,3],['metal',1,2],['fuel',1,1],['batteries',1,3],['bp_medkit',0,1],['bp_backpack',0,1]],
-  bunker_rare:     [['medkit',1,1],['antibiotics',1,1],['pistol_ammo',6,11],['rifle_ammo',3,6],['electronics',1,3],['bp_purify',0,1]],
+  bunker_rare:     [['medkit',1,1],['antibiotics',1,1],['pistol_ammo',6,11],['rifle_ammo',3,6],['electronics',1,3],['bp_purify',0,1],['bulletproof_vest',1,1,15],['cargo_pants',1,1,20]],
   rooftop_main:    [['canned_fruit',1,2],['mushroom',1,3],['dirty_water',1,2],['rope',0,1],['dried_berries',0,2]],
 };
 
@@ -290,20 +290,20 @@ const LOOT_TABLES = {
 // Each table: [itemId, min, max]  — quantities reduced ~30% from original
 const BUILDING_LOOT = {
   tent_light:     [['cloth',0,1],['matches',0,1],['dried_berries',0,1],['rope',0,1]],
-  cabin_cabin:    [['wood',1,2],['cloth',1,2],['canned_beans',0,1],['book',0,1],['knife',0,1],['rifle_ammo',0,3],['note_survivor_tip',0,1],['note_safe_zone',0,1]],
-  factory_heavy:  [['metal',1,4],['electronics',1,2],['tools',0,1],['fuel',0,1],['rope',1,1],['note_resistance',0,1]],
+  cabin_cabin:    [['flannel_shirt',1,1,15],['work_jacket',1,1,12],['padded_coat',1,1,8],['wood',1,2],['cloth',1,2],['canned_beans',0,1],['book',0,1],['knife',0,1],['rifle_ammo',0,3],['note_survivor_tip',0,1],['note_safe_zone',0,1]],
+  factory_heavy:  [['work_jacket',1,1,10],['work_trousers',1,1,12],['metal',1,4],['electronics',1,2],['tools',0,1],['fuel',0,1],['rope',1,1],['note_resistance',0,1]],
   factory_factory:[['metal',1,3],['electronics',0,1],['rope',0,1],['note_resistance',0,1]],
   office_rare:    [['electronics',1,2],['chemicals',1,1],['pistol_ammo',0,6],['pistol',0,1]],
   office_medium:  [['batteries',1,2],['electronics',0,1],['book',0,1],['cloth',0,1],['note_bulletin',0,1],['note_history',0,1]],
-  mall_mall:      [['cloth',1,4],['rope',0,1],['bandage',0,1],['canned_beans',0,2],['bat',0,1],['energy_bar',0,1],['note_trade_list',0,1]],
+  mall_mall:      [['hoodie',1,1,12],['jeans',1,1,12],['leather_jacket',1,1,6],['cargo_pants',1,1,8],['cloth',1,4],['rope',0,1],['bandage',0,1],['canned_beans',0,2],['bat',0,1],['energy_bar',0,1],['note_trade_list',0,1]],
   hospital_medical:[['bandage',1,3],['painkiller',0,1],['medkit',0,1],['antibiotics',0,1],['chemicals',0,1]],
   hospital_rare:  [['medkit',1,1],['antibiotics',0,1],['chemicals',1,2]],
-  house_home:        [['cloth',1,3],['canned_beans',0,2],['book',0,1],['toy',0,1],['matches',0,1],['bandage',0,1],['note_diary_1',0,1],['note_loved_one',0,1]],
+  house_home:        [['hoodie',1,1,10],['jeans',1,1,10],['flannel_shirt',1,1,8],['leather_jacket',1,1,4],['cloth',1,3],['canned_beans',0,2],['book',0,1],['toy',0,1],['matches',0,1],['bandage',0,1],['note_diary_1',0,1],['note_loved_one',0,1]],
   pharmacy_pharma:   [['bandage',1,4],['painkiller',1,2],['medkit',0,1],['antibiotics',0,1],['chemicals',0,1]],
   pharmacy_pharma_rare:[['medkit',1,2],['antibiotics',1,2],['bandage',2,4],['painkiller',1,3],['chemicals',1,2]],
   generic_light:     [['cloth',0,1],['matches',0,1],['batteries',0,1]],
-  generic_medium:    [['cloth',0,2],['canned_beans',0,1],['bandage',0,1],['rope',0,1]],
-  office_police:     [['pistol_ammo',3,7],['metal',1,2],['cloth',1,1],['bandage',0,1],['pistol',0,1]],
+  generic_medium:    [['hoodie',1,1,5],['jeans',1,1,5],['cloth',0,2],['canned_beans',0,1],['bandage',0,1],['rope',0,1]],
+  office_police:     [['bulletproof_vest',1,1,10],['cargo_pants',1,1,12],['pistol_ammo',3,7],['metal',1,2],['cloth',1,1],['bandage',0,1],['pistol',0,1]],
 };
 
 // ── Enemy Templates ────────────────────────────────────────────────────────────
@@ -410,7 +410,8 @@ function rollLoot(tableId) {
   const table = LOOT_TABLES[tableId];
   if (!table) return [];
   const result = [];
-  for (const [id, min, max] of table) {
+  for (const [id, min, max, pct] of table) {
+    if (pct != null && !chance(pct)) continue;      // optional 4th field: % chance the entry appears at all
     const qty = randInt(min, max);
     if (qty > 0) result.push({ id, qty });
   }
@@ -421,7 +422,8 @@ function rollBuildingLoot(theme, quality) {
   const key = theme + '_' + quality;
   const table = BUILDING_LOOT[key] || BUILDING_LOOT['generic_' + quality] || BUILDING_LOOT.generic_light;
   const result = [];
-  for (const [id, min, max] of table) {
+  for (const [id, min, max, pct] of table) {
+    if (pct != null && !chance(pct)) continue;      // optional 4th field: % chance the entry appears at all
     const qty = randInt(min, max);
     if (qty > 0) result.push({ id, qty });
   }

@@ -3,6 +3,15 @@
 
 let packUI = { invScroll: 0, storScroll: 0, selected: null, selectedSide: null, confirmExplore: false };
 
+function _packLayout() {
+  const actionBarH = 28;
+  const panelY = 28, panelH = CFG.H - 64 - actionBarH;
+  const dollX = 10, dollW = 176;
+  const invX = dollX + dollW + 6, invW = 262;
+  const storX = invX + invW + 6, storW = CFG.W - 10 - storX;
+  return { actionBarH, panelY, panelH, dollX, dollW, invX, invW, storX, storW };
+}
+
 function renderPackScreen(ctx, gs) {
   const loc = gs._pendingLoc;
   if (!loc) { gs.screen = 'shelter'; return; }
@@ -15,30 +24,11 @@ function renderPackScreen(ctx, gs) {
 
   const mx = gs.mouse.x, my = gs.mouse.y;
 
-  // ── Equip strip ──────────────────────────────────────────────────────────
-  const eq = gs.parent.equipped;
-  const weapDef = eq.weapon ? getItemDef(eq.weapon) : null;
-  const armDef  = eq.armor  ? getItemDef(eq.armor)  : null;
-  const bpDef   = gs.parent.backpackId ? getItemDef(gs.parent.backpackId) : null;
-
-  const equipY = 28;
-  drawPanel(ctx, 10, equipY, CFG.W - 20, 20, C.panelBg2, C.border);
-  const slots = [
-    { label: 'Weapon', val: weapDef ? weapDef.name : 'none', x: 18 },
-    { label: 'Armor',  val: armDef  ? armDef.name  : 'none', x: 190 },
-    { label: 'Pack',   val: bpDef   ? bpDef.name   : 'none', x: 370 },
-    { label: 'Light',  val: eq.light ? getItemDef(eq.light).name : 'none', x: 540 },
-  ];
-  for (const sl of slots) {
-    drawText(ctx, `${sl.label}: `, sl.x, equipY + 13, C.textDim, 7);
-    drawText(ctx, sl.val, sl.x + 52, equipY + 13, sl.val === 'none' ? '#444450' : C.textBright, 7);
-  }
-
-  // ── Two panels ───────────────────────────────────────────────────────────
-  const actionBarH = 28; // height reserved at bottom for action buttons
-  const panelY = 52, panelH = CFG.H - 88 - actionBarH;
-  const invW = 300, storW = CFG.W - invW - 20;
-  const invX = 10, storX = invX + invW + 6;
+  // ── Layout: character + slots | bag | storage ─────────────────────────────
+  const L = _packLayout();
+  const actionBarH = L.actionBarH, panelY = L.panelY, panelH = L.panelH;
+  const invW = L.invW, storW = L.storW, invX = L.invX, storX = L.storX;
+  gs._packDollBoxes = drawEquipDoll(ctx, gs, L.dollX, panelY, L.dollW, panelH, mx, my);
 
   const wt = calcWeight(gs.parent.inventory).toFixed(1);
   const maxWt = parentMaxCarry().toFixed(1);
@@ -63,42 +53,29 @@ function renderPackScreen(ctx, gs) {
     const row  = rows.find(r => r.idx === packUI.selected);
     if (row) {
       const def = getItemDef(row.slot.id);
-      fillRect(ctx, invX, abY, CFG.W - 20, abH, '#0e1018');
-      strokeRect(ctx, invX, abY, CFG.W - 20, abH, C.border2);
-      drawText(ctx, `Selected: ${def ? def.name : row.slot.id}`, invX + 8, abY + 11, C.textBright, 8);
+      fillRect(ctx, L.dollX, abY, CFG.W - 20, abH, '#0e1018');
+      strokeRect(ctx, L.dollX, abY, CFG.W - 20, abH, C.border2);
+      drawText(ctx, `Selected: ${def ? def.name : row.slot.id}${_equipStatText(def)}`, L.dollX + 8, abY + 11, C.textBright, 8);
 
-      let bx = invX + 120;
+      let bx = L.dollX + 8 + Math.min(260, Math.max(150, ctx.measureText(`Selected: ${def ? def.name : row.slot.id}${_equipStatText(def)}`).width + 16));
       const by = abY + 5;
       const bh = 18;
 
-      if (packUI.selectedSide === 'inv') {
-        // Equip option for weapons/armor/backpack
-        if (def && (def.type === 'weapon' || def.type === 'armor' || def.type === 'backpack' || def.type === 'light')) {
-          const bw = 46;
-          const isEq = (def.type === 'weapon' && gs.parent.equipped.weapon === row.slot.id)
-                    || (def.type === 'light'   && gs.parent.equipped.light  === row.slot.id)
-                    || (def.type === 'armor'   && gs.parent.equipped.armor  === row.slot.id)
-                    || (def.type === 'backpack' && gs.parent.backpackId      === row.slot.id);
-          const hov = hitTest(mx, my, bx, by, bw, bh);
-          drawButton(ctx, bx, by, bw, bh, isEq ? 'Unequip' : 'Equip', hov);
-          gs._packEquipBtn = { x: bx, y: by, w: bw, h: bh, action: isEq ? 'unequip' : 'equip', slot: row.slot };
-          bx += bw + 6;
-        } else {
-          gs._packEquipBtn = null;
-        }
-        // Move to storage
-        const mw = 80;
-        const mhov = hitTest(mx, my, bx, by, mw, bh);
-        drawButton(ctx, bx, by, mw, bh, '→ Storage', mhov);
-        gs._packMoveBtn = { x: bx, y: by, w: mw, h: bh, action: 'toStorage', slot: row.slot };
+      // Equip straight from the bag or from storage
+      if (equipSlotFor(def)) {
+        const bw = 46;
+        const hov = hitTest(mx, my, bx, by, bw, bh);
+        drawButton(ctx, bx, by, bw, bh, 'Equip', hov);
+        gs._packEquipBtn = { x: bx, y: by, w: bw, h: bh, action: 'equip', slot: row.slot, side: packUI.selectedSide };
+        bx += bw + 6;
       } else {
         gs._packEquipBtn = null;
-        // Move to bag
-        const mw = 80;
-        const mhov = hitTest(mx, my, bx, by, mw, bh);
-        drawButton(ctx, bx, by, mw, bh, '→ My Bag', mhov);
-        gs._packMoveBtn = { x: bx, y: by, w: mw, h: bh, action: 'toBag', slot: row.slot };
       }
+      const mw = 80;
+      const mhov = hitTest(mx, my, bx, by, mw, bh);
+      const toStor = packUI.selectedSide === 'inv';
+      drawButton(ctx, bx, by, mw, bh, toStor ? '→ Storage' : '→ My Bag', mhov);
+      gs._packMoveBtn = { x: bx, y: by, w: mw, h: bh, action: toStor ? 'toStorage' : 'toBag', slot: row.slot };
     } else {
       // Row no longer found — deselect
       packUI.selected = null; packUI.selectedSide = null;
@@ -106,7 +83,7 @@ function renderPackScreen(ctx, gs) {
     }
   } else {
     // Hint text
-    drawText(ctx, 'Click an item to select it, then choose an action', invX + 8, abY + 11, C.textDim, 7);
+    drawText(ctx, 'Click an item to select it, then choose an action. Click an equipment slot to take it off.', L.dollX + 8, abY + 11, C.textDim, 7);
     gs._packEquipBtn = null; gs._packMoveBtn = null;
   }
 
@@ -172,19 +149,7 @@ function packScreenClick(mx, my, gs) {
       const slot = b.slot;
       const def  = getItemDef(slot.id);
       if (!def) { packUI.selected = null; return; }
-      if (b.action === 'equip') {
-        if (def.type === 'weapon')   gs.parent.equipped.weapon = slot.id;
-        else if (def.type === 'light') gs.parent.equipped.light = slot.id;
-        else if (def.type === 'armor') gs.parent.equipped.armor = slot.id;
-        else if (def.type === 'backpack') gs.parent.backpackId = slot.id;
-        notify(`Equipped ${def.name}.`, 'good');
-      } else {
-        if (def.type === 'weapon'   && gs.parent.equipped.weapon    === slot.id) gs.parent.equipped.weapon = null;
-        if (def.type === 'light'    && gs.parent.equipped.light     === slot.id) gs.parent.equipped.light  = null;
-        if (def.type === 'armor'    && gs.parent.equipped.armor     === slot.id) gs.parent.equipped.armor  = null;
-        if (def.type === 'backpack' && gs.parent.backpackId         === slot.id) gs.parent.backpackId      = null;
-        notify(`Unequipped ${def.name}.`);
-      }
+      equipItem(gs, slot.id, b.side === 'stor' ? gs.shelter.storage : gs.parent.inventory);
       packUI.selected = null; packUI.selectedSide = null;
       return;
     }
@@ -214,12 +179,14 @@ function packScreenClick(mx, my, gs) {
     }
   }
 
+  // Equipment slot — take it off into the bag
+  if (gs._packDollBoxes) {
+    const box = gs._packDollBoxes.find(b => hitTest(mx, my, b.x, b.y, b.w, b.h));
+    if (box) { if (box.id) unequipSlot(gs, box.key); packUI.selected = null; packUI.selectedSide = null; return; }
+  }
+
   // Click in bag — select item
-  const panelY = 52;
-  const panelH = CFG.H - 88 - 28;
-  const invX = 10, invW = 300;
-  const storX = invX + invW + 6;
-  const storW = CFG.W - invW - 20;
+  const { panelY, panelH, invX, invW, storX, storW } = _packLayout();
 
   if (gs._packInvRows && hitTest(mx, my, invX, panelY, invW, panelH)) {
     for (const row of gs._packInvRows) {
@@ -254,7 +221,7 @@ function packScreenClick(mx, my, gs) {
 
 function packScreenScroll(dy, gs) {
   if (!gs._packInvRows && !gs._packStorRows) return;
-  const invX = 10, invW = 300;
+  const { invX, invW } = _packLayout();
   if (gs.mouse.x < invX + invW) {
     packUI.invScroll = Math.max(0, packUI.invScroll + dy * 20);
   } else {

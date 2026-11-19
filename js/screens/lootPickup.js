@@ -185,11 +185,6 @@ function lootPickupClick(mx, my, gs) {
         if (!slot) return;
         const def = getItemDef(slot.id);
         if (!def) return;
-        // Don't allow dropping equipped weapon
-        if (gs.parent.equipped.weapon === slot.id) {
-          notify('Unequip weapon first.', 'warn');
-          return;
-        }
         list.push({ id: slot.id, qty: slot.qty });
         gs.parent.inventory.splice(b.idx, 1);
         return;

@@ -623,7 +623,8 @@ function drawCharPanel(ctx, gs, mx, my) {
   // Equipped weapon / armor info
   if (who.equipped) {
     const wpnDef = who.equipped.weapon ? getItemDef(who.equipped.weapon) : null;
-    const armDef = who.equipped.armor  ? getItemDef(who.equipped.armor)  : null;
+    const armDef = who.equipped.chest ? getItemDef(who.equipped.chest)
+                 : who.equipped.armor ? getItemDef(who.equipped.armor) : null;
     if (wpnDef) {
       const dmgStr = Array.isArray(wpnDef.damage)
         ? `${wpnDef.damage[0]}–${wpnDef.damage[1]} dmg`
@@ -632,12 +633,13 @@ function drawCharPanel(ctx, gs, mx, my) {
       y += 12;
     }
     if (armDef) {
-      const avStr = armDef.armorValue ? `  ${armDef.armorValue} armor` : '';
+      const av = who === GS.parent && typeof playerArmor === 'function' ? playerArmor(who, false) : (armDef.armor || 0);
+      const avStr = av ? `  ${Math.round(av * 10) / 10} armor` : '';
       drawText(ctx, `🛡 ${armDef.name}${avStr}`, px+8, y+9, '#6080a0', 9);
       y += 12;
     }
     if (!wpnDef && !armDef) {
-      drawText(ctx, 'No weapon/armor equipped', px+8, y+9, C.textDim, 8);
+      drawText(ctx, 'No weapon/clothes equipped', px+8, y+9, C.textDim, 8);
       y += 12;
     }
   }

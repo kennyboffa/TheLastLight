@@ -27,8 +27,7 @@ function _wearWeapon(gs, id) {
     combatLog(gs, `${name} breaks!`, 'danger');
     notify(`Your ${name} broke!`, 'danger');
     if (typeof Audio.breakWeapon === 'function') Audio.breakWeapon();
-    if (p.equipped.weapon === id) p.equipped.weapon = null;
-    if (countInInventory(p.inventory, id) > 0) removeFromInventory(p.inventory, id, 1);
+    if (p.equipped.weapon === id) p.equipped.weapon = null;   // the equipped one is held, not in the bag
     delete p.weaponWear[id];
   }
 }
@@ -379,11 +378,11 @@ function enemyTurn(gs) {
         }
         if (chance(hit)) {
           const dmg   = randInt(enemy.damage[0], enemy.damage[1]);
-          const dealt = Math.max(1, dmg);
+          const { dealt, blocked } = applyArmor(gs.parent, dmg, !!enemy.isRanged);
           c.player.hp -= dealt;
           _fx(gs, 'hit', 'player', dealt, enemy.worldX, impact);
           gs.parent.health = Math.max(0, gs.parent.health - dealt);
-          combatLog(gs, `${enemy.name} hits ${gs.parent.name} for ${dealt} dmg.`, 'danger');
+          combatLog(gs, `${enemy.name} hits ${gs.parent.name} for ${dealt} dmg${blocked ? ` (${blocked} blocked)` : ''}.`, 'danger');
           if (!gs.parent.infected && chance(5)) {
             gs.parent.infected = true;
             combatLog(gs, 'Wound may be infected!', 'danger');

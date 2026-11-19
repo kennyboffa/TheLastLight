@@ -1353,6 +1353,61 @@ def it_simple(kind):
     return s.finish(outline=0.35)
 
 
+def it_top(base, kind='hoodie', trim=None):
+    """Chest clothing: hoodie, shirt, jackets, coat, vest."""
+    s = _item(16, 14)
+    c = s.material(base, 14, 0.06)
+    dark = s.material(trim or '#2a2a2a', 10, 0.04)
+    if kind == 'vest':
+        # sleeveless slab with straps and plate seams
+        s.rect(2, 0, 4, 2, c); s.rect(9, 0, 11, 2, c)
+        s.rect(1, 2, 12, 12, c)
+        s.rect(5, 0, 8, 2, dark)                 # neck hole
+        s.rect(1, 6, 12, 6, dark); s.rect(3, 8, 10, 11, s.material('#3a3e34', 10, 0.04))
+        s.rect(5, 3, 8, 4, s.material('#d8d8c8', 6, 0))   # patch
+        s.shade_gradient('x', 0.3)
+        return s.finish(outline=0.4)
+    s.rect(4, 1, 11, 13, c)                      # torso
+    s.rect(3, 1, 12, 3, c)                       # shoulders
+    s.poly([(3, 1), (0, 9), (2, 10), (4, 5)], c)  # sleeves
+    s.poly([(12, 1), (15, 9), (13, 10), (11, 5)], c)
+    s.rect(6, 0, 9, 1, dark)                     # collar
+    if kind == 'hoodie':
+        s.ellipse(5, 0, 10, 3, dark); s.rect(5, 8, 10, 10, dark)   # hood + pocket
+    elif kind == 'shirt':
+        chk = s.material(trim or '#5a1a14', 8, 0.02)
+        for y in range(2, 13, 3):
+            s.rect(4, y, 11, y, chk)
+        for x in (5, 8, 11):
+            s.rect(x, 2, x, 13, chk)
+        s.rect(7, 0, 8, 2, s.material('#d8d0c0', 6, 0))
+    elif kind == 'jacket':
+        s.rect(7, 1, 8, 13, dark); s.poly([(5, 1), (7, 1), (7, 5)], dark); s.poly([(8, 1), (10, 1), (8, 5)], dark)
+        s.rect(4, 12, 11, 13, dark)
+    elif kind == 'coat':
+        for y in (4, 7, 10):
+            s.rect(4, y, 11, y, dark)
+        s.rect(7, 1, 8, 13, dark)
+    s.shade_gradient('x', 0.3)
+    return s.finish(outline=0.4)
+
+
+def it_pants(base, cargo=False, trim='#2a2a2a'):
+    s = _item(10, 14)
+    c = s.material(base, 14, 0.06); d = s.material(trim, 10, 0.04)
+    s.rect(0, 0, 9, 2, c)                        # waist
+    s.poly([(0, 2), (4, 2), (4, 13), (0, 13)], c)
+    s.poly([(5, 2), (9, 2), (9, 13), (5, 13)], c)
+    s.rect(0, 0, 9, 0, d)
+    s.clear(4, 4, 5, 13)
+    if cargo:
+        s.rect(0, 6, 2, 8, d); s.rect(7, 6, 9, 8, d)
+    else:
+        s.rect(1, 1, 2, 2, d); s.rect(7, 1, 8, 2, d)
+    s.shade_gradient('x', 0.25)
+    return s.finish(outline=0.4)
+
+
 ITEM_ART = {
     'canned_beans': lambda: it_can('#a04a2a'), 'canned_soup': lambda: it_can('#c8a040'),
     'canned_meat': lambda: it_can('#8a2a2a'), 'canned_fruit': lambda: it_can('#c86a2a'),
@@ -1369,6 +1424,16 @@ ITEM_ART = {
     'shotgun_ammo': lambda: it_ammo('#2a5aa0'),
     'small_backpack': lambda: it_pack('#6a5a3a', 'small'), 'backpack': lambda: it_pack('#3a4a5a', 'reg'),
     'mil_backpack': lambda: it_pack('#4a5a2a', 'mil'),
+    # clothing
+    'hoodie': lambda: it_top('#5a5e62', 'hoodie', '#3a3c40'),
+    'flannel_shirt': lambda: it_top('#8a2e24', 'shirt', '#4a1410'),
+    'leather_jacket': lambda: it_top('#3a2a20', 'jacket', '#1e1410'),
+    'work_jacket': lambda: it_top('#8a6a3a', 'jacket', '#4a3a1e'),
+    'padded_coat': lambda: it_top('#3a4a3a', 'coat', '#243024'),
+    'bulletproof_vest': lambda: it_top('#2e3236', 'vest', '#1a1c1e'),
+    'jeans': lambda: it_pants('#3a4a6a', False, '#24304a'),
+    'cargo_pants': lambda: it_pants('#5a5a3a', True, '#3a3a22'),
+    'work_trousers': lambda: it_pants('#4a3e30', True, '#2a2218'),
 }
 for _k in ('bat', 'crowbar', 'knife', 'machete', 'pipe', 'pistol', 'rifle', 'shotgun', 'spear'):
     ITEM_ART[_k] = (lambda k: lambda: it_weapon(k))(_k)

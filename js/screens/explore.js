@@ -907,34 +907,7 @@ function exploreClick(mx, my, gs) {
         }
 
         if (btn.action === 'equip') {
-          if (def.type === 'weapon') {
-            // Swap current weapon to inventory
-            if (gs.parent.equipped.weapon) {
-              addToInventory(gs.parent.inventory, gs.parent.equipped.weapon, 1);
-            }
-            gs.parent.equipped.weapon = slot.id;
-            removeFromInventory(gs.parent.inventory, slot.id, 1);
-            notify(`Equipped ${def.name}.`, 'good');
-          } else if (def.type === 'light') {
-            if (gs.parent.equipped.light) addToInventory(gs.parent.inventory, gs.parent.equipped.light, 1);
-            gs.parent.equipped.light = slot.id;
-            removeFromInventory(gs.parent.inventory, slot.id, 1);
-            notify(`Equipped ${def.name}. Press L to switch it on.`, 'good');
-          } else if (def.type === 'backpack') {
-            if (gs.parent.backpackId) {
-              addToInventory(gs.parent.inventory, gs.parent.backpackId, 1);
-            }
-            gs.parent.backpackId = slot.id;
-            removeFromInventory(gs.parent.inventory, slot.id, 1);
-            notify(`Equipped ${def.name}.`, 'good');
-          } else if (def.type === 'armor') {
-            if (gs.parent.equipped.armor) {
-              addToInventory(gs.parent.inventory, gs.parent.equipped.armor, 1);
-            }
-            gs.parent.equipped.armor = slot.id;
-            removeFromInventory(gs.parent.inventory, slot.id, 1);
-            notify(`Equipped ${def.name}.`, 'good');
-          }
+          equipItem(gs, slot.id, gs.parent.inventory);
           es.invSelected = null;
         } else if (btn.action === 'drop1') {
           removeFromInventory(gs.parent.inventory, slot.id, 1);
@@ -952,6 +925,12 @@ function exploreClick(mx, my, gs) {
         }
         return;
       }
+    }
+
+    // Equipment slot click — take the item off
+    if (gs._exploreDollBoxes) {
+      const box = gs._exploreDollBoxes.find(b => hitTest(mx, my, b.x, b.y, b.w, b.h));
+      if (box) { if (box.id) unequipSlot(gs, box.key); es.invSelected = null; return; }
     }
 
     // Item row click — select/deselect
@@ -1427,6 +1406,7 @@ function drawExploreHUD(ctx, gs, es) {
   for (const st of STATS) {
     drawText(ctx, st.label, 10, sy + 7, C.textDim, 8, 'left');
     drawStatBar(ctx, 40, sy, 110, 7, st.val, st.max, st.color, null, false);
+    if (st.label === 'HP' && hasVest(p)) drawArmorIcon(ctx, 154, sy - 1);
     sy += 15;
   }
   if (p.wounded) drawText(ctx, 'WOUNDED', 162, 118, '#cc3030', 8, 'right');
@@ -2539,16 +2519,11 @@ function drawExploreInventory(ctx, gs, es) {
   fillRect(ctx, 0, 0, CFG.W, CFG.H, '#000000', 0.55);
   drawModal(ctx, px, py, pw, ph, 'INVENTORY & EQUIPMENT');
 
-  // Equipped strip
-  const eq = gs.parent.equipped;
-  const weapDef = eq.weapon ? getItemDef(eq.weapon) : null;
-  const bpDef   = gs.parent.backpackId ? getItemDef(gs.parent.backpackId) : null;
-  let ey = py + 22;
-  drawText(ctx, `Weapon: ${weapDef ? weapDef.name : 'none'}`, px + 8, ey + 8, weapDef ? '#88cc88' : C.textDim, 8);
-  drawText(ctx, `Backpack: ${bpDef ? bpDef.name : 'none'}`, px + pw/2, ey + 8, bpDef ? '#88cc88' : C.textDim, 8);
-  ey += 14;
-  drawDivider(ctx, px + 4, ey, pw - 8, C.border2);
-  ey += 4;
+  // Character with equipment slots on the left, bag on the right
+  const ey = py + 22;
+  const dollW = 176;
+  gs._exploreDollBoxes = drawEquipDoll(ctx, gs, px + 4, ey, dollW, ph - (ey - py) - 26, mx, my);
+  const lx = px + dollW + 8, lw = pw - dollW - 12;
 
   // Action panel height: shown when item selected
   const selSlot = es.invSelected !== null ? gs.parent.inventory[es.invSelected] : null;
@@ -2556,7 +2531,7 @@ function drawExploreInventory(ctx, gs, es) {
   const actionH = selSlot ? 36 : 0;
 
   const listH = ph - (ey - py) - 30 - actionH;
-  const rows = drawInventoryList(ctx, gs.parent.inventory, px + 4, ey, pw - 8, listH,
+  const rows = drawInventoryList(ctx, gs.parent.inventory, lx, ey, lw, listH,
     `CARRYING  ${calcWeight(gs.parent.inventory).toFixed(1)}/${parentMaxCarry().toFixed(1)}kg`,
     es.invScroll || 0, mx, my, es.invSelected);
   gs._exploreInvRows = rows;
@@ -2565,12 +2540,12 @@ function drawExploreInventory(ctx, gs, es) {
   gs._exploreInvActionBtns = [];
   if (selSlot && selDef) {
     const ay = ey + listH + 4;
-    fillRect(ctx, px + 4, ay, pw - 8, actionH - 2, '#0e1525');
-    drawText(ctx, `Selected: ${selDef.name}${selSlot.qty > 1 ? ` x${selSlot.qty}` : ''}`, px + 10, ay + 10, '#c8c8d8', 8);
-    let bx = px + 10;
+    fillRect(ctx, lx, ay, lw, actionH - 2, '#0e1525');
+    drawText(ctx, `Selected: ${selDef.name}${selSlot.qty > 1 ? ` x${selSlot.qty}` : ''}${_equipStatText(selDef)}`, lx + 6, ay + 10, '#c8c8d8', 8);
+    let bx = lx + 6;
     const by = ay + 16;
     const bh = 14;
-    const isEquippable = def => def.type === 'weapon' || def.type === 'backpack' || def.type === 'armor' || def.type === 'light';
+    const isEquippable = def => !!equipSlotFor(def);
     const isConsumable = def => def.type === 'food' || def.type === 'drink' || def.type === 'medicine' || def.type === 'water';
     if (selDef.type === 'note') {
       const bw = 36;
@@ -2601,18 +2576,18 @@ function drawExploreInventory(ctx, gs, es) {
       gs._exploreInvActionBtns.push({ action: 'equip', x: bx, y: by, w: bw, h: bh });
       bx += bw + 5;
     }
-    { const bw = 38;
+    { const bw = 46;
       const hov = hitTest(mx, my, bx, by, bw, bh);
       drawButton(ctx, bx, by, bw, bh, 'Drop 1', hov);
       gs._exploreInvActionBtns.push({ action: 'drop1', x: bx, y: by, w: bw, h: bh });
       bx += bw + 5; }
-    { const bw = 48;
+    { const bw = 58;
       const hov = hitTest(mx, my, bx, by, bw, bh);
       drawButton(ctx, bx, by, bw, bh, 'Drop All', hov);
       gs._exploreInvActionBtns.push({ action: 'dropAll', x: bx, y: by, w: bw, h: bh });
       bx += bw + 5; }
   } else {
-    drawText(ctx, 'Click item to select it.', px + pw/2, py + ph - 18, C.textDim, 7, 'center');
+    drawText(ctx, 'Click item to select it.', lx + lw / 2, py + ph - 18, C.textDim, 7, 'center');
   }
 
   // Close button

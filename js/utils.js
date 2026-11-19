@@ -147,7 +147,7 @@ function itemTypeColor(type) {
   const map = {
     food: C.food, water: C.water, medicine: C.medicine,
     weapon: C.weapon, material: C.material, ammo: C.ammo,
-    backpack: C.backpack, tool: C.material, misc: C.material,
+    backpack: C.backpack, tool: C.material, misc: C.material, clothing: '#7a8aa0', light: '#d8c070',
   };
   return map[type] || C.material;
 }

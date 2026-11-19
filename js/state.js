@@ -29,7 +29,7 @@ const GS = {
     // Inventory
     inventory: [],
     backpackId: null,    // item id of equipped backpack
-    equipped: { weapon: null, armor: null },
+    equipped: { weapon: null, chest: null, legs: null, light: null },   // see equipment.js
     // Ammo tracking (rounds in magazine, spare ammo)
     ammo: { pistol: 0, rifle: 0, shotgun: 0 },
     loaded: { pistol: 0, rifle: 0, shotgun: 0 },

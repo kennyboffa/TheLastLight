@@ -63,6 +63,7 @@ function _finishLoad(gs) {
   gs.screenFade = { active: false, alpha: 0, phase: 'idle', pendingFn: null };
   gs.notifications = [];
   if (gs.parent) gs.parent.isExploring = false;
+  if (gs.parent && typeof normalizeEquipment === 'function') normalizeEquipment(gs.parent);
   if (gs.child)  gs.child.isAlone = false;
   for (const s of (gs.survivors || [])) s.isExploring = false;
   gs.exploreCompanionId = null;

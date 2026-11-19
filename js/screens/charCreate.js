@@ -448,6 +448,8 @@ function finalizeCharacter(gs) {
   addToInventory(inv, 'bandage', 2);
   if (cc.skills.melee >= 4)    addToInventory(inv, 'knife', 1);
   if (cc.skills.firearms >= 4) { addToInventory(inv, 'pistol', 1); addToInventory(inv, 'pistol_ammo', 8); }
+  // Dressed in what they fled in
+  gs.parent.equipped = { weapon: null, chest: 'hoodie', legs: 'jeans', light: null };
 
   // Shelter starting storage
   const storage = gs.shelter.storage;
@@ -460,6 +462,7 @@ function finalizeCharacter(gs) {
   addToInventory(storage, 'matches', 2);
   addToInventory(storage, 'flashlight', 1);
   addToInventory(storage, 'batteries', 2);
+  addToInventory(storage, 'flannel_shirt', 1);
 
   setScreen('shelter');
   Audio.startShelterMusic();

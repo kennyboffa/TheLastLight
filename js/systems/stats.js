@@ -445,6 +445,8 @@ function advanceDay(gs) {
 
   // Autosave at the start of every new day
   if (typeof autoSaveGame === 'function') autoSaveGame(gs);
+  // High suspicion may bring a raid later today
+  if (typeof rollDailyRaid === 'function') rollDailyRaid(gs);
 
   // Parent: if sleeping when day ends, they wake up fully rested
   if (gs.parent.isSleeping) {

@@ -200,6 +200,43 @@ function drawNotifications(ctx, gs, startX, startY, centered, maxWidth) {
   gs.notifications = notifs;
 }
 
+// ── One-time tutorial hints ───────────────────────────────────────────────────
+// Each hint id shows once per playthrough (remembered in gs.hintsSeen, which is
+// saved). Hints queue up so they never overlap.
+
+const HINT_MS = 8000;
+
+function showHint(gs, id, text) {
+  if (!gs.hintsSeen) gs.hintsSeen = {};
+  if (gs.hintsSeen[id]) return;
+  gs.hintsSeen[id] = true;
+  if (!gs._hintQueue) gs._hintQueue = [];
+  gs._hintQueue.push(text);
+}
+
+function drawHint(ctx, gs, cx, y, maxW) {
+  const q = gs._hintQueue;
+  if (!q || !q.length) return;
+  if (!gs._hintT0) gs._hintT0 = Date.now();
+  const age = Date.now() - gs._hintT0;
+  if (age > HINT_MS) { q.shift(); gs._hintT0 = 0; return; }
+  const a = Math.min(1, age / 300, (HINT_MS - age) / 700);
+  // wrap
+  const perLine = Math.floor((maxW - 20) / 6.2);
+  const lines = []; let cur = '';
+  for (const w of q[0].split(' ')) {
+    if ((cur + ' ' + w).trim().length > perLine) { lines.push(cur); cur = w; } else cur = (cur + ' ' + w).trim();
+  }
+  if (cur) lines.push(cur);
+  const h = 16 + lines.length * 12;
+  ctx.save();
+  ctx.globalAlpha = a;
+  drawPanel(ctx, cx - maxW / 2, y - h, maxW, h, '#101418', '#4a6a50');
+  drawText(ctx, 'TIP', cx - maxW / 2 + 8, y - h + 12, '#7ac07a', 7, 'left', true);
+  lines.forEach((l, i) => drawText(ctx, l, cx, y - h + 12 + i * 12 + (i === 0 ? 0 : 0) + 0, C.text, 8, 'center'));
+  ctx.restore();
+}
+
 // ── Action button grid ─────────────────────────────────────────────────────────
 
 function drawActionButtons(ctx, buttons, mx, my) {

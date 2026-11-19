@@ -54,6 +54,7 @@ function _finishLoad(gs) {
   gs.screen   = 'shelter';
   gs.combat   = null;
   gs.inCombat = false;
+  gs.isRaid   = false;
   gs.event    = null;
   gs.explore  = null;
   gs.paused   = false;

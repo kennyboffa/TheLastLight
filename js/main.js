@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.41';
+const GAME_VERSION = 'v0.42';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -450,6 +450,7 @@ function update(dt) {
 
   // Shelter ambient events (skip if day transition just started this frame)
   if (gs.screen === 'shelter' && !gs.dayFade.active) {
+    if (typeof checkRaid === 'function') checkRaid(gs);
     maybeFireShelterEvent(gs);
     maybeFireDialogueEvent(gs);
     autoFeedLogic(gs);

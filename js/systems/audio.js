@@ -61,6 +61,27 @@ const Audio = (() => {
     } catch (e) {}
   }
 
+  // Filtered noise burst — the base for footsteps, rustles and thuds
+  function shapedNoise(dur, vol, type, freq, q, delay) {
+    if (!ctx || !enabled) return;
+    const v = vol * sfxVol;
+    if (v < 0.0005) return;
+    try {
+      const sr = ctx.sampleRate;
+      const buf = ctx.createBuffer(1, Math.ceil(sr * dur), sr);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q || 0.8;
+      const g = ctx.createGain();
+      const t = ctx.currentTime + (delay || 0);
+      g.gain.setValueAtTime(v, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(ctx.destination);
+      src.start(t);
+    } catch (e) {}
+  }
+
   function noise(dur, vol, delay) {
     if (!ctx || !enabled) return;
     const v = (vol || 0.12) * sfxVol;
@@ -498,6 +519,14 @@ const Audio = (() => {
       beep(160, 0.3, 0.10, 'sawtooth');
       beep(100, 0.5, 0.07, 'sawtooth', 0.25);
     },
+
+    // Movement & world
+    step:    (soft) => shapedNoise(0.05, soft ? 0.025 : 0.05, 'lowpass', 420 + Math.random() * 160, 1),
+    door:    () => { shapedNoise(0.18, 0.09, 'lowpass', 160, 1); beep(90 + Math.random() * 20, 0.25, 0.03, 'triangle', 0.05); },
+    rustle:  () => { for (let i = 0; i < 3; i++) shapedNoise(0.09, 0.035, 'bandpass', 1800 + Math.random() * 900, 1.5, i * 0.11); },
+    thud:    () => { shapedNoise(0.22, 0.12, 'lowpass', 110, 1); beep(55, 0.2, 0.05, 'sine'); },
+    breakWeapon: () => { shapedNoise(0.12, 0.12, 'highpass', 2500, 1); beep(220, 0.15, 0.05, 'square', 0.03); },
+    wind:    () => shapedNoise(1.6, 0.05, 'bandpass', 500, 0.6),
 
     // Events & rewards
     loot:    () => beep(660, 0.09, 0.06, 'sine'),

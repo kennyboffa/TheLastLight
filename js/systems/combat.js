@@ -105,6 +105,9 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     playerWx: playerWx || 80,
     playerAp: 4,   // AP remaining this player turn
     ambush: !!gs.parent.sneaking,   // snuck up on them: first strike bonus
+    // Companion stands beside you, on the side away from the enemies
+    compWx: (playerWx || 80) + (((encounterWx || playerWx + 200) >= (playerWx || 80)) ? -24 : 24),
+    compDown: false, compHealed: false,
     introTimer: CFG_COMBAT_INTRO, // brief freeze + "COMBAT" banner before anyone acts
   };
 
@@ -349,7 +352,16 @@ function enemyTurn(gs) {
     let ap = enemyMaxAp(enemy);
 
     while (ap > 0) {
-      const dist = gs.inCombat ? Math.abs(c.playerWx - enemy.worldX) : 0;
+      const pDist = gs.inCombat ? Math.abs(c.playerWx - enemy.worldX) : 0;
+      // Go for the companion instead when they're clearly closer (or sometimes when both are in reach)
+      const comp = (gs.exploreCompanionId && c.companion && !c.compDown) ? c.companion : null;
+      const cDist = comp ? Math.abs(c.compWx - enemy.worldX) : Infinity;
+      if (enemy._targetComp === undefined || ap === enemyMaxAp(enemy)) {
+        enemy._targetComp = !!comp && (cDist < pDist - 15 || (cDist <= MELEE_RANGE && chance(30)));
+      }
+      const targetComp = enemy._targetComp && !!comp;
+      const dist   = targetComp ? cDist : pDist;
+      const targetX = targetComp ? c.compWx : c.playerWx;
 
       // Can attack: ranged weapon or within melee range
       const canAttack = enemy.isRanged || dist <= MELEE_RANGE;
@@ -359,8 +371,12 @@ function enemyTurn(gs) {
         const hit = clamp((enemy.accuracy || 60) - (gs.parent.agility || 5), 10, 90);
         const delay = 300 * attackOrder++;
         enemy._atkT0  = Date.now() + delay;
-        enemy._shotTo = c.playerWx;
+        enemy._shotTo = targetX;
         const impact = delay + (enemy.isRanged ? 60 : 200);
+        if (targetComp) {
+          _enemyHitsCompanion(gs, enemy, impact);
+          break;
+        }
         if (chance(hit)) {
           const dmg   = randInt(enemy.damage[0], enemy.damage[1]);
           const dealt = Math.max(1, dmg);
@@ -394,7 +410,7 @@ function enemyTurn(gs) {
         // Move toward player
         ap -= 1;
         if (gs.inCombat) {
-          const dir = c.playerWx > enemy.worldX ? 1 : -1;
+          const dir = targetX > enemy.worldX ? 1 : -1;
           enemy.worldX += dir * 35;
         }
       } else {
@@ -403,28 +419,48 @@ function enemyTurn(gs) {
     }
   }
 
-  // Companion auto-attack
-  if (gs.exploreCompanionId && c.companion) {
+  // Companion's turn: patch the player up once when they're hurt, otherwise
+  // close in on the nearest enemy and attack
+  if (gs.exploreCompanionId && c.companion && !c.compDown) {
     const comp  = c.companion;
     const alive = c.enemies.filter(e => !e.dead);
-    if (alive.length > 0) {
-      const tgt     = alive[Math.floor(Math.random() * alive.length)];
-      const compHit = clamp(50 + (comp.skills?.melee || 1) * 4, 20, 90);
-      if (chance(compHit)) {
-        const dmg = randInt(3, 8);
-        tgt.hp -= dmg;
-        _fx(gs, 'hit', tgt, dmg, c.playerWx, 300 * attackOrder);
-        combatLog(gs, `${comp.name} hits ${tgt.name} for ${dmg} dmg.`, 'good');
-        if (tgt.hp <= 0) {
-          tgt.dead = true;
-          _fx(gs, 'death', tgt, 0, c.playerWx, 300 * attackOrder + 20);
-          combatLog(gs, `${tgt.name} destroyed.`, 'good');
-          collectLoot(gs, tgt);
-        }
-      } else {
-        combatLog(gs, `${comp.name} misses.`, 'normal');
+    const delay = 300 * attackOrder++;
+    if (alive.length && c.player.hp / c.player.maxHp < 0.4 && !c.compHealed) {
+      c.compHealed = true;
+      const heal = 6;
+      c.player.hp = Math.min(c.player.maxHp, c.player.hp + heal);
+      gs.parent.health = Math.min(gs.parent.maxHealth, gs.parent.health + heal);
+      combatLog(gs, `${comp.name} patches you up (+${heal} HP).`, 'good');
+    } else if (alive.length) {
+      const tgt = alive.reduce((a, e) => Math.abs(e.worldX - c.compWx) < Math.abs(a.worldX - c.compWx) ? e : a);
+      let d = Math.abs(tgt.worldX - c.compWx);
+      if (d > MELEE_RANGE) {
+        const step = Math.min(d - 40, 80);
+        c.compWx += (tgt.worldX > c.compWx ? 1 : -1) * step;
+        d = Math.abs(tgt.worldX - c.compWx);
       }
-      if (checkCombatVictory(gs)) return;
+      if (d <= MELEE_RANGE) {
+        c.compAtkT0 = Date.now() + delay;
+        const compHit = clamp(55 + (comp.skills?.melee || 1) * 4 - (tgt.agility || 3) * 2, 15, 85);
+        if (chance(compHit)) {
+          const dmg = Math.max(1, randInt(3, 8) - Math.floor((tgt.armor || 0) / 2));
+          tgt.hp -= dmg;
+          _fx(gs, 'hit', tgt, dmg, c.compWx, delay + 200);
+          combatLog(gs, `${comp.name} hits ${tgt.name} for ${dmg} dmg.`, 'good');
+          if (tgt.hp <= 0) {
+            tgt.dead = true;
+            _fx(gs, 'death', tgt, 0, c.compWx, delay + 220);
+            combatLog(gs, `${tgt.name} destroyed.`, 'good');
+            collectLoot(gs, tgt);
+          }
+        } else {
+          combatLog(gs, `${comp.name} misses.`, 'normal');
+          _fx(gs, 'miss', tgt, 0, c.compWx, delay + 200);
+        }
+        if (checkCombatVictory(gs)) return;
+      } else {
+        combatLog(gs, `${comp.name} moves in.`, 'normal');
+      }
     }
   }
 
@@ -437,6 +473,29 @@ function enemyTurn(gs) {
 // ── Loot & end ────────────────────────────────────────────────────────────────
 
 // Drops stay on the body; search it afterwards (E) to take them
+// An enemy attacks the companion instead of the player
+function _enemyHitsCompanion(gs, enemy, impact) {
+  const c = gs.combat, comp = c.companion;
+  const hit = clamp((enemy.accuracy || 60) - 5, 10, 90);
+  const pseudo = { worldX: c.compWx, sprite: 'human_hostile' };
+  if (!chance(hit)) {
+    combatLog(gs, `${enemy.name} misses ${comp.name}.`, 'normal');
+    _fx(gs, 'miss', pseudo, 0, enemy.worldX, impact);
+    return;
+  }
+  const dealt = Math.max(1, randInt(enemy.damage[0], enemy.damage[1]));
+  comp.health = Math.max(0, (comp.health || 0) - dealt);
+  c.compHitT0 = Date.now() + impact;
+  _fx(gs, 'hit', pseudo, dealt, enemy.worldX, impact);
+  combatLog(gs, `${enemy.name} hits ${comp.name} for ${dealt} dmg.`, 'danger');
+  if (comp.health <= 0) {
+    comp.health = 1;                 // knocked out, not killed
+    c.compDown = true;
+    combatLog(gs, `${comp.name} is knocked down and out of the fight!`, 'danger');
+    notify(`${comp.name} is badly hurt.`, 'danger');
+  }
+}
+
 function collectLoot(gs, enemy) {
   enemy._loot = [];
   if (!enemy.drops) return;
@@ -490,6 +549,9 @@ function endCombat(gs, result) {
     triggerGameOver(gs, `${gs.parent.name} was killed in combat.`);
     return;
   }
+
+  // A shelter raid ends back in the shelter, not in exploration
+  if (gs.isRaid && typeof finishRaid === 'function') { finishRaid(gs, result, c); return; }
 
   if (result === 'victory' && c._encRef) c._encRef.killed = true;
   // Bodies stay where they fell for the rest of this exploration

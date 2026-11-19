@@ -209,6 +209,12 @@ const GS = {
   // ── Event cooldowns (last fired day per event id) ─────────────────────────
   eventLastFired: {},
 
+  // ── Tutorial hints / shelter raids ────────────────────────────────────────
+  hintsSeen: {},
+  _hintQueue: [], _hintT0: 0,
+  pendingRaid: null,
+  isRaid: false,
+
   cc: {
     step: 0,     // 0=gender/name  1=attributes  2=skills
     gender: 'father',

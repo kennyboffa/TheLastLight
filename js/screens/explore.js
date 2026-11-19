@@ -386,6 +386,7 @@ function startExploration(gs, loc) {
 function updateExplore(gs, dt) {
   if (!exploreState) return;
   _tickFlashlight(gs, dt);
+  _exploreHints(gs);
   if (exploreState.building) { updateBuildingInterior(gs, dt); return; }
 
   const es = exploreState;
@@ -416,6 +417,7 @@ function updateExplore(gs, dt) {
   es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.15), 0, CFG.WORLD_W - EXPLORE_VIEW_W);
 
   es.animTimer++;
+  if (Math.abs(es.velX) > 0.1 && es.animTimer % (gs.parent.sneaking ? 26 : 17) === 0) Audio.step(gs.parent.sneaking);
   if (Math.abs(es.velX) > 0.1 && es.animTimer % 12 === 0) es.animFrame++;
   else if (Math.abs(es.velX) < 0.1) es.animFrame = 0;
   p.animFrame = es.animFrame;
@@ -528,6 +530,7 @@ function updateBuildingInterior(gs, dt) {
   bi.scrollX = areaScroll(area, lerp(bi.scrollX, targetScroll, 0.15));
 
   bi.animTimer = (bi.animTimer || 0) + 1;
+  if (Math.abs(bi.velX) > 0.1 && bi.animTimer % (gs.parent.sneaking ? 26 : 17) === 0) Audio.step(gs.parent.sneaking);
   if (Math.abs(bi.velX) > 0.1 && bi.animTimer % 12 === 0) bi.animFrame = ((bi.animFrame || 0) + 1);
   else if (Math.abs(bi.velX) < 0.1) bi.animFrame = 0;
   p.animFrame = bi.animFrame || 0;
@@ -731,6 +734,7 @@ function interactOutdoor(gs) {
   const nearB = es.buildings.find(b => !b.isTent && Math.abs(es.px - (b.doorX + 8)) < 24);
   if (nearB) {
     const bldgIdx = es.buildings.indexOf(nearB);
+    Audio.door();
     es.building = {
       bldgIdx, floorIdx: 0, roomIdx: null,
       px: (nearB.floors[0].exitX || 60) + 24,
@@ -753,6 +757,7 @@ function interactBuilding(gs) {
   if (area.isRoom) {
     // Back out to the hallway, in front of this room's door
     if (Math.abs(bi.px - (area.backDoorX + DOOR_W / 2)) < 26) {
+      Audio.door();
       const door = fl.doors.find(d => d.roomIdx === bi.roomIdx);
       bi.roomIdx = null;
       bi.px = door ? door.x + DOOR_W / 2 : 120;
@@ -762,12 +767,14 @@ function interactBuilding(gs) {
   } else {
     // Exit door (floor 0 only)
     if (fl.exitX !== null && Math.abs(bi.px - fl.exitX) < 30) {
+      Audio.door();
       es.building = null;
       notify('Exited building.', 'info');
       return;
     }
     // Stairs up
     if (fl.stairsUpX !== null && Math.abs(bi.px - fl.stairsUpX) < 30 && bi.floorIdx + 1 < bld.numFloors) {
+      Audio.step(); Audio.step(true);
       bi.floorIdx++;
       bi.roomIdx = null;
       bi.px = bld.floors[bi.floorIdx].stairsDownX || 110;
@@ -777,6 +784,7 @@ function interactBuilding(gs) {
     }
     // Stairs down
     if (fl.stairsDownX !== null && Math.abs(bi.px - fl.stairsDownX) < 30 && bi.floorIdx > 0) {
+      Audio.step(); Audio.step(true);
       bi.floorIdx--;
       bi.roomIdx = null;
       bi.px = bld.floors[bi.floorIdx].stairsUpX || BUILDING_W - 110;
@@ -787,6 +795,7 @@ function interactBuilding(gs) {
     // Room doorways
     const door = (fl.doors || []).find(d => Math.abs(bi.px - (d.x + DOOR_W / 2)) < 20);
     if (door) {
+      Audio.door();
       bi.roomIdx = door.roomIdx;
       const room = fl.rooms[door.roomIdx];
       bi.px = room.backDoorX + DOOR_W / 2 + 24;
@@ -806,6 +815,7 @@ function _interactBodies(gs, px) {
   const here = areaKey(es);
   const body = es.corpses.find(cp => (cp.where || 'out') === here && cp.loot && cp.loot.length && Math.abs(px - cp.x) < 28);
   if (!body) return false;
+  Audio.rustle();
   openContainerLoot(gs, { type: 'body', loot: body.loot, label: body.name });
   return true;
 }
@@ -821,6 +831,7 @@ function _interactContainers(gs, containers, px) {
   if (nearC) {
     nearC.searching = true; nearC.searchProgress = 0;
     if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
+    Audio.rustle();
     notify('Searching... (moving cancels)', 'info');
     return true;
   }
@@ -1042,6 +1053,7 @@ function renderExplore(ctx, gs) {
   drawZoneTitleCard(ctx, es);
   drawExploreHUD(ctx, gs, es);
   if (es.invOpen) drawExploreInventory(ctx, gs, es);
+  if (!es.invOpen) drawHint(ctx, gs, 428, 112, 400);   // top band, clear of the HUD panels and the fight
   if (gs.inCombat && gs.combat && gs.combat.introTimer > 0) _drawCombatBanner(ctx, gs.combat.introTimer);
   // Notifications centered between left HUD panels and right clock to avoid overlap
   drawNotifications(ctx, gs, CFG.W / 2, 14, true);
@@ -1173,14 +1185,7 @@ function renderOutdoor(ctx, gs, es) {
   });
 
   // Companion following player (uses combat world-x during combat)
-  if (gs.exploreCompanionId) {
-    const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
-    if (compIdx >= 0) {
-      const compAnchorX = (gs.inCombat && gs.combat) ? gs.combat.playerWx : es.px;
-      const compX = compAnchorX - es.facing * 22;
-      drawSurvivor(ctx, compX, PLAYER_FOOT, 2, -es.facing, es.animFrame, compIdx, Math.abs(es.velX) > 0.1 ? 'side' : 'front');
-    }
-  }
+  _drawCompanion(ctx, gs, es.px, es.facing, es.animFrame, Math.abs(es.velX) > 0.1);
 
   // Blood, sparks, damage numbers, tracers
   _updateDrawFx(ctx, gs, es);
@@ -1357,12 +1362,7 @@ function renderBuildingInterior(ctx, gs, es) {
   });
 
   // Companion
-  if (gs.exploreCompanionId && !gs.inCombat) {
-    const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
-    if (compIdx >= 0) {
-      drawSurvivor(ctx, bi.px - bi.facing * 22, PLAYER_FOOT, 2, -bi.facing, bi.animFrame || 0, compIdx, Math.abs(bi.velX) > 0.1 ? 'side' : 'front');
-    }
-  }
+  _drawCompanion(ctx, gs, bi.px, bi.facing, bi.animFrame || 0, Math.abs(bi.velX) > 0.1);
 
   _updateDrawFx(ctx, gs, es);
 
@@ -1546,6 +1546,25 @@ function drawExploreHUD(ctx, gs, es) {
   }
 }
 
+// ── Tutorial hints while exploring ───────────────────────────────────────────
+function _exploreHints(gs) {
+  const es = exploreState;
+  if (!es || (gs.screenFade && gs.screenFade.active) || gs.isRaid) return;
+  showHint(gs, 'move', 'A/D or arrows walk. E interacts (search, doors, stairs). C sneaks, L toggles a flashlight, INV opens your bag. Walk to either edge to go home.');
+  if (gs.inCombat) {
+    showHint(gs, 'combat', 'Combat: A/D move (1 AP), Space attacks (ends turn), I uses an item, Enter ends your turn. Flee needs distance and 2 AP. Your hit chance shows on the Attack button.');
+    return;
+  }
+  if (es.location.canHunt && !es.building) showHint(gs, 'hunt', 'In the wild you can hunt: press H (or HUNT) to spend an hour looking for meat. Cook it at home before eating.');
+  if (es.building) showHint(gs, 'rooms', 'Doorways lead to rooms. Shelves, bookshelves and cabinets can be searched too.');
+  const area = es.building ? curArea(es) : null;
+  const px = es.building ? es.building.px : es.px;
+  const containers = area ? area.containers : es.containers;
+  if (containers.some(c => !c.searched && Math.abs(px - c.wx) < 40)) showHint(gs, 'search', 'Press E to search. Moving cancels the search. Afterwards pick what to take; E takes everything.');
+  if (es.corpses && es.corpses.some(c => c.loot && c.loot.length)) showHint(gs, 'bodies', 'Bodies can be searched with E for whatever they carried.');
+  if (nightFactor(gs.time) > 0.5 && !es.building) showHint(gs, 'night', 'It is dark. A flashlight (L) helps you see but makes you easier to spot outside. Sneaking (C) does the opposite.');
+}
+
 // ── Sneaking & flashlight ────────────────────────────────────────────────────
 
 function toggleSneak(gs) {
@@ -1627,6 +1646,7 @@ function startHunt(gs) {
   if (!canHuntHere(gs) || (gs.screenFade && gs.screenFade.active)) return;
   gs.mouse.down = false;
   gs.keys = {};
+  Audio.wind();
   const fade = { active: true, alpha: 0, phase: 'out', titleText: null };
   fade.pendingFn = () => {
     // An hour passes in 10-minute steps (hunger, thirst, nightfall all apply)
@@ -1979,6 +1999,7 @@ function combatFx(gs, type, who, amount, fromX, delayMs) {
   } else if (type === 'miss') {
     es.floaters.push({ x, y: y - 18, text: isPlayer ? 'DODGE' : 'MISS', color: '#b8b4a0', t0: now });
   } else if (type === 'death') {
+    setTimeout(() => Audio.thud(), FX_FALL_MS * 0.85);
     if (isPlayer) { c.playerDeathT0 = now; c.playerDeathDir = away; }
     else { who._deathT0 = now; who._deathDir = away; }
     _spray(es, x, y, away, machine, 18);
@@ -2110,6 +2131,38 @@ function _updateDrawFx(ctx, gs, es) {
     drawText(ctx, f.text, f.x, f.y - t * 18, f.color, 8, 'center', true);
     ctx.restore();
   }
+}
+
+// The survivor travelling with you: follows behind, or holds their own spot in a fight
+function _drawCompanion(ctx, gs, px, facing, animFrame, moving) {
+  if (!gs.exploreCompanionId) return;
+  const compIdx = (gs.survivors || []).findIndex(s => s.id === gs.exploreCompanionId);
+  if (compIdx < 0) return;
+  const comp = gs.survivors[compIdx];
+  const c = gs.inCombat && gs.combat ? gs.combat : null;
+  if (!c) {
+    drawSurvivor(ctx, px - facing * 22, PLAYER_FOOT, 2, -facing, animFrame, compIdx, moving ? 'side' : 'front');
+    return;
+  }
+  const alive = c.enemies.filter(e => !e.dead);
+  const near = alive.length ? alive.reduce((a, e) => Math.abs(e.worldX - c.compWx) < Math.abs(a.worldX - c.compWx) ? e : a) : null;
+  const f = near ? (near.worldX >= c.compWx ? 1 : -1) : facing;
+  ctx.save();
+  if (c.compDown) {
+    // knocked down: lying on the ground
+    ctx.globalAlpha = 0.85;
+    ctx.translate(c.compWx, PLAYER_FOOT - 6);
+    ctx.rotate(-f * Math.PI / 2);
+    drawSurvivor(ctx, 0, 0, 2, f, 0, compIdx, 'front');
+    ctx.restore();
+    return;
+  }
+  const x = c.compWx + _hitOffset(c.compHitT0, -f);
+  drawSurvivor(ctx, x, PLAYER_FOOT, 2, f, 0, compIdx, 'front');
+  ctx.restore();
+  drawStatBar(ctx, c.compWx - 18, PLAYER_FOOT - 50, 36, 4, comp.health, comp.maxHealth || 100,
+              comp.health / (comp.maxHealth || 100) > 0.4 ? '#3a7a5a' : '#cc2020');
+  drawText(ctx, comp.name, c.compWx, PLAYER_FOOT - 54, '#88bbaa', 6, 'center');
 }
 
 // Knockback offset while a hit reaction plays

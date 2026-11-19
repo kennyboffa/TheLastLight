@@ -124,7 +124,7 @@ function renderLootPickup(ctx, gs) {
   // Take All button
   const takeAllX = panX + 10, takeAllY = panY + panH - 28;
   const takeAllHov = hitTest(mx, my, takeAllX, takeAllY, 80, 20);
-  drawButton(ctx, takeAllX, takeAllY, 80, 20, 'Take All', takeAllHov);
+  drawButton(ctx, takeAllX, takeAllY, 80, 20, 'Take All [E]', takeAllHov);
   gs._lootTakeAllBounds = { x: takeAllX, y: takeAllY, w: 80, h: 20 };
 
   // Done button
@@ -152,18 +152,7 @@ function lootPickupClick(mx, my, gs) {
   if (gs._lootTakeAllBounds && hitTest(mx, my,
       gs._lootTakeAllBounds.x, gs._lootTakeAllBounds.y,
       gs._lootTakeAllBounds.w, gs._lootTakeAllBounds.h)) {
-    const toTake = [...list];
-    let left = 0;
-    for (const item of toTake) {
-      const wt = calcWeight(gs.parent.inventory) + getItemDef(item.id).weight * item.qty;
-      if (wt <= parentMaxCarry() * 1.1) {
-        addToInventory(gs.parent.inventory, item.id, item.qty);
-        list.splice(list.indexOf(item), 1);
-        _lootTaken(gs, item);
-      } else left++;
-    }
-    if (left) notify('Too heavy to carry everything.', 'warn');
-    else closeLootPickup(gs);
+    lootTakeAll(gs);
     return;
   }
 
@@ -207,6 +196,28 @@ function lootPickupClick(mx, my, gs) {
       }
     }
   }
+}
+
+// Take everything that fits; closes the screen if nothing is left
+function lootTakeAll(gs) {
+  const list = _lootList(gs);
+  if (!list) return;
+  let left = 0;
+  for (const item of [...list]) {
+    const wt = calcWeight(gs.parent.inventory) + getItemDef(item.id).weight * item.qty;
+    if (wt <= parentMaxCarry() * 1.1) {
+      addToInventory(gs.parent.inventory, item.id, item.qty);
+      list.splice(list.indexOf(item), 1);
+      _lootTaken(gs, item);
+    } else left++;
+  }
+  if (left) notify('Too heavy to carry everything.', 'warn');
+  else closeLootPickup(gs);
+}
+
+function lootPickupKey(key, gs) {
+  if (key === 'e') lootTakeAll(gs);
+  else if (key === 'escape' || key === 'enter') closeLootPickup(gs);
 }
 
 function closeLootPickup(gs) {

@@ -644,6 +644,14 @@ function exploreKeyPress(key, gs) {
   if (gs.inCombat && gs.combat) {
     const c = gs.combat;
     if (c.introTimer > 0 || (c.busyUntil && Date.now() < c.busyUntil) || c.turn !== 'player' || c.phase !== 'action') return;
+    if (c.itemMenu) {
+      const n = parseInt(key, 10);
+      const items = combatUsableItems(gs);
+      if (n >= 1 && n <= items.length) { c.itemMenu = false; playerUseItem(gs, items[n - 1].id); }
+      else if (key === 'escape' || key === 'i') c.itemMenu = false;
+      return;
+    }
+    if (key === 'i') { if (combatUsableItems(gs).length) c.itemMenu = true; return; }
     if (key === 'arrowleft'  || key === 'a') { playerMoveLeft(gs);  return; }
     if (key === 'arrowright' || key === 'd') { playerMoveRight(gs); return; }
     if (key === ' ' || key === 'f') {
@@ -1605,9 +1613,9 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   } else { gs._combatTarget = null; }
 
   // Item
-  const hasUsable = gs.parent.inventory.some(s => { const d = getItemDef(s.id); return d && (d.health || d.hunger || d.thirst); });
+  const hasUsable = combatUsableItems(gs).length > 0;
   const itHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 50, 24);
-  drawButton(ctx, bx, _COMBAT_BAR_Y, 50, 24, 'Item', itHov, false, !hasUsable);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 50, 24, 'Item [I]', itHov, !!c.itemMenu, !hasUsable);
   gs._combatItem = { x: bx, y: _COMBAT_BAR_Y, w: 50, h: 24 };
   bx += 56;
 
@@ -1621,9 +1629,53 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
     const needed = alive.length ? Math.round(FLEE_MIN_DIST - Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX)))) : 0;
     if (needed > 0) drawText(ctx, `need ${needed}m`, bx + 24, _COMBAT_BAR_Y - 2, '#884444', 6, 'center');
   }
+
+  if (c.itemMenu) _drawCombatItemMenu(ctx, gs, mx, my);
 }
 
 // ── In-world combat click handler ────────────────────────────────────────────
+
+// Items that can be used mid-fight: food, water and medicine (not Lily's antiviral)
+function combatUsableItems(gs) {
+  return gs.parent.inventory.filter(s => {
+    const d = getItemDef(s.id);
+    return d && ['food', 'water', 'medicine'].includes(d.type) && s.id !== 'antiviral';
+  });
+}
+
+// What an item does, short form for the picker
+function _itemEffectText(d) {
+  const parts = [];
+  if (d.health) parts.push(`+${d.health} HP`);
+  // hunger/thirst values are reductions, so show them as food/water gained
+  const sgn = v => (v > 0 ? '+' : '') + v;
+  if (d.hunger) parts.push(`food ${sgn(-d.hunger)}`);
+  if (d.thirst) parts.push(`water ${sgn(-d.thirst)}`);
+  if (d.clearsInfection) parts.push('cures infection');
+  return parts.join(', ');
+}
+
+// Combat item picker (opened with the Item button or I)
+function _drawCombatItemMenu(ctx, gs, mx, my) {
+  const items = combatUsableItems(gs);
+  const rowH = 16, w = 280;
+  const h = 24 + items.length * rowH + 14;
+  const x = Math.round(CFG.W / 2 - w / 2), y = _COMBAT_BAR_Y - 8 - h;
+  drawPanel(ctx, x, y, w, h, C.panelBg, C.border2);
+  drawText(ctx, 'USE ITEM  (uses your turn)', x + 8, y + 14, C.textBright, 8, 'left', true);
+  gs._combatItemRows = [];
+  items.forEach((slot, i) => {
+    const d = getItemDef(slot.id);
+    const ry = y + 22 + i * rowH;
+    const hov = hitTest(mx, my, x + 4, ry, w - 8, rowH);
+    if (hov) fillRect(ctx, x + 4, ry, w - 8, rowH, C.highlight);
+    const ic = drawItemIcon(ctx, slot.id, x + 8, ry + 1, rowH - 2);
+    drawText(ctx, `${i + 1}. ${d.name}${slot.qty > 1 ? ' x' + slot.qty : ''}`, x + (ic ? rowH + 10 : 10), ry + rowH - 4, hov ? C.textBright : C.text, 8);
+    drawText(ctx, _itemEffectText(d), x + w - 8, ry + rowH - 4, C.textDim, 7, 'right');
+    gs._combatItemRows.push({ x: x + 4, y: ry, w: w - 8, h: rowH, id: slot.id });
+  });
+  drawText(ctx, 'Click outside or Esc to cancel', x + w / 2, y + h - 4, C.textDim, 6, 'center');
+}
 
 // Return Home button: bottom-left, or left of the [E] button when touch controls are shown
 function _returnBtnRect(gs) {
@@ -1634,6 +1686,14 @@ function _returnBtnRect(gs) {
 function _handleExploreCombatClick(mx, my, gs) {
   const c = gs.combat;
   if (!c || c.introTimer > 0 || (c.busyUntil && Date.now() < c.busyUntil) || c.turn !== 'player' || c.phase !== 'action') return;
+
+  // Item picker open: pick an item, or click anywhere else to close it
+  if (c.itemMenu) {
+    const row = (gs._combatItemRows || []).find(r => hitTest(mx, my, r.x, r.y, r.w, r.h));
+    c.itemMenu = false;
+    if (row) playerUseItem(gs, row.id);
+    return;
+  }
 
   // Move left
   if (gs._combatMoveL && hitTest(mx, my, gs._combatMoveL.x, gs._combatMoveL.y, gs._combatMoveL.w, gs._combatMoveL.h)) {
@@ -1671,8 +1731,7 @@ function _handleExploreCombatClick(mx, my, gs) {
   }
   // Item
   if (gs._combatItem && hitTest(mx, my, gs._combatItem.x, gs._combatItem.y, gs._combatItem.w, gs._combatItem.h)) {
-    const slot = gs.parent.inventory.find(s => { const d = getItemDef(s.id); return d && (d.health || d.hunger || d.thirst); });
-    if (slot) playerUseItem(gs, slot.id);
+    if (combatUsableItems(gs).length) c.itemMenu = true;
     return;
   }
   // Flee

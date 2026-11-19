@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.38';
+const GAME_VERSION = 'v0.39';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -319,6 +319,8 @@ function handleKeyPress(key) {
     exploreKeyPress(key, GS);
     return;
   }
+
+  if (GS.screen === 'lootPickup') { lootPickupKey(key, GS); return; }
 
   if (GS.screen === 'event') {
     if (key >= '1' && key <= '9') {

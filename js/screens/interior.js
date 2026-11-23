@@ -7,16 +7,24 @@
 //     stairsDownX, doors[] (floors), isRoom/label/backDoorX (rooms) }
 
 // Rooms per building type: [min, max] and the kinds of room it has
+// Rooms behind doorways, per building plan (a building's `plan`, else its theme)
 const ROOM_PLAN = {
   house:    { n: [1, 2], kinds: ['Bedroom', 'Bathroom', 'Kitchen', 'Closet'] },
-  urban:    { n: [2, 3], kinds: ['Apartment', 'Bedroom', 'Bathroom', 'Storage'] },
+  urban:    { n: [2, 3], kinds: ['Apartment', 'Bedroom', 'Bathroom', 'Storage'] },   // apartment block
   office:   { n: [2, 3], kinds: ['Office', 'Meeting Room', 'Storage', 'Restroom'] },
   hospital: { n: [2, 3], kinds: ['Ward', 'Exam Room', 'Supply Room', 'Office'] },
   pharmacy: { n: [1, 1], kinds: ['Stock Room', 'Office'] },
   mall:     { n: [1, 2], kinds: ['Stock Room', 'Changing Room', 'Office'] },
-  factory:  { n: [1, 1], kinds: ['Foreman Office', 'Tool Room'] },
-  church:   { n: [0, 1], kinds: ['Vestry'] },
+  factory:  { n: [1, 2], kinds: ['Foreman Office', 'Tool Room', 'Locker Room'] },
+  church:   { n: [1, 2], kinds: ['Vestry', 'Sacristy', 'Parish Office'] },
+  crypt:    { n: [0, 1], kinds: ['Ossuary', 'Burial Chamber'] },
   cabin:    { n: [0, 1], kinds: ['Bedroom'] },
+  shed:     { n: [0, 0], kinds: [] },
+  police:   { n: [2, 3], kinds: ['Holding Cell', 'Interrogation', 'Locker Room', 'Evidence Room', 'Office'] },
+  bunker:   { n: [1, 2], kinds: ['Barracks', 'Armory', 'Radio Room', 'Storage'] },
+  school:   { n: [2, 3], kinds: ['Classroom', 'Classroom', "Teachers' Room", 'Restroom'] },
+  hall:     { n: [1, 2], kinds: ['Office', 'Meeting Room', 'Storage'] },
+  shop:     { n: [1, 2], kinds: ['Stock Room', 'Back Office', 'Kitchen'] },
 };
 
 // Furniture groups per room kind (numbers are gaps in px)
@@ -38,6 +46,20 @@ const ROOM_FURNITURE = {
   'Exam Room':      [['s_cot', 6, 'f_iv_stand'], ['f_med_shelf']],
   'Changing Room':  [['f_mannequin'], ['f_mannequin']],
   'Vestry':         [['f_bookshelf'], ['f_table']],
+  'Sacristy':       [['s_shelf'], ['f_bookshelf']],
+  'Parish Office':  [['f_desk', 4, 'f_office_chair'], ['f_bookshelf']],
+  'Ossuary':        [['debris'], ['s_crates']],
+  'Burial Chamber': [['f_church_cross'], ['debris']],
+  'Holding Cell':   [['s_cot']],
+  'Interrogation':  [['f_office_chair', 6, 'f_table', 6, 'f_office_chair']],
+  'Locker Room':    [['s_shelf'], ['s_crates']],
+  'Evidence Room':  [['s_shelf'], ['f_filing', 2, 'f_filing']],
+  'Barracks':       [['s_cot', 8, 's_cot'], ['s_crates']],
+  'Armory':         [['s_gunrack'], ['s_crates'], ['s_gunrack']],
+  'Radio Room':     [['s_radio'], ['f_filing']],
+  'Classroom':      [['f_table'], ['f_table'], ['f_bookshelf']],
+  "Teachers' Room": [['f_table'], ['f_sofa'], ['f_bookshelf']],
+  'Back Office':    [['f_desk', 4, 'f_office_chair'], ['f_filing']],
 };
 
 // Hallway furniture per building theme
@@ -51,6 +73,12 @@ const HALL_FURNITURE = {
   pharmacy: [['f_med_shelf', 4, 'f_med_shelf'], ['f_med_shelf']],
   church:   [['f_church_cross'], ['f_pew'], ['f_pew'], ['f_pew']],
   urban:    [['debris'], ['f_table'], ['debris']],
+  crypt:    [['debris'], ['f_church_cross'], ['debris']],
+  police:   [['f_desk', 4, 'f_office_chair'], ['f_filing', 2, 'f_filing'], ['s_sandbags']],
+  bunker:   [['s_sandbags'], ['s_crates'], ['s_barrel', 4, 's_barrel']],
+  school:   [['f_table'], ['f_bookshelf'], ['f_table']],
+  hall:     [['f_table'], ['f_bookshelf'], ['f_sofa']],
+  shop:     [['f_store_shelf', 4, 'f_store_shelf'], ['f_table']],
   tent:     [['debris']],
 };
 
@@ -62,7 +90,7 @@ const FURN_SIZE = {
   f_table: [56, 30], f_bookshelf: [34, 52], f_pew: [72, 24], f_church_cross: [44, 88],
   s_bed_good: [54, 22], s_nightstand: [12, 20], s_shelf: [44, 58], s_crates: [40, 34],
   s_workbench: [60, 40], s_medcab: [26, 44], s_cot: [50, 18], s_stove: [26, 20],
-  debris: [52, 22],
+  debris: [52, 22], s_gunrack: [30, 44], s_radio: [52, 38], s_sandbags: [44, 18], s_barrel: [20, 26],
 };
 
 // Furniture you can search, and the container type it acts as
@@ -225,7 +253,7 @@ function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
   if (fl.stairsUpX !== null) busy.push([fl.stairsUpX - 4, fl.stairsUpX + 66]);
 
   // Rooms behind doorways
-  const plan = bdef.isTent ? null : (ROOM_PLAN[theme] || ROOM_PLAN.urban);
+  const plan = bdef.isTent ? null : (ROOM_PLAN[bdef.plan] || ROOM_PLAN[theme] || ROOM_PLAN.urban);
   if (plan) {
     const n = randInt(plan.n[0], plan.n[1]);
     const kinds = [...plan.kinds].sort(() => Math.random() - 0.5);
@@ -243,7 +271,7 @@ function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
   }
 
   // Hallway furniture (searchable shelves etc. become containers)
-  layoutFurniture(fl, HALL_FURNITURE[theme] || HALL_FURNITURE.urban, busy, theme, quality, 70, W - 70);
+  layoutFurniture(fl, HALL_FURNITURE[bdef.plan] || HALL_FURNITURE[theme] || HALL_FURNITURE.urban, busy, theme, quality, 70, W - 70);
 
   // A few regular containers in the gaps
   const cCount = 1 + randInt(0, 1);

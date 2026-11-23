@@ -138,6 +138,9 @@ function _rollCombatOpening(gs, enemies) {
     } else if (chance(clamp(45 - stealth * 8, 0, 40))) {
       c.surprised = true;
     }
+  } else if (chance(15)) {
+    // walking in openly: 15% chance they saw you first and jump you
+    c.surprised = true;
   }
   const pAgi = p.agility || 5;
   const fastest = enemies.reduce((a, e) => ((e.agility || 3) > (a.agility || 3) ? e : a), enemies[0] || {});
@@ -148,7 +151,7 @@ function _rollCombatOpening(gs, enemies) {
     combatLog(gs, `You catch them off guard! First strike +${c.ambushBonus}% to hit.`, 'good');
     c.openerText = 'AMBUSH';
   } else if (c.surprised) {
-    combatLog(gs, 'They heard you coming. Caught by surprise!', 'danger');
+    combatLog(gs, p.sneaking ? 'They heard you coming. Caught by surprise!' : 'They saw you first. Caught by surprise!', 'danger');
     c.openerText = 'CAUGHT BY SURPRISE';
   } else if (!playerFirst) {
     combatLog(gs, `${fastest.name || 'They'} ${enemies.length > 1 ? 'are' : 'is'} quicker and acts first.`, 'warn');

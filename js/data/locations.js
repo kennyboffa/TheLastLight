@@ -39,8 +39,8 @@ const LOCATIONS_DB = [
       { id:'gate',    name:'Village Gate',   x:0,    w:450, bgColor:'#0d0c09', lootTable:'home_light',   enemyChance:18 },
       { id:'square',  name:'Town Square',    x:450,  w:600, bgColor:'#0c0b08', lootTable:'mixed_medium', enemyChance:28,
         buildings:[
-          { relX:150, label:'Old Shop',      numFloors:2, theme:'house',  lootQuality:'home',   enemyChance:25 },
-          { relX:380, label:'Village Hall',  numFloors:2, theme:'office', lootQuality:'medium', enemyChance:30 },
+          { relX:150, label:'Old Shop',      numFloors:2, theme:'house',  plan:'shop',  lootQuality:'home',   enemyChance:25 },
+          { relX:380, label:'Village Hall',  numFloors:2, theme:'office', plan:'hall', lootQuality:'medium', enemyChance:30 },
         ]},
       { id:'homes',   name:'Residential Row',x:1050, w:650, bgColor:'#0b0a07', lootTable:'home_medium',  enemyChance:32,
         buildings:[
@@ -158,7 +158,7 @@ const LOCATIONS_DB = [
         ]},
       { id:'school',  name:'Old School',     x:1150, w:650, bgColor:'#0c0c0a', lootTable:'mixed_medium', enemyChance:28,
         buildings:[
-          { relX:220, label:'School Building',numFloors:2, theme:'office',  lootQuality:'medium', enemyChance:25 },
+          { relX:220, label:'School Building',numFloors:2, theme:'office', plan:'school', lootQuality:'medium', enemyChance:25 },
         ]},
       { id:'back',    name:'Back Gardens',   x:1800, w:550, bgColor:'#0a0c06', lootTable:'food_light',   enemyChance:10, huntChance:15 },
     ],
@@ -175,12 +175,12 @@ const LOCATIONS_DB = [
       { id:'lot',     name:'Parking Lot',    x:0,    w:400, bgColor:'#0c0c0f', lootTable:'urban_light',  enemyChance:20 },
       { id:'lobby',   name:'Front Desk',     x:400,  w:400, bgColor:'#0b0b0e', lootTable:'police_main',  enemyChance:28,
         buildings:[
-          { relX:150, label:'Station Block', numFloors:3, theme:'office', lootQuality:'police', enemyChance:32 },
+          { relX:150, label:'Station Block', numFloors:3, theme:'office', plan:'police', lootQuality:'police', enemyChance:32 },
         ]},
       { id:'cells',   name:'Holding Cells',  x:800,  w:450, bgColor:'#090910', lootTable:'police_main',  enemyChance:35, requiresLockpick:true },
       { id:'armory',  name:'Armory',         x:1250, w:450, bgColor:'#07070c', lootTable:'police_rare',  enemyChance:50, requiresLockpick:true,
         buildings:[
-          { relX:160, label:'Weapons Locker', numFloors:1, theme:'office', lootQuality:'rare', enemyChance:55, bossChance:12 },
+          { relX:160, label:'Weapons Locker', numFloors:1, theme:'office', plan:'police', lootQuality:'rare', enemyChance:55, bossChance:12 },
         ]},
       { id:'evidence',name:'Evidence Room',  x:1700, w:400, bgColor:'#080810', lootTable:'mixed_rare',   enemyChance:40, requiresLockpick:true },
     ],
@@ -202,7 +202,7 @@ const LOCATIONS_DB = [
       { id:'tower',   name:'Bell Tower',    x:950,  w:350, bgColor:'#0b0b07', lootTable:'mixed_light',  enemyChance:14 },
       { id:'crypt',   name:'Crypt',         x:1300, w:450, bgColor:'#080806', lootTable:'church_main',  enemyChance:20, requiresLockpick:true,
         buildings:[
-          { relX:140, label:'Underground Crypt', numFloors:1, theme:'pharmacy', lootQuality:'medical', enemyChance:18, bossChance:8 },
+          { relX:140, label:'Underground Crypt', numFloors:1, theme:'church', plan:'crypt', lootQuality:'crypt', enemyChance:18, bossChance:8 },
         ]},
     ],
   },
@@ -218,16 +218,16 @@ const LOCATIONS_DB = [
       { id:'tunnel',  name:'Access Tunnel',   x:0,    w:400, bgColor:'#0a0a0e', lootTable:'mixed_light',  enemyChance:30 },
       { id:'command', name:'Command Room',    x:400,  w:500, bgColor:'#08080d', lootTable:'bunker_main',  enemyChance:45,
         buildings:[
-          { relX:180, label:'Command Block',  numFloors:2, theme:'factory', lootQuality:'heavy', enemyChance:50 },
+          { relX:180, label:'Command Block',  numFloors:2, theme:'factory', plan:'bunker', lootQuality:'heavy', enemyChance:50 },
         ]},
       { id:'barracks',name:'Barracks',        x:900,  w:500, bgColor:'#07070c', lootTable:'bunker_main',  enemyChance:40 },
       { id:'vault',   name:'Armory Vault',    x:1400, w:400, bgColor:'#060609', lootTable:'bunker_rare',  enemyChance:60, requiresLockpick:true,
         buildings:[
-          { relX:140, label:'Vault',          numFloors:1, theme:'office',  lootQuality:'rare',  enemyChance:65, bossChance:20 },
+          { relX:140, label:'Vault',          numFloors:1, theme:'office',  plan:'bunker', lootQuality:'rare',  enemyChance:65, bossChance:20 },
         ]},
       { id:'power',   name:'Power Room',      x:1800, w:450, bgColor:'#050508', lootTable:'electronics',  enemyChance:55,
         buildings:[
-          { relX:150, label:'Server Core',    numFloors:2, theme:'factory', lootQuality:'factory', enemyChance:60, bossChance:15 },
+          { relX:150, label:'Server Core',    numFloors:2, theme:'factory', plan:'bunker', lootQuality:'factory', enemyChance:60, bossChance:15 },
         ]},
     ],
   },
@@ -244,7 +244,7 @@ const LOCATIONS_DB = [
       { id:'roof',    name:'Roof Level',      x:350,  w:500, bgColor:'#080b06', lootTable:'rooftop_main', enemyChance:8  },
       { id:'green',   name:'Greenhouse',      x:850,  w:500, bgColor:'#070c05', lootTable:'rooftop_main', enemyChance:6,
         buildings:[
-          { relX:170, label:'Greenhouse',     numFloors:1, theme:'tent', lootQuality:'light', enemyChance:5 },
+          { relX:170, label:'Greenhouse',     numFloors:1, theme:'tent', plan:'shed', lootQuality:'light', enemyChance:5 },
         ]},
       { id:'tanks',   name:'Water Tanks',     x:1350, w:450, bgColor:'#060a06', lootTable:'water_heavy',  enemyChance:10 },
     ],
@@ -301,6 +301,8 @@ const BUILDING_LOOT = {
   house_home:        [['hoodie',1,1,10],['jeans',1,1,10],['flannel_shirt',1,1,8],['leather_jacket',1,1,4],['cloth',1,3],['canned_beans',0,2],['book',0,1],['toy',0,1],['matches',0,1],['bandage',0,1],['note_diary_1',0,1],['note_loved_one',0,1]],
   pharmacy_pharma:   [['bandage',1,4],['painkiller',1,2],['medkit',0,1],['antibiotics',0,1],['chemicals',0,1]],
   pharmacy_pharma_rare:[['medkit',1,2],['antibiotics',1,2],['bandage',2,4],['painkiller',1,3],['chemicals',1,2]],
+  church_home:       [['cloth',1,2],['book',0,1],['matches',0,1],['canned_beans',0,1],['bandage',0,1],['note_prayer',0,1]],
+  church_crypt:      [['bandage',0,2],['painkiller',0,1],['antibiotics',0,1],['matches',0,1],['book',0,1],['metal',0,1],['note_singularity',0,1]],
   generic_light:     [['cloth',0,1],['matches',0,1],['batteries',0,1]],
   generic_medium:    [['hoodie',1,1,5],['jeans',1,1,5],['cloth',0,2],['canned_beans',0,1],['bandage',0,1],['rope',0,1]],
   office_police:     [['bulletproof_vest',1,1,10],['cargo_pants',1,1,12],['pistol_ammo',3,7],['metal',1,2],['cloth',1,1],['bandage',0,1],['pistol',0,1]],

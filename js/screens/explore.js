@@ -3,6 +3,10 @@
 
 const GROUND_Y    = 276;
 const PLAYER_FOOT = GROUND_Y;
+// The parent's sprite frames put the feet 9px below the anchor (the shelter
+// relies on that); in the world everyone else stands on the ground line, so
+// draw the parent this much higher to share it.
+const PARENT_SPRITE_DROP = 9;
 const BUILDING_W  = 900;   // interior width of each building floor
 
 // World zoom — game world is rendered at this scale; HUD/buttons are drawn
@@ -114,7 +118,7 @@ function startExploration(gs, loc) {
         : bdef.relX;
       const bx = zone.x + baseRelX;
       // Building size comes from its facade sprite; tents use the tent sprite size
-      const facade = bdef.isTent ? null : pickBuildingSprite(bdef.theme || 'urban', bdef.label || zone.name);
+      const facade = bdef.isTent ? null : pickBuildingSprite(bdef.theme || 'urban', bdef.label || zone.name, bdef.plan);
       const bw     = bdef.isTent ? 72 : facade.w;
       const bh     = bdef.isTent ? 46 : facade.h;
       const nFloors = bdef.numFloors || 1;
@@ -137,15 +141,16 @@ function startExploration(gs, loc) {
     if ((zone.buildings || []).length === 0 && zone.lootTable &&
         !zone.lootTable.startsWith('nature') && !zone.lootTable.startsWith('water')) {
       const bx = zone.x + Math.floor(zone.w * 0.4);
-      const facade = pickBuildingSprite('urban', zone.name);
+      const g = genericBuildingStyle(loc, zone);
+      const facade = pickBuildingSprite(g.facade || g.theme, zone.name, g.plan);
       const bw = facade.w;
       const bh = facade.h;
       buildings.push({
         bx, bw, bh,
         label: zone.name,
-        theme: 'urban',
+        theme: g.theme,
         numFloors: 1,
-        floors: [genBuildingFloorArea(0, 1, { lootQuality: 'light', theme: 'urban', enemyChance: zone.enemyChance || 15 }, loc.difficulty || 1)],
+        floors: [genBuildingFloorArea(0, 1, { lootQuality: 'light', theme: g.theme, plan: g.plan, enemyChance: zone.enemyChance || 15 }, loc.difficulty || 1)],
         doorX: bx + Math.floor(bw / 2) - 8,
         sprite: facade.key,
       });
@@ -1250,7 +1255,7 @@ function drawExploreActors(ctx, gs, es, o) {
     const e = 1 - (1 - k) * (1 - k);
     const dir = pc.playerDeathDir || -facing;
     ctx.save();
-    ctx.translate(px, PLAYER_FOOT - 6 * e);
+    ctx.translate(px, PLAYER_FOOT - PARENT_SPRITE_DROP - 6 * e);
     ctx.rotate(dir * e * Math.PI / 2);
     drawParent(ctx, 0, 0, 2, facing, 0, gs.parent.gender, 'front', null);
     ctx.restore();
@@ -1258,7 +1263,7 @@ function drawExploreActors(ctx, gs, es, o) {
     const hx = px + (pc ? _hitOffset(pc.playerHitT0, pc.playerHitDir || -facing) : 0);
     ctx.save();
     if (gs.parent.sneaking && !pc) ctx.globalAlpha = 0.72;      // keeping to the shadows
-    drawParent(ctx, hx, PLAYER_FOOT, 2, facing, o.animFrame, gs.parent.gender, o.pose, weapon);
+    drawParent(ctx, hx, PLAYER_FOOT - PARENT_SPRITE_DROP, 2, facing, o.animFrame, gs.parent.gender, o.pose, weapon);
     ctx.restore();
   }
   if (pc) {
@@ -1534,6 +1539,29 @@ function drawExploreHUD(ctx, gs, es) {
     drawText(ctx, '1 hour [H]', hx + 25, hy + 31, C.textDim, 6, 'center');
     gs._exploreHuntBtn = { x: hx, y: hy, w: 50, h: 22 };
   }
+}
+
+// Zones without a building of their own get a small one that fits the place
+// (theme = loot/look, plan = which rooms it has), not a generic apartment block.
+const GENERIC_BUILDING_STYLE = {
+  village:  { theme: 'house',    plan: 'house' },
+  suburb:   { theme: 'house',    plan: 'house' },
+  forest:   { theme: 'cabin',    plan: 'cabin' },
+  factory:  { theme: 'factory',  plan: 'factory' },
+  mall:     { theme: 'mall',     plan: 'shop' },
+  hospital: { theme: 'hospital', plan: 'hospital' },
+  pharmacy: { theme: 'urban',    plan: 'urban' },     // back streets: apartment blocks are fine
+  police:   { theme: 'office',   plan: 'police' },
+  church:   { theme: 'church',   plan: 'church', facade: 'house' },   // parish buildings beside the church
+  bunker:   { theme: 'factory',  plan: 'bunker' },
+  rooftop:  { theme: 'urban',    plan: 'urban' },
+};
+function genericBuildingStyle(loc, zone) {
+  if (/pharmac/i.test(zone.name)) return { theme: 'pharmacy', plan: 'pharmacy' };
+  if (/crypt/i.test(zone.name))   return { theme: 'church', plan: 'crypt' };
+  if (/tower|chapel/i.test(zone.name)) return { theme: 'church', plan: 'church' };
+  if (/parking/i.test(zone.name) && loc.id !== 'police') return { theme: 'office', plan: 'hall' };   // attendant's office
+  return GENERIC_BUILDING_STYLE[loc.id] || { theme: 'urban', plan: 'urban' };
 }
 
 // ── Tutorial hints while exploring ───────────────────────────────────────────

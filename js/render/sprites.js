@@ -107,20 +107,20 @@ function _loadItemVariants(id, filenames) {
   _itemSpriteMap[id] = [];
   filenames.forEach(function(filename) {
     const img = new Image();
-    img.onload = function() { _itemSpriteMap[id].push(_grainify(img, filename)); };
+    img.onload = function() { _itemSpriteMap[id].push(img); };   // generated art is already grainy
     img.src = 'Assets/' + filename;
   });
 }
 
-_loadItemVariants('mushroom', ['mushroom_1.png', 'mushroom_2.png']);
-_loadItemVariants('wood',     ['wood.png', 'wood_2.png', 'wood-1.png.png']);
-_loadItemVariants('rope',     ['rope.png']);
+_loadItemVariants('mushroom', ['item_mushroom.png', 'item_mushroom_2.png']);
+_loadItemVariants('wood',     ['item_wood.png', 'item_wood_2.png', 'item_wood_3.png']);
+_loadItemVariants('rope',     ['item_rope.png']);
 
 // ── Environment sprites (exploration world) ───────────────────────────────────
 // Facade sprites per building theme. Sizes match the PNGs; doors are centred.
 const BUILDING_SPRITES = {
   house:     [{ key: 'bld_house_1', w: 150, h: 140 }, { key: 'bld_house_2', w: 132, h: 128 }],
-  office:    [{ key: 'bld_office',  w: 170, h: 168 }, { key: 'bld_apartment', w: 140, h: 170 }],
+  office:    [{ key: 'bld_office',  w: 170, h: 168 }],
   police:    [{ key: 'bld_police',  w: 170, h: 168 }],
   church:    [{ key: 'bld_church',  w: 170, h: 200 }],
   factory:   [{ key: 'bld_factory', w: 210, h: 150 }],
@@ -128,29 +128,29 @@ const BUILDING_SPRITES = {
   pharmacy:  [{ key: 'bld_pharmacy', w: 150, h: 116 }],
   mall:      [{ key: 'bld_mall',    w: 230, h: 128 }],
   cabin:     [{ key: 'bld_cabin',   w: 130, h: 104 }],
+  tent:      [{ key: 'bld_cabin',   w: 130, h: 104 }],   // sheds and greenhouses
   urban:     [{ key: 'bld_apartment', w: 140, h: 170 }, { key: 'bld_house_2', w: 132, h: 128 }],
 };
 
-// Sprites drawn by hand (get extra grain at load); everything else is generated
-const HAND_DRAWN = new Set(['tree_1', 'tree_2', 'tree_3', 'large_tree', 'dead_tree', 'bush', 'bush_berry',
-  'grass_1', 'grass_2', 'bones_1', 'bones_2', 'trash', 'crate', 'box', 'chest', 'locker',
-  'survivor_1', 'survivor_2']);
-
-// Trees are shown 40% desaturated; baked in at load instead of a per-draw canvas filter
-const TREE_KEYS = new Set(['tree_1', 'tree_2', 'tree_3', 'large_tree', 'dead_tree']);
+// Sprites drawn by hand (get extra grain at load); everything else is generated.
+// Only the characters are still hand-drawn: trees, bushes, props and containers
+// are generated (tools/gen_art.py, env_*.png) in the muted world palette. The
+// original hand-made files are kept in Assets/ but no longer loaded.
+const HAND_DRAWN = new Set(['survivor_1', 'survivor_2']);
+const TREE_KEYS = new Set();
 const TREE_SATURATION = 0.6;
 
 const _envSpr = {};
 (function() {
   const files = {
-    tree_1: 'Tree_1.png', tree_2: 'Tree_2.png', tree_3: 'Tree_3.png',
-    large_tree: 'Large_Tree.png', dead_tree: 'Dead_Tree.png',
-    bush: 'Bush.png', bush_berry: 'Bush_Berry.png',
-    grass_1: 'Grass_1.png', grass_2: 'Grass_2.png',
-    bones_1: 'Bones_1.png', bones_2: 'Bones_2.png',
-    trash: 'Trash.png',
-    crate: 'conatiner_crate.png', box: 'container_box.png',
-    chest: 'container_chest.png', locker: 'container_locker.png',
+    tree_1: 'env_tree_1.png', tree_2: 'env_tree_2.png', tree_3: 'env_tree_3.png',
+    large_tree: 'env_large_tree.png', dead_tree: 'env_dead_tree.png',
+    bush: 'env_bush.png', bush_berry: 'env_bush_berry.png',
+    grass_1: 'env_grass_1.png', grass_2: 'env_grass_2.png',
+    bones_1: 'env_bones_1.png', bones_2: 'env_bones_2.png',
+    trash: 'env_trash.png',
+    crate: 'env_crate.png', box: 'env_box.png',
+    chest: 'env_chest.png', locker: 'env_locker.png',
     survivor_1: 'survivor_1.png', survivor_2: 'survivor_2.png',
     // Environment objects
     car_wreck: 'car_wreck.png', tent: 'tent.png',
@@ -188,9 +188,9 @@ const _envSpr = {};
 
 // Pick a facade for a building. Police stations use the 'office' theme in
 // the location data, so the label decides.
-function pickBuildingSprite(theme, label) {
+function pickBuildingSprite(theme, label, plan) {
   let key = theme;
-  if (label && /police|station block|precinct/i.test(label)) key = 'police';
+  if (plan === 'police' || (label && /police|station block|precinct/i.test(label))) key = 'police';
   const list = BUILDING_SPRITES[key] || BUILDING_SPRITES.urban;
   return list[Math.floor(Math.random() * list.length)];
 }
@@ -415,7 +415,7 @@ const HAND_WALK = [[25,33],[25,33],[25,33],[27,33],[27,33],[25,34],[26,34],[26,3
 const HAND_RUN  = [[24,29],[28,28],[28,28],[25,29],[25,29],[25,27],[28,28],[26,29],
                    [24,30],[26,28],[25,29],[24,30],[23,30],[28,29],[22,30],[22,30]];
 // Front hand of other character sprites drawn via drawCharSprite
-const CHAR_HAND = { enemy_human: [18, 27] };
+const CHAR_HAND = { enemy_human: [17, 25] };   // front hand in enemy_human.png (generated at 0.94 scale)
 
 // Rotation (degrees, clockwise, for a character facing right) for a weapon
 // at time t0 of its last attack. Melee: hang → wind-up → strike. Guns: low → level.

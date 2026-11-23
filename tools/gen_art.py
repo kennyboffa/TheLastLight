@@ -23,7 +23,11 @@ def hexrgb(h):
 class Sprite:
     """Paint shapes as 'materials'; finish() turns them into grainy pixel art."""
 
-    def __init__(self, w, h):
+    def __init__(self, w, h, k=1.0):
+        # k scales everything drawn: shapes are given in the unscaled design
+        # coordinates and land on a canvas k times the size.
+        self.k = k
+        w, h = int(np.ceil(w * k)), int(np.ceil(h * k))
         self.w, self.h = w, h
         self.mat = np.full((h, w), -1, dtype=int)   # material index per pixel
         self.mats = []                               # (base rgb, grain, shade dir)
@@ -41,23 +45,41 @@ class Sprite:
         self.mat[sel] = m
         return sel
 
+    # design coords -> canvas pixels (a box always keeps at least one pixel)
+    def _box(self, x0, y0, x1, y1):
+        k = self.k
+        if k == 1.0:
+            return x0, y0, x1, y1
+        X0, Y0 = int(np.floor(x0 * k)), int(np.floor(y0 * k))
+        return X0, Y0, max(X0, int(np.floor((x1 + 1) * k)) - 1), max(Y0, int(np.floor((y1 + 1) * k)) - 1)
+
+    def _pts(self, pts):
+        k = self.k
+        return pts if k == 1.0 else [(round(x * k), round(y * k)) for x, y in pts]
+
     def rect(self, x0, y0, x1, y1, m):
-        return self._paint(lambda d: d.rectangle([x0, y0, x1, y1], fill=255), m)
+        b = self._box(x0, y0, x1, y1)
+        return self._paint(lambda d: d.rectangle(list(b), fill=255), m)
 
     def ellipse(self, x0, y0, x1, y1, m):
-        return self._paint(lambda d: d.ellipse([x0, y0, x1, y1], fill=255), m)
+        b = self._box(x0, y0, x1, y1)
+        return self._paint(lambda d: d.ellipse(list(b), fill=255), m)
 
     def poly(self, pts, m):
-        return self._paint(lambda d: d.polygon(pts, fill=255), m)
+        q = self._pts(pts)
+        return self._paint(lambda d: d.polygon(q, fill=255), m)
 
     def line(self, pts, m, width=1):
-        return self._paint(lambda d: d.line(pts, fill=255, width=width), m)
+        q = self._pts(pts)
+        return self._paint(lambda d: d.line(q, fill=255, width=width), m)
 
     def px(self, x, y, m):
+        x, y = int(x * self.k), int(y * self.k)
         if 0 <= x < self.w and 0 <= y < self.h:
             self.mat[y, x] = m
 
     def clear(self, x0, y0, x1, y1):
+        x0, y0, x1, y1 = self._box(x0, y0, x1, y1)
         self.mat[y0:y1 + 1, x0:x1 + 1] = -1
 
     def shade(self, x0, y0, x1, y1, amount):
@@ -131,9 +153,13 @@ def save(img, name):
 # player and survivor sprites). All face RIGHT; the game mirrors them.
 # ════════════════════════════════════════════════════════════════════════════
 
+# Creature scale next to the ~47 px hand-drawn player (design coords stay the same)
+CREATURE_K = {'raider': 0.94, 'robot': 0.85, 'drone': 0.75, 'wolf': 0.8, 'dog': 0.75}
+
+
 def raider():
-    # Slim build to match the hand-drawn survivors (~12 px shoulders, 48 px tall)
-    s = Sprite(26, 50)
+    # Slim build to match the hand-drawn survivors, a touch shorter than the player
+    s = Sprite(26, 50, CREATURE_K['raider'])
     skin = s.material('#b07a52', 14, 0.03)
     hair = s.material('#2a1c14', 14)
     hood = s.material('#5e2c22', 20, 0.08)
@@ -164,7 +190,7 @@ def raider():
 
 
 def robot():
-    s = Sprite(40, 62)
+    s = Sprite(40, 62, CREATURE_K['robot'])
     plate = s.material('#4e5660', 16, 0.08)
     dark = s.material('#262b31', 10)
     joint = s.material('#33383e', 12)
@@ -196,7 +222,7 @@ def robot():
 
 
 def drone():
-    s = Sprite(48, 26)
+    s = Sprite(48, 26, CREATURE_K['drone'])
     body = s.material('#3a4048', 14, 0.07)
     dark = s.material('#1c2025', 8)
     rotor = s.material('#5a6068', 10)
@@ -218,7 +244,7 @@ def drone():
 
 
 def wolf(fur='#5c5048', belly='#7a6c60', name='wolf'):
-    s = Sprite(46, 30)
+    s = Sprite(46, 30, CREATURE_K['wolf'])
     f = s.material(fur, 22, 0.12)
     b = s.material(belly, 18, 0.06)
     d = s.material('#241c18', 10)
@@ -244,7 +270,7 @@ def wolf(fur='#5c5048', belly='#7a6c60', name='wolf'):
 
 
 def dog():
-    s = Sprite(38, 26)
+    s = Sprite(38, 26, CREATURE_K['dog'])
     f = s.material('#8a5a32', 20, 0.08)
     b = s.material('#b88a5a', 16, 0.05)
     d = s.material('#2a1a10', 10)
@@ -1447,6 +1473,298 @@ for _k in ('map', 'note', 'blueprint'):
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# Nature & props (replace the early hand-made placeholders; characters stay
+# hand-drawn). Same canvas sizes and bottom-centred placement as the originals
+# so the game draws them unchanged. Muted greens: the world is desaturated.
+# ════════════════════════════════════════════════════════════════════════════
+
+LEAF = {'dark': '#22331e', 'mid': '#34492a', 'light': '#4c6236', 'hi': '#647a44'}
+
+
+def _foliage(s, cx, cy, rx, ry, rng, pal=LEAF, clumps=26):
+    """A canopy: dark mass, mid clumps, light clumps towards the upper left."""
+    dark = s.material(pal['dark'], 14, 0.10)
+    mid = s.material(pal['mid'], 16, 0.08)
+    light = s.material(pal['light'], 16, 0.06)
+    hi = s.material(pal['hi'], 12, 0.04)
+    for _ in range(clumps):                                   # ragged outer mass
+        a = rng.uniform(0, 2 * np.pi); r = rng.uniform(0.55, 0.95)
+        x, y = cx + np.cos(a) * rx * r, cy + np.sin(a) * ry * r
+        w, h = rng.uniform(0.25, 0.4) * rx, rng.uniform(0.25, 0.4) * ry
+        s.ellipse(x - w, y - h, x + w, y + h, dark)
+    s.ellipse(cx - rx * 0.8, cy - ry * 0.8, cx + rx * 0.8, cy + ry * 0.8, dark)
+    for _ in range(clumps):
+        a = rng.uniform(np.pi * 0.9, np.pi * 2.1); r = rng.uniform(0.1, 0.75)
+        x, y = cx + np.cos(a) * rx * r, cy + np.sin(a) * ry * r - ry * 0.05
+        w, h = rng.uniform(0.15, 0.3) * rx, rng.uniform(0.15, 0.28) * ry
+        s.ellipse(x - w, y - h, x + w, y + h, mid)
+    for _ in range(clumps // 2):
+        a = rng.uniform(np.pi * 1.0, np.pi * 1.7); r = rng.uniform(0.2, 0.7)
+        x, y = cx + np.cos(a) * rx * r, cy + np.sin(a) * ry * r
+        w, h = rng.uniform(0.1, 0.2) * rx, rng.uniform(0.08, 0.16) * ry
+        s.ellipse(x - w, y - h, x + w, y + h, light)
+    for _ in range(clumps // 3):
+        a = rng.uniform(np.pi * 1.1, np.pi * 1.5); r = rng.uniform(0.3, 0.7)
+        x, y = cx + np.cos(a) * rx * r, cy + np.sin(a) * ry * r
+        s.ellipse(x - 2, y - 1, x + 2, y + 1, hi)
+    # leafy fringe: scattered single pixels just outside the mass
+    for _ in range(int(rx * 3)):
+        a = rng.uniform(0, 2 * np.pi)
+        s.px(int(cx + np.cos(a) * rx * rng.uniform(0.9, 1.05)), int(cy + np.sin(a) * ry * rng.uniform(0.9, 1.05)), dark)
+
+
+def _trunk(s, cx, top, bottom, w, rng, col='#4a3424', dark='#2a1c14'):
+    bark = s.material(col, 18, 0.12); d = s.material(dark, 10, 0.05)
+    s.poly([(cx - w // 2, top), (cx + w // 2, top), (cx + w // 2 + 3, bottom), (cx - w // 2 - 3, bottom)], bark)
+    s.poly([(cx - w // 2 - 3, bottom - 4), (cx - w // 2 - 7, bottom), (cx - w // 2, bottom)], bark)   # roots
+    s.poly([(cx + w // 2 + 3, bottom - 4), (cx + w // 2 + 8, bottom), (cx + w // 2, bottom)], bark)
+    for _ in range(max(3, (bottom - top) // 8)):                                                  # bark grooves
+        x = cx + int(rng.integers(-w // 2 + 1, w // 2))
+        y0 = int(rng.integers(top, bottom - 6))
+        s.line([(x, y0), (x + int(rng.integers(-1, 2)), y0 + int(rng.integers(4, 10)))], d)
+    return bark
+
+
+def round_tree(variant=0):
+    rng = np.random.default_rng(100 + variant)
+    s = Sprite(128, 128)
+    if variant == 0:
+        _trunk(s, 64, 60, 127, 10, rng)
+        bark = s.material('#4a3424', 18, 0.12)
+        s.line([(64, 78), (44, 58)], bark, width=4); s.line([(66, 72), (86, 54)], bark, width=4)
+        _foliage(s, 64, 44, 50, 38, rng)
+    else:
+        _trunk(s, 62, 66, 127, 9, rng, '#524030', '#2e2218')
+        bark = s.material('#524030', 18, 0.12)
+        s.line([(62, 84), (40, 66)], bark, width=3)
+        pal = {'dark': '#283a22', 'mid': '#3c5230', 'light': '#566c3c', 'hi': '#6e8048'}
+        _foliage(s, 46, 54, 30, 24, rng, pal, 18)
+        _foliage(s, 74, 40, 40, 32, rng, pal, 22)
+    s.shade_gradient('x', 0.2)
+    return s.finish(outline=0.35, mottle=0.06)
+
+
+def pine(w, h, layers, seed, trunk_h, pal=None):
+    rng = np.random.default_rng(seed)
+    s = Sprite(w, h)
+    pal = pal or {'dark': '#1e3022', 'mid': '#2c4430', 'light': '#405a3c'}
+    cx = w // 2
+    _trunk(s, cx, h - trunk_h - 10, h - 1, max(6, w // 18), rng, '#463022', '#261a12')
+    dark = s.material(pal['dark'], 14, 0.10); mid = s.material(pal['mid'], 16, 0.08); light = s.material(pal['light'], 14, 0.05)
+    top, base = 2, h - trunk_h
+    for i in range(layers):
+        t = i / max(1, layers - 1)
+        y0 = top + (base - top) * t * 0.82
+        y1 = y0 + (base - top) / layers * 1.9
+        half = (w * 0.12) + (w * 0.36) * (t ** 0.85)
+        jag = []
+        n = 9
+        for k in range(n + 1):                                   # jagged lower edge
+            x = cx - half + 2 * half * k / n
+            jag.append((x, y1 + (rng.integers(-3, 4) if 0 < k < n else -2)))
+        s.poly([(cx, y0)] + jag[::-1][:0] + jag, dark)
+        s.poly([(cx, y0 + 2), (cx - half * 0.75, y1 - 3), (cx + half * 0.2, y1 - 5)], mid)
+        s.poly([(cx - 1, y0 + 4), (cx - half * 0.45, y1 - 7), (cx - half * 0.05, y1 - 8)], light)
+    s.shade_gradient('x', 0.22)
+    return s.finish(outline=0.35, mottle=0.05)
+
+
+def dead_tree():
+    rng = np.random.default_rng(55)
+    s = Sprite(256, 256)
+    bark = s.material('#4a3a30', 18, 0.12); d = s.material('#2a201a', 10, 0.05)
+    cx = 128
+    s.poly([(cx - 6, 40), (cx + 5, 40), (cx + 10, 255), (cx - 11, 255)], bark)
+    s.poly([(cx - 11, 245), (cx - 22, 255), (cx - 6, 255)], bark); s.poly([(cx + 10, 245), (cx + 24, 255), (cx + 6, 255)], bark)
+
+    def branch(x, y, ang, length, width, depth):
+        x2, y2 = x + np.cos(ang) * length, y - np.sin(ang) * length
+        s.line([(x, y), (x2, y2)], bark, width=max(1, int(width)))
+        if depth > 0:
+            for da in (-0.45, 0.4):
+                if rng.random() < 0.85:
+                    branch(x2, y2, ang + da + rng.uniform(-0.15, 0.15), length * rng.uniform(0.55, 0.7), width * 0.6, depth - 1)
+    branch(cx - 2, 150, np.pi * 0.78, 60, 5, 3)
+    branch(cx + 2, 120, np.pi * 0.2, 55, 5, 3)
+    branch(cx, 70, np.pi * 0.62, 45, 4, 3)
+    branch(cx + 1, 60, np.pi * 0.32, 40, 3, 2)
+    branch(cx, 42, np.pi * 0.5, 20, 3, 2)
+    for _ in range(14):
+        y0 = int(rng.integers(50, 240)); x = cx + int(rng.integers(-4, 5))
+        s.line([(x, y0), (x, y0 + int(rng.integers(6, 14)))], d)
+    s.rect(cx - 3, 180, cx + 1, 186, d)                       # knot hole
+    s.shade_gradient('x', 0.25)
+    return s.finish(outline=0.4)
+
+
+def bush(berries=False):
+    rng = np.random.default_rng(7 if berries else 3)
+    w, h = 64, 64
+    s = Sprite(w, h)
+    if berries:
+        pal = {'dark': '#24341e', 'mid': '#34482a', 'light': '#4a5e34', 'hi': '#5c7040'}
+        _foliage(s, 32, 50, 22, 14, rng, pal, 18)
+        red = s.material('#8a2a2a', 10, 0); hi = s.material('#c05048', 6, 0)
+        for _ in range(16):
+            x, y = int(rng.integers(14, 50)), int(rng.integers(40, 62))
+            if s.mat[y, x] >= 0:
+                s.rect(x, y, x + 1, y + 1, red); s.px(x, y, hi)
+    else:
+        _foliage(s, 26, 50, 20, 13, rng, clumps=16)
+        _foliage(s, 42, 47, 21, 16, rng, clumps=18)
+    s.clear(0, 63, 63, 63)
+    s.shade_gradient('y', 0.2)
+    return s.finish(outline=0.35)
+
+
+def grass(variant=0):
+    rng = np.random.default_rng(20 + variant)
+    s = Sprite(64, 64)
+    blades = [s.material(c, 12, 0.04) for c in ('#2a3c22', '#3a5030', '#4c6438', '#5e7442')]
+    s.rect(0, 62, 63, 63, blades[0])                         # soil-level tuft base
+    for x in range(0, 64):
+        for _ in range(2 if variant else 1):
+            if rng.random() < 0.25:
+                continue
+            hgt = int(rng.integers(3, 12 if variant else 9))
+            lean = int(rng.integers(-3, 4))
+            col = blades[min(3, int(rng.integers(0, 3)) + (1 if hgt > 7 else 0))]
+            s.line([(x, 63), (x + lean, 63 - hgt)], col)
+    if variant == 0:                                          # a few wildflowers
+        for col in ('#c8b040', '#a83a2a', '#c8c0b0', '#8a6ab0', '#c8b040'):
+            x = int(rng.integers(4, 60)); hgt = int(rng.integers(8, 12))
+            s.line([(x, 63), (x, 63 - hgt)], blades[1])
+            f = s.material(col, 8, 0)
+            s.rect(x - 1, 63 - hgt - 1, x + 1, 63 - hgt, f); s.px(x, 63 - hgt - 2, f)
+    return s.finish(outline=0.08)
+
+
+def bones(variant=0):
+    s = Sprite(64, 64)
+    b = s.material('#b8ae98', 10, 0.05); d = s.material('#5a5246', 8)
+    if variant == 0:
+        s.ellipse(22, 51, 31, 59, b); s.rect(24, 58, 29, 62, b)          # skull
+        s.rect(24, 54, 25, 56, d); s.rect(28, 54, 29, 56, d); s.px(26, 58, d)
+        for x in (34, 40, 46):                                          # ribs / long bones
+            s.line([(x, 62), (x + 6, 58)], b, width=2)
+        s.line([(32, 63), (52, 63)], b, width=2)
+        s.rect(51, 61, 53, 63, b)
+    else:
+        s.line([(14, 62), (34, 60)], b, width=2); s.rect(12, 60, 14, 63, b); s.rect(34, 58, 36, 61, b)
+        s.line([(22, 63), (44, 63)], b, width=2); s.rect(43, 61, 45, 63, b)
+        s.ellipse(36, 55, 44, 62, b); s.rect(38, 57, 39, 58, d); s.rect(41, 57, 42, 58, d)
+    s.shade_gradient('y', 0.2)
+    return s.finish(outline=0.35)
+
+
+def trash_pile():
+    rng = np.random.default_rng(33)
+    s = Sprite(64, 64)
+    bag1 = s.material('#2a2c2a', 14, 0.06); bag2 = s.material('#3a3a34', 14, 0.06)
+    paper = s.material('#a8a08a', 12, 0.05); can = s.material('#8a8a86', 8); rust = s.material('#7a4a2a', 14)
+    box = s.material('#7a6044', 14, 0.06); rot = s.material('#4a5a2a', 16, 0.1)
+    s.ellipse(4, 46, 30, 64, bag1); s.ellipse(22, 42, 46, 64, bag2); s.ellipse(38, 50, 58, 64, bag1)
+    s.rect(28, 50, 40, 60, box); s.line([(28, 50), (34, 47)], box)
+    s.px(16, 44, bag1); s.rect(15, 42, 17, 45, bag1)                          # tied knot
+    for _ in range(6):
+        x, y = int(rng.integers(6, 56)), int(rng.integers(50, 62))
+        s.rect(x, y, x + 2, y + 1, paper)
+    s.rect(46, 58, 49, 62, can); s.rect(10, 59, 13, 63, rust)
+    s.ellipse(20, 58, 26, 63, rot)
+    s.shade_gradient('x', 0.2)
+    return s.finish(outline=0.4, mottle=0.08)
+
+
+def crate():
+    s = Sprite(28, 24)
+    wood = s.material('#7a5a34', 16, 0.08); d = s.material('#4a3420', 10); n = s.material('#2a2a2a', 4, 0)
+    s.rect(0, 0, 27, 23, wood)
+    for y in (0, 22):
+        s.rect(0, y, 27, y + 1, d)
+    for x in (0, 26):
+        s.rect(x, 0, x + 1, 23, d)
+    for y in (7, 15):
+        s.rect(2, y, 25, y, d)                                            # slats
+    s.line([(2, 2), (25, 21)], d, width=2)                               # brace
+    for x, y in ((1, 1), (26, 1), (1, 22), (26, 22)):
+        s.px(x, y, n)
+    s.shade_gradient('x', 0.25)
+    return s.finish(outline=0.45)
+
+
+def cardboard_box():
+    s = Sprite(22, 16)
+    c = s.material('#a07a4a', 14, 0.06); d = s.material('#6a4e2e', 10); tape = s.material('#c8b48a', 6, 0)
+    s.rect(0, 2, 21, 15, c)
+    s.poly([(0, 2), (4, 0), (10, 0), (10, 2)], d); s.poly([(11, 2), (11, 0), (18, 0), (21, 2)], c)   # open flaps
+    s.rect(10, 2, 11, 15, tape)
+    s.rect(3, 8, 7, 9, d)                                                 # scrawl
+    s.shade_gradient('x', 0.25)
+    return s.finish(outline=0.4)
+
+
+def chest():
+    s = Sprite(26, 18)
+    wood = s.material('#6a4428', 16, 0.08); band = s.material('#3e3e3a', 8); brass = s.material('#b09040', 6, 0)
+    s.rect(0, 6, 25, 17, wood)
+    s.ellipse(0, 0, 25, 11, wood)
+    s.rect(0, 5, 25, 6, band)
+    for x in (3, 21):
+        s.rect(x, 1, x + 1, 17, band)
+    s.rect(11, 6, 14, 9, brass); s.px(12, 8, band)
+    s.shade_gradient('x', 0.25)
+    return s.finish(outline=0.45)
+
+
+def locker():
+    s = Sprite(16, 42)
+    m = s.material('#6a7070', 10, 0.04); d = s.material('#3a3e40', 8); h = s.material('#a8a8a0', 4, 0)
+    rust = s.material('#7a4a2a', 16, 0.1)
+    s.rect(0, 0, 15, 41, m)
+    s.rect(0, 0, 15, 1, d); s.rect(0, 40, 15, 41, d); s.rect(7, 2, 8, 39, d)    # door split
+    for y in range(4, 12, 2):
+        s.rect(2, y, 5, y, d); s.rect(10, y, 13, y, d)                      # vents
+    s.rect(5, 20, 5, 23, h); s.rect(10, 20, 10, 23, h)                      # handles
+    s.rect(1, 33, 3, 38, rust); s.px(12, 29, rust)
+    s.shade_gradient('x', 0.3)
+    return s.finish(outline=0.45)
+
+
+def it_mushroom(variant=0):
+    s = _item(9, 9)
+    cap = s.material('#8a5a3a' if variant == 0 else '#a8885a', 12, 0.05)
+    stem = s.material('#d8ccb0', 8, 0.03); spot = s.material('#e8dcc8', 4, 0)
+    if variant == 0:                                          # one brown cap
+        s.rect(3, 4, 4, 8, stem)
+        s.ellipse(0, 0, 7, 5, cap); s.clear(0, 4, 7, 5); s.rect(3, 4, 4, 5, stem)
+        s.px(2, 1, spot); s.px(5, 2, spot)
+    else:                                                     # a pair of pale ones
+        s.rect(2, 4, 3, 8, stem); s.ellipse(0, 1, 5, 5, cap); s.clear(0, 4, 5, 5); s.rect(2, 4, 3, 5, stem)
+        s.rect(6, 6, 6, 8, stem); s.ellipse(4, 4, 8, 7, cap); s.clear(4, 7, 8, 7); s.rect(6, 7, 6, 7, stem)
+    return s.finish(outline=0.35)
+
+
+def it_wood(variant=0):
+    rng = np.random.default_rng(60 + variant)
+    s = _item(20, 7)
+    bark = s.material('#5a3e28', 16, 0.1); end = s.material('#b08a5a', 10, 0.04); ring = s.material('#7a5a3a', 6)
+    logs = [(0, 2, 17, 6)] if variant == 0 else [(0, 3, 15, 6), (4, 0, 19, 3)] if variant == 1 else [(2, 1, 13, 6)]
+    for x0, y0, x1, y1 in logs:
+        s.rect(x0 + 1, y0, x1, y1, bark)
+        s.ellipse(x1 - 2, y0, x1 + 1, y1, end); s.px(x1, (y0 + y1) // 2, ring)
+        x = int(rng.integers(x0 + 2, x1 - 3)); s.rect(x, y0, x + 1, y0, ring)
+    return s.finish(outline=0.35)
+
+
+def it_rope():
+    s = _item(14, 8)
+    r = s.material('#a08a5a', 12, 0.05); d = s.material('#6a5a3a', 8)
+    s.ellipse(0, 0, 13, 7, r); s.ellipse(3, 2, 10, 5, d); s.ellipse(5, 3, 8, 4, r)
+    s.line([(11, 6), (13, 7)], r)
+    return s.finish(outline=0.35)
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Parallax background layers (tile horizontally: width = 736, shapes wrap)
 # and ground strips. Kept low-contrast so the playfield stays readable.
 # ════════════════════════════════════════════════════════════════════════════
@@ -1735,6 +2053,20 @@ if __name__ == '__main__':
     })
     jobs.update({'f_door.png': room_door, 'f_exit_door.png': exit_door, 'f_stairs_up.png': lambda: stairs(True),
                  'f_stairs_down.png': lambda: stairs(False)})
+    jobs.update({
+        'env_tree_1.png': lambda: round_tree(0), 'env_tree_2.png': lambda: round_tree(1),
+        'env_tree_3.png': lambda: pine(128, 128, 6, 31, 22),
+        'env_large_tree.png': lambda: pine(256, 256, 9, 41, 40),
+        'env_dead_tree.png': dead_tree,
+        'env_bush.png': lambda: bush(False), 'env_bush_berry.png': lambda: bush(True),
+        'env_grass_1.png': lambda: grass(0), 'env_grass_2.png': lambda: grass(1),
+        'env_bones_1.png': lambda: bones(0), 'env_bones_2.png': lambda: bones(1),
+        'env_trash.png': trash_pile,
+        'env_crate.png': crate, 'env_box.png': cardboard_box, 'env_chest.png': chest, 'env_locker.png': locker,
+        'item_mushroom.png': lambda: it_mushroom(0), 'item_mushroom_2.png': lambda: it_mushroom(1),
+        'item_wood.png': lambda: it_wood(0), 'item_wood_2.png': lambda: it_wood(1), 'item_wood_3.png': lambda: it_wood(2),
+        'item_rope.png': it_rope,
+    })
     for _id, _fn in ITEM_ART.items():
         jobs['item_%s.png' % _id] = _fn
     for name, fn in jobs.items():

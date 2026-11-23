@@ -1155,61 +1155,145 @@ function drawCraftingMenu(ctx, gs, mx, my) {
   drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
 }
 
+// Storage & bag: move things between them, and use food/medicine on anyone at home
+const STORAGE_PANEL = { x: 14, y: 18, w: 412, h: CFG.H - 36 - 24 };
+
+function _storageInv(gs) { return shelterUI.storageTab === 'bag' ? gs.parent.inventory : gs.shelter.storage; }
+
+/** People at home who can be given an item. */
+function _peopleAtHome(gs) {
+  const list = [];
+  if (!gs.parent.isExploring) list.push(gs.parent);
+  if (gs.child && gs.child.health > 0) list.push(gs.child);
+  for (const sv of gs.survivors || []) if (!sv.onMission && !sv.isExploring) list.push(sv);
+  return list;
+}
+
 function drawStorageMenu(ctx, gs, mx, my) {
-  const W2 = 280, H2 = 270;
-  const px = 60, py = 22;
+  const P = STORAGE_PANEL, M = shelterUI;
+  const px = P.x, py = P.y, W2 = P.w, H2 = P.h;
+  M.storageTab = M.storageTab || 'storage';
+  const inv = _storageInv(gs);
+  drawModal(ctx, px, py, W2, H2, 'STORAGE & BAG');
 
-  const storage = gs.shelter.storage;
-  const wt = shelterStorageWeight().toFixed(1);
-  drawModal(ctx, px, py, W2, H2, `STORAGE  ${wt}/${gs.shelter.storageMax}kg`);
+  // Tabs
+  const tabs = [
+    { id: 'storage', label: `Storage ${shelterStorageWeight().toFixed(1)}/${gs.shelter.storageMax}kg` },
+    { id: 'bag',     label: `My Bag ${calcWeight(gs.parent.inventory).toFixed(1)}/${parentMaxCarry().toFixed(1)}kg` },
+  ];
+  M._stTabs = [];
+  tabs.forEach((t, i) => {
+    const tx = px + 6 + i * 150, ty = py + 16;
+    drawButton(ctx, tx, ty, 146, 16, t.label, hitTest(mx, my, tx, ty, 146, 16), M.storageTab === t.id);
+    M._stTabs.push({ id: t.id, x: tx, y: ty, w: 146, h: 16 });
+  });
 
-  const listH = H2 - 68;
-  const sel   = shelterUI.storageSelected ?? null;
-  const rows  = drawInventoryList(ctx, storage, px + 2, py + 17, W2 - 4, listH, null,
-    shelterUI.storageScroll, mx, my, sel);
-  shelterUI._storageRows = rows;
+  const listY = py + 36, listH = H2 - 136;
+  const sel = M.storageSelected ?? null;
+  M._storageRows = drawInventoryList(ctx, inv, px + 2, listY, W2 - 4, listH, null, M.storageScroll, mx, my, sel);
 
-  // ── Action row — shown when a consumable is selected ──────────────────────
-  const ay = py + listH + 19;
-  if (sel !== null && storage[sel]) {
-    const slotDef = getItemDef(storage[sel].id);
-    const isConsumable = slotDef && (
-      slotDef.type === 'food' || slotDef.type === 'water' ||
-      slotDef.type === 'drink' || slotDef.type === 'medicine');
-    if (isConsumable) {
-      drawText(ctx, `Give ${slotDef.name} to:`, px + 10, ay + 2, C.textDim, 7);
-      let bx = px + 8;
-      const bh = 16, bw = 66;
-      // Parent
-      drawButton(ctx, bx, ay + 8, bw, bh, gs.parent.name,
-        hitTest(mx, my, bx, ay + 8, bw, bh));
-      shelterUI._stGiveParent = { x: bx, y: ay + 8, w: bw, h: bh };
-      bx += bw + 4;
-      // Lily
-      drawButton(ctx, bx, ay + 8, bw, bh, gs.child.name,
-        hitTest(mx, my, bx, ay + 8, bw, bh));
-      shelterUI._stGiveLily = { x: bx, y: ay + 8, w: bw, h: bh };
-      bx += bw + 4;
-      // Survivors in bunker
-      const inBunker = (gs.survivors || []).filter(s => !s.onMission && !s.isExploring);
-      for (const s of inBunker.slice(0, 1)) { // max 1 extra to fit panel
-        drawButton(ctx, bx, ay + 8, bw, bh, s.name,
-          hitTest(mx, my, bx, ay + 8, bw, bh));
-        shelterUI._stGiveSurv = { x: bx, y: ay + 8, w: bw, h: bh, id: s.id };
-        bx += bw + 4;
+  // ── Selected item: move / use on someone ─────────────────────────────────
+  M._stBtns = [];
+  const ay = listY + listH + 6;
+  const slot = sel !== null ? inv[sel] : null;
+  const def = slot ? getItemDef(slot.id) : null;
+  const btn = (x, y, w, label, action, extra, disabled) => {
+    drawButton(ctx, x, y, w, 16, label, !disabled && hitTest(mx, my, x, y, w, 16), false, disabled);
+    if (!disabled) M._stBtns.push({ x, y, w, h: 16, action, ...(extra || {}) });
+  };
+  if (slot && def) {
+    const fx = typeof _itemEffectText === 'function' ? _itemEffectText(def) : '';
+    drawText(ctx, `${def.name}${slot.qty > 1 ? ' x' + slot.qty : ''}${fx ? '  — ' + fx : ''}`, px + 8, ay + 8, C.textBright, 8);
+    const toBag = M.storageTab === 'storage';
+    btn(px + 8, ay + 14, 110, toBag ? 'To bag (1)' : 'To storage (1)', 'move1');
+    btn(px + 124, ay + 14, 110, toBag ? 'To bag (all)' : 'To storage (all)', 'moveAll');
+    const usable = ['food', 'water', 'drink', 'medicine'].includes(def.type) && !def.needsCooking;
+    if (usable) {
+      drawText(ctx, 'Use on:', px + 8, ay + 44, C.textDim, 7);
+      let bx = px + 48, by = ay + 34;
+      for (const who of _peopleAtHome(gs)) {
+        const hurt = who.health < who.maxHealth ? ` ${Math.round(who.health)}hp` : '';
+        const lbl = `${who.name.slice(0, 8)}${who.infected ? ' +inf' : hurt}`;
+        if (bx + 82 > px + W2 - 6) { bx = px + 48; by += 19; }
+        btn(bx, by, 80, lbl, 'give', { who });
+        bx += 84;
       }
-    } else {
-      shelterUI._stGiveParent = null; shelterUI._stGiveLily = null; shelterUI._stGiveSurv = null;
-      drawText(ctx, 'Not consumable.', px + 10, ay + 10, C.textDim, 7);
+    } else if (def.needsCooking) {
+      drawText(ctx, 'Cook it first (Cook).', px + 8, ay + 44, C.textDim, 7);
     }
   } else {
-    shelterUI._stGiveParent = null; shelterUI._stGiveLily = null; shelterUI._stGiveSurv = null;
-    drawText(ctx, 'Select an item to use or give.', px + W2/2, ay + 10, C.textDim, 7, 'center');
+    drawText(ctx, 'Select an item to move it, or to use it on someone.', px + W2 / 2, ay + 20, C.textDim, 7, 'center');
   }
 
-  const closeX = px + 8, closeY = py + H2 - 18;
-  drawButton(ctx, closeX, closeY, 50, 14, 'Close', hitTest(mx, my, closeX, closeY, 50, 14));
-  shelterUI._stClose = { x: closeX, y: closeY, w: 50, h: 14 };
+  // Bottom row
+  const by = py + H2 - 20;
+  btn(px + 8, by, 50, 'Close', 'close');
+  btn(px + W2 - 158, by, 150, 'Move whole bag → Storage', 'bagToStorage', null, gs.parent.inventory.length === 0);
+}
+
+function _moveItem(gs, from, to, id, qty, toBag) {
+  const def = getItemDef(id);
+  if (toBag) {
+    const room = parentMaxCarry() - calcWeight(gs.parent.inventory);
+    qty = Math.min(qty, Math.floor(room / Math.max(0.001, def.weight || 0.001)));
+    if (qty <= 0) { notify('Too heavy to carry.', 'warn'); return 0; }
+  } else {
+    const room = gs.shelter.storageMax - shelterStorageWeight();
+    qty = Math.min(qty, Math.floor(room / Math.max(0.001, def.weight || 0.001)));
+    if (qty <= 0) { notify('Storage is full.', 'warn'); return 0; }
+  }
+  removeFromInventory(from, id, qty);
+  addToInventory(to, id, qty);
+  return qty;
+}
+
+function storageMenuClick(gs, mx, my) {
+  const M = shelterUI, P = STORAGE_PANEL;
+  for (const t of M._stTabs || []) {
+    if (hitTest(mx, my, t.x, t.y, t.w, t.h)) { M.storageTab = t.id; M.storageSelected = null; M.storageScroll = 0; return; }
+  }
+  const b = (M._stBtns || []).find(r => hitTest(mx, my, r.x, r.y, r.w, r.h));
+  if (b) {
+    const inv = _storageInv(gs);
+    const slot = M.storageSelected !== null ? inv[M.storageSelected] : null;
+    const toBag = M.storageTab === 'storage';
+    const other = toBag ? gs.parent.inventory : gs.shelter.storage;
+    if (b.action === 'close') { M.activeMenu = null; M.storageSelected = null; return; }
+    if (b.action === 'bagToStorage') {
+      let moved = 0, left = 0;
+      for (const sl of [...gs.parent.inventory]) {
+        const n = _moveItem(gs, gs.parent.inventory, gs.shelter.storage, sl.id, sl.qty, false);
+        moved += n; left += sl.qty - n;
+      }
+      if (moved) Audio.rustle && Audio.rustle();
+      notify(left ? `Moved ${moved} items. Storage is full (${left} left in bag).` : `Moved ${moved} items to storage.`, left ? 'warn' : 'good');
+      M.storageSelected = null;
+      return;
+    }
+    if (!slot) return;
+    if (b.action === 'move1' || b.action === 'moveAll') {
+      const n = _moveItem(gs, inv, other, slot.id, b.action === 'move1' ? 1 : slot.qty, toBag);
+      if (n && !inv[M.storageSelected]) M.storageSelected = null;
+      return;
+    }
+    if (b.action === 'give') {
+      const def = getItemDef(slot.id);
+      const wasInfected = b.who.infected;
+      if (useItem(b.who, inv, slot.id, gs)) {
+        notify(`${b.who.name} used ${def.name}.${wasInfected && !b.who.infected ? ' Infection treated.' : ''}`, 'good');
+        if (!inv[M.storageSelected] || inv[M.storageSelected].id !== slot.id) M.storageSelected = null;
+      } else notify(`${b.who.name} can't use that.`, 'warn');
+      return;
+    }
+  }
+  // Item rows
+  for (const row of M._storageRows || []) {
+    if (my >= row.y1 && my < row.y2 && mx >= P.x && mx < P.x + P.w) {
+      M.storageSelected = (M.storageSelected === row.idx) ? null : row.idx;
+      return;
+    }
+  }
+  if (!hitTest(mx, my, P.x, P.y, P.w, P.h)) { M.activeMenu = null; M.storageSelected = null; }
 }
 
 function drawCookingMenu(ctx, gs, mx, my) {
@@ -1872,50 +1956,7 @@ function handleMenuClick(mx, my, gs) {
     return;
   }
 
-  if (M.activeMenu === 'storage') {
-    // Close button
-    if (M._stClose && hitTest(mx, my, M._stClose.x, M._stClose.y, M._stClose.w, M._stClose.h)) {
-      M.activeMenu = null; M.storageSelected = null; return;
-    }
-    // Give-to buttons (only when a consumable is selected)
-    const doGive = (who) => {
-      const slot = gs.shelter.storage[M.storageSelected];
-      if (!slot) return;
-      const used = useItem(who, gs.shelter.storage, slot.id, gs);
-      if (used) {
-        const def = getItemDef(slot.id);
-        notify(`${who.name} used ${def?.name || slot.id}.`, 'good');
-        if (gs.shelter.storage[M.storageSelected] === undefined) M.storageSelected = null;
-      }
-    };
-    if (M._stGiveParent && hitTest(mx, my, M._stGiveParent.x, M._stGiveParent.y, M._stGiveParent.w, M._stGiveParent.h)) {
-      doGive(gs.parent); return;
-    }
-    if (M._stGiveLily && hitTest(mx, my, M._stGiveLily.x, M._stGiveLily.y, M._stGiveLily.w, M._stGiveLily.h)) {
-      doGive(gs.child); return;
-    }
-    if (M._stGiveSurv) {
-      const tb = M._stGiveSurv;
-      if (hitTest(mx, my, tb.x, tb.y, tb.w, tb.h)) {
-        const surv = (gs.survivors || []).find(s => s.id === tb.id);
-        if (surv) doGive(surv);
-        return;
-      }
-    }
-    // Item row click — select / deselect
-    if (M._storageRows) {
-      for (const row of M._storageRows) {
-        if (my >= row.y1 && my < row.y2) {
-          M.storageSelected = (M.storageSelected === row.idx) ? null : row.idx;
-          return;
-        }
-      }
-    }
-    // Click outside modal
-    const W2 = 280, H2 = 270, px = 60, py = 22;
-    if (!hitTest(mx, my, px, py, W2, H2)) { M.activeMenu = null; M.storageSelected = null; }
-    return;
-  }
+  if (M.activeMenu === 'storage') { storageMenuClick(gs, mx, my); return; }
 
   if (M.activeMenu === 'char') {
     // Close button

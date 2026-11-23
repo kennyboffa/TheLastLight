@@ -1317,11 +1317,13 @@ function _lerpHex(a, b, t) {
 const _SKY_KF = [
   [0.00, '#050408', '#080810'],  // 00:00 midnight — near black
   [0.17, '#0a0614', '#0d0820'],  // 04:00 deep night
-  [0.25, '#1e0c28', '#2c1238'],  // 06:00 dawn — dark purple
-  [0.33, '#2a1830', '#1a2040'],  // 08:00 morning — purple-blue
-  [0.50, '#182838', '#1e3450'],  // 12:00 noon — overcast blue-grey
-  [0.67, '#1a2030', '#1c2840'],  // 16:00 afternoon
-  [0.75, '#28101c', '#3a1428'],  // 18:00 dusk — warm purple
+  [0.24, '#241430', '#5a3440'],  // 05:45 first light — purple, warm horizon
+  [0.29, '#3e4660', '#8a6a58'],  // 07:00 sunrise — pale gold under grey
+  [0.36, '#5a6878', '#8e9290'],  // 08:40 morning — overcast
+  [0.50, '#66747e', '#9ca2a0'],  // 12:00 noon — bright overcast grey
+  [0.68, '#5c6872', '#94948a'],  // 16:20 afternoon
+  [0.76, '#4a3a4a', '#a06048'],  // 18:15 sunset — warm orange horizon
+  [0.81, '#22182a', '#4a2a30'],  // 19:25 dusk
   [0.88, '#0e060e', '#140810'],  // 21:00 evening
   [1.00, '#050408', '#080810'],  // 24:00 midnight
 ];

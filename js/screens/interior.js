@@ -299,11 +299,9 @@ function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
 
 /** Check indoor enemies against the player; starts combat. Returns true if it did. */
 function checkIndoorEncounters(gs, area, px) {
-  const stealth = gs.parent.skills?.stealth || 0;
-  const alertRange = Math.max(45, 120 - stealth * 10) * detectionMult(gs, true);
   for (const enc of area.encounters) {
     if (enc.triggered || enc.killed) continue;
-    if (Math.abs(px - enc.wx) > alertRange) continue;
+    if (Math.abs(px - enc.wx) > encounterDetectPx(gs, enc, true)) continue;
     enc.triggered = true;
     let enemies;
     if (enc._savedEnemies) { enemies = enc._savedEnemies; enc._savedEnemies = null; }
@@ -312,8 +310,14 @@ function checkIndoorEncounters(gs, area, px) {
     gs.mouse.down = false;
     startCombat(gs, enemies, px, enc.wx);
     gs.combat._encRef = enc;
-    // keep fighters inside the room
-    for (const e of gs.combat.enemies) e.worldX = clamp(e.worldX, 30, area.width - 30);
+    // keep fighters inside the room, still one per tile
+    const c = gs.combat;
+    for (const e of c.enemies) {
+      let x = e.worldX;
+      while (x > area.width - 30) x -= TILE;
+      while (x < 30) x += TILE;
+      e.worldX = x;
+    }
     gs.inCombat = true;
     return true;
   }

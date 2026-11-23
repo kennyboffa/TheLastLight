@@ -73,8 +73,10 @@ function renderFog(ctx, playerScreenX, playerScreenY, gs, isIndoor) {
   if (gs.parent.lightOn) radius += isIndoor ? 95 : 40 + Math.round(110 * nf);
 
   fc.clearRect(0, 0, CFG.W, CFG.H);
-  // Lighter by day so the scenery is visible; as dark as before at night
-  fc.fillStyle = `rgba(0,0,0,${(0.84 - 0.40 * df).toFixed(3)})`;
+  // Outdoors in daylight you see the whole scene (only a light vignette);
+  // indoors stays dim; nights are as dark as ever
+  const dark = isIndoor ? 0.84 - 0.42 * df : 0.84 - 0.74 * df;
+  fc.fillStyle = `rgba(0,0,0,${dark.toFixed(3)})`;
   fc.fillRect(0, 0, CFG.W, CFG.H);
 
   // Punch a radial hole around the player
@@ -178,15 +180,18 @@ function startExploration(gs, loc) {
   const encounters = [];
   for (const zone of loc.zones) {
     if (chance(zone.enemyChance)) {
-      const _ps = (loc.canHunt || zone.canHunt) ? 'wolf'
-                : loc.id === 'factory' ? 'robot' : 'human_hostile';
+      // Decide who is there now, so what you see is what you fight and each
+      // type can notice you from its own distance
+      const rolled = buildEncounter(loc.difficulty, zone, !!loc.canHunt, gs.day);
+      if (!rolled.length) continue;
       encounters.push({
         wx: zone.x + Math.floor(zone.w * 0.6) + randInt(-20, 20),
         triggered: false, killed: false, distance: 70,
         difficulty: loc.difficulty,
         locCanHunt: !!loc.canHunt,
         zone,
-        previewSprite: _ps,
+        ids: rolled.map(e => e.id),
+        previewSprite: rolled[0].sprite || 'human_hostile',
       });
     }
   }
@@ -440,12 +445,9 @@ function updateExplore(gs, dt) {
   // Searching: moving away aborts it
   _tickSearches(gs, es.containers, Math.abs(es.velX) > 0.1, dt);
 
-  // Enemy encounters — stealth affects detection range
-  const stealth    = gs.parent.skills?.stealth || 0;
-  const alertRange = Math.max(50, 150 - stealth * 12) * detectionMult(gs, false);
-  const nightMult  = 1 + nightFactor(gs.time) * 0.3;
+  // Enemy encounters — each type notices you from its own distance (4-8 tiles)
   for (const enc of es.encounters) {
-    if (!enc.triggered && Math.abs(es.px - enc.wx) < alertRange * nightMult) {
+    if (!enc.triggered && !enc.killed && Math.abs(es.px - enc.wx) < encounterDetectPx(gs, enc, false)) {
       enc.triggered = true;
       // Re-use survivors from a previous fled combat (same HP); else roll fresh
       let enemies;
@@ -453,7 +455,8 @@ function updateExplore(gs, dt) {
         enemies = enc._savedEnemies;
         enc._savedEnemies = null;
       } else {
-        enemies = buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
+        enemies = enc.ids ? enc.ids.map(id => deepClone(ENEMY_TEMPLATES[id])).filter(Boolean)
+                          : buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
       }
       if (enemies.length > 0) {
         gs.mouse.down = false;
@@ -700,6 +703,7 @@ function exploreKeyPress(key, gs) {
     return;
   }
   if (key === 'h') { startHunt(gs); return; }
+  if (key === 'f') { openFire(gs); return; }
   if (key === 'c') { toggleSneak(gs); return; }
   if (key === 'l') { toggleFlashlight(gs); return; }
   if (key === 'escape') {
@@ -976,6 +980,10 @@ function exploreClick(mx, my, gs) {
   }
   if (gs._exploreSneakBtn && hitTest(mx, my, gs._exploreSneakBtn.x, gs._exploreSneakBtn.y, gs._exploreSneakBtn.w, gs._exploreSneakBtn.h)) {
     toggleSneak(gs); return;
+  }
+  // SHOOT button (open fire on enemies who haven't seen you)
+  if (gs._exploreShootBtn && hitTest(mx, my, gs._exploreShootBtn.x, gs._exploreShootBtn.y, gs._exploreShootBtn.w, gs._exploreShootBtn.h)) {
+    openFire(gs); return;
   }
   // HUNT button
   if (gs._exploreHuntBtn && hitTest(mx, my, gs._exploreHuntBtn.x, gs._exploreHuntBtn.y, gs._exploreHuntBtn.w, gs._exploreHuntBtn.h)) {
@@ -1531,6 +1539,17 @@ function drawExploreHUD(ctx, gs, es) {
     sideY += 38;
   }
 
+  // SHOOT button: an unaware enemy is within your gun's reach
+  gs._exploreShootBtn = null;
+  const shootTgt = !gs.inCombat ? openFireTarget(gs) : null;
+  if (shootTgt) {
+    const hx = CFG.W - 60, hy = sideY;
+    drawButton(ctx, hx, hy, 50, 22, 'SHOOT', hitTest(mx, my, hx, hy, 50, 22), false);
+    drawText(ctx, `${shootTgt.tiles} tiles [F]`, hx + 25, hy + 31, '#d0a060', 6, 'center');
+    gs._exploreShootBtn = { x: hx, y: hy, w: 50, h: 22 };
+    sideY += 38;
+  }
+
   // HUNT button (huntable areas, outdoors, not fighting)
   gs._exploreHuntBtn = null;
   if (canHuntHere(gs)) {
@@ -1629,6 +1648,70 @@ function detectionMult(gs, indoors) {
   return m;
 }
 
+// ── Detection & opening shots ────────────────────────────────────────────────
+
+/** How close (px) you can get before this group notices you: their type's
+ *  sight in tiles, shortened by stealth and sneaking, lengthened by a lit flashlight. */
+function encounterDetectPx(gs, enc, indoor) {
+  const tiles = Math.max(4, ...(enc.ids || []).map(id => (ENEMY_TEMPLATES[id] && ENEMY_TEMPLATES[id].detect) || 5));
+  const stealth = (gs.parent.skills && gs.parent.skills.stealth) || 1;
+  const k = (1 - Math.min(0.3, (stealth - 1) * 0.035)) * detectionMult(gs, !!indoor);
+  return Math.max(2, tiles * k) * TILE;
+}
+
+/** An unaware enemy group you could shoot at right now: {enc, tiles} or null. */
+function openFireTarget(gs) {
+  const es = exploreState;
+  if (!es || gs.inCombat || es.invOpen) return null;
+  const p = gs.parent, wd = p.equipped.weapon ? getItemDef(p.equipped.weapon) : null;
+  if (!wd || wd.weaponType !== 'firearm' || !(p.loaded[wd.ammoType] > 0)) return null;
+  const list = es.building ? curArea(es).encounters : es.encounters;
+  const px = es.building ? es.building.px : es.px;
+  const range = weaponCombatStats(wd.id).range;
+  let best = null;
+  for (const enc of list || []) {
+    if (enc.triggered || enc.killed) continue;
+    const tiles = tilesBetween(px, enc.wx);
+    if (tiles <= range && (!best || tiles < best.tiles)) best = { enc, tiles };
+  }
+  return best;
+}
+
+/** Shoot first: start the fight with an aimed opening shot (ambush bonus). */
+function openFire(gs) {
+  const t = openFireTarget(gs);
+  if (!t) {
+    const wd = gs.parent.equipped.weapon ? getItemDef(gs.parent.equipped.weapon) : null;
+    notify(wd && wd.weaponType === 'firearm' ? 'No unaware target in range.' : 'You need a loaded gun to open fire.', 'warn');
+    return;
+  }
+  const es = exploreState, enc = t.enc;
+  const px = es.building ? es.building.px : es.px;
+  enc.triggered = true;
+  const enemies = enc._savedEnemies || (enc.ids ? enc.ids.map(id => deepClone(ENEMY_TEMPLATES[id])).filter(Boolean)
+                                                 : buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day));
+  enc._savedEnemies = null;
+  if (!enemies.length) return;
+  gs.mouse.down = false;
+  startCombat(gs, enemies, px, enc.wx);
+  const c = gs.combat;
+  c._encRef = enc;
+  gs.inCombat = true;
+  if (es.building) {
+    const area = curArea(es);
+    for (const e of c.enemies) { while (e.worldX > area.width - 30) e.worldX -= TILE; while (e.worldX < 30) e.worldX += TILE; }
+  }
+  // They never saw it coming
+  c.surprised = false;
+  c.ambush = true;
+  c.ambushBonus = 10 + Math.min(30, ((gs.parent.skills && gs.parent.skills.firearms) || 1) * 4);
+  c.turn = 'player'; c.firstTurn = 'player'; c.pendingAction = null;
+  c.openerText = 'OPENING SHOT';
+  c.openingShot = true;
+  c.log.length = 0;
+  combatLog(gs, 'You take aim from cover...', 'good');
+}
+
 // Gunfire pulls in any other enemies within earshot of the fight
 function gunNoise(gs) {
   const es = exploreState, c = gs.combat;
@@ -1643,8 +1726,10 @@ function gunNoise(gs) {
       || (enc.ids ? enc.ids.map(id => deepClone(ENEMY_TEMPLATES[id])) : buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day));
     enc._savedEnemies = null;
     for (const e of (enemies || []).filter(Boolean)) {
-      c.enemies.push({ ...e, isPlayer: false, index: c.enemies.length, dead: false, aiTimer: 0,
-                       worldX: e.worldX !== undefined ? e.worldX : enc.wx + (Math.random() - 0.5) * 40 });
+      const wx = e.worldX !== undefined ? e.worldX : enc.wx;
+      const ne = { ...e, isPlayer: false, index: c.enemies.length, dead: false, aiTimer: 0 };
+      ne.worldX = _snapToGrid(c, wx, ne, wx >= c.playerWx ? 1 : -1);
+      c.enemies.push(ne);
       joined++;
     }
   }
@@ -1738,6 +1823,7 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   // Move left
   const mlHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 32, 24);
   drawButton(ctx, bx, _COMBAT_BAR_Y, 32, 24, '◀', mlHov, false, c.playerAp < 1);
+  drawText(ctx, 'move 1AP', bx + 34, _COMBAT_BAR_Y - 2, C.textDim, 6, 'center');
   gs._combatMoveL = { x: bx, y: _COMBAT_BAR_Y, w: 32, h: 24 };
   bx += 36;
 
@@ -1759,12 +1845,16 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   const isEmpty   = isFirearm && c.player.magazine <= 0;
   const alive     = c.enemies.filter(e => !e.dead);
   const tgt       = alive[c.targetIdx] || alive[0];
-  const meleeDist = (gs.inCombat && tgt) ? Math.abs(c.playerWx - tgt.worldX) : 0;
-  const tooFar    = !isFirearm && meleeDist > MELEE_RANGE;
+  const ws        = playerAttackStats(gs);
+  const tgtTiles  = (gs.inCombat && tgt) ? tilesBetween(c.playerWx, tgt.worldX) : 0;
+  const tooFar    = tgtTiles > ws.range;
+  const noAp      = c.playerAp < ws.ap;
   const hitPct    = tgt ? playerHitChance(gs, tgt) : 0;
-  const atkLabel  = isEmpty ? '⚠ EMPTY' : (tooFar ? 'Too far' : `${wd ? 'Attack' : 'Punch'} ${hitPct}%`);
+  const verb      = !wd ? 'Punch' : wd.id === 'knife' ? 'Stab' : isFirearm ? 'Shoot' : 'Hit';
+  const atkLabel  = isEmpty ? '⚠ EMPTY' : (tooFar ? `Too far (${tgtTiles})` : `${verb} ${hitPct}%`);
   const atkHov    = hitTest(mx, my, bx, _COMBAT_BAR_Y, 80, 24);
-  drawButton(ctx, bx, _COMBAT_BAR_Y, 80, 24, atkLabel, atkHov, false, isEmpty || tooFar);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 80, 24, atkLabel, atkHov, false, isEmpty || tooFar || noAp);
+  drawText(ctx, `${ws.ap}AP · reach ${ws.range}`, bx + 40, _COMBAT_BAR_Y + 33, C.textDim, 6, 'center');
   if (wd) {
     const cond = weaponCondition(gs.parent, wd.id);
     const label = cond === null ? wd.name.slice(0, 10) : `${wd.name.slice(0, 8)} ${cond}/${WEAPON_DURABILITY[wd.id]}`;
@@ -1777,7 +1867,8 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   if (isFirearm) {
     const rlHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 56, 24);
     drawButton(ctx, bx, _COMBAT_BAR_Y, 56, 24, 'Reload', rlHov, false,
-      !isEmpty || (gs.parent.ammo[wd.ammoType] || 0) <= 0);
+      c.player.magazine >= c.player.magazineSize || (gs.parent.ammo[wd.ammoType] || 0) <= 0 || c.playerAp < AP_COST.reload);
+    drawText(ctx, `${AP_COST.reload}AP`, bx + 28, _COMBAT_BAR_Y + 33, C.textDim, 6, 'center');
     gs._combatReload = { x: bx, y: _COMBAT_BAR_Y, w: 56, h: 24 };
     bx += 62;
   } else { gs._combatReload = null; }
@@ -1793,19 +1884,20 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   // Item
   const hasUsable = combatUsableItems(gs).length > 0;
   const itHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 50, 24);
-  drawButton(ctx, bx, _COMBAT_BAR_Y, 50, 24, 'Item [I]', itHov, !!c.itemMenu, !hasUsable);
+  drawButton(ctx, bx, _COMBAT_BAR_Y, 50, 24, 'Item [I]', itHov, !!c.itemMenu, !hasUsable || c.playerAp < AP_COST.item);
+  drawText(ctx, `${AP_COST.item}AP`, bx + 25, _COMBAT_BAR_Y + 33, C.textDim, 6, 'center');
   gs._combatItem = { x: bx, y: _COMBAT_BAR_Y, w: 50, h: 24 };
   bx += 56;
 
   // Flee
-  const canFlee = !alive.length || Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX))) >= FLEE_MIN_DIST;
+  const canFlee = !alive.length || Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX))) >= FLEE_MIN_DIST - TILE / 2;
   const flHov   = hitTest(mx, my, bx, _COMBAT_BAR_Y, 48, 24);
   drawButton(ctx, bx, _COMBAT_BAR_Y, 48, 24, 'Flee', flHov, false, c.playerAp < 2 || !canFlee);
   gs._combatFlee = { x: bx, y: _COMBAT_BAR_Y, w: 48, h: 24 };
   // Flee hint
   if (!canFlee) {
-    const needed = alive.length ? Math.round(FLEE_MIN_DIST - Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX)))) : 0;
-    if (needed > 0) drawText(ctx, `need ${needed}m`, bx + 24, _COMBAT_BAR_Y - 2, '#884444', 6, 'center');
+    const needed = alive.length ? Math.ceil((FLEE_MIN_DIST - Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX)))) / TILE) : 0;
+    if (needed > 0) drawText(ctx, `${needed} tile${needed > 1 ? 's' : ''} more`, bx + 24, _COMBAT_BAR_Y - 2, '#884444', 6, 'center');
   }
 
   if (c.itemMenu) _drawCombatItemMenu(ctx, gs, mx, my);
@@ -1840,7 +1932,7 @@ function _drawCombatItemMenu(ctx, gs, mx, my) {
   const h = 24 + items.length * rowH + 14;
   const x = Math.round(CFG.W / 2 - w / 2), y = _COMBAT_BAR_Y - 8 - h;
   drawPanel(ctx, x, y, w, h, C.panelBg, C.border2);
-  drawText(ctx, 'USE ITEM  (uses your turn)', x + 8, y + 14, C.textBright, 8, 'left', true);
+  drawText(ctx, `USE ITEM  (${AP_COST.item} AP)`, x + 8, y + 14, C.textBright, 8, 'left', true);
   gs._combatItemRows = [];
   items.forEach((slot, i) => {
     const d = getItemDef(slot.id);

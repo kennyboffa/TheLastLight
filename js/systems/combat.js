@@ -1,9 +1,56 @@
 // combat.js — In-world combat system (v0.27)
 'use strict';
 
-const MELEE_RANGE    = 70;   // px — max distance for melee attacks
-const FLEE_MIN_DIST  = 110;  // px — min distance from any enemy to attempt flee
-const COMBAT_STEP    = 40;   // px — distance per Move action
+// Combat is on a line of tiles. One tile = one Move.
+const COMBAT_STEP    = 40;   // px — one tile
+const TILE           = COMBAT_STEP;
+const MELEE_RANGE    = TILE + 8;        // px — adjacent tile (used by the companion and UI hints)
+const FLEE_MIN_DIST  = 3 * TILE;        // px — must be at least 3 tiles from every enemy to flee
+
+// AP cost and reach (in tiles) of each way to attack. Unarmed = '_fists'.
+const WEAPON_COMBAT = {
+  _fists:  { ap: 2, range: 1 },
+  knife:   { ap: 2, range: 1 }, pipe:    { ap: 2, range: 1 },
+  machete: { ap: 3, range: 1 }, bat:     { ap: 3, range: 1 }, crowbar: { ap: 3, range: 1 },
+  spear:   { ap: 2, range: 2 },                                  // long reach
+  pistol:  { ap: 2, range: 6 }, shotgun: { ap: 3, range: 4 }, rifle:   { ap: 3, range: 10 },
+};
+const AP_COST = { move: 1, item: 1, reload: 2, flee: 2 };
+
+function weaponCombatStats(id) {
+  if (!id) return WEAPON_COMBAT._fists;
+  if (WEAPON_COMBAT[id]) return WEAPON_COMBAT[id];
+  const d = getItemDef(id);
+  return d && d.weaponType === 'firearm' ? { ap: 2, range: 6 } : { ap: 2, range: 1 };
+}
+function playerAttackStats(gs) { return weaponCombatStats(gs.parent.equipped.weapon); }
+function tilesBetween(a, b) { return Math.round(Math.abs(a - b) / TILE); }
+
+// Enemies: an attack costs 2 AP (bosses 3); shooters reach 6 tiles, everyone else 1
+function enemyAttackAp(e) { return e.atkAp || (e.isBoss ? 3 : 2); }
+function enemyRangeTiles(e) { return e.isRanged ? (e.rangeTiles || 6) : 1; }
+
+/** Is world-x tile `x` taken by someone other than `self`? */
+function _tileTaken(c, x, self) {
+  const near = v => Math.abs(v - x) < TILE / 2;
+  if (self !== 'player' && near(c.playerWx)) return true;
+  if (self !== 'comp' && c.companion && !c.compDown && near(c.compWx)) return true;
+  return c.enemies.some(e => e !== self && !e.dead && near(e.worldX));
+}
+
+/** Put a combatant on the grid (relative to where the fight started), on a free tile. */
+function _snapToGrid(c, x, self, dirIfTaken) {
+  let t = c.gridOrigin + Math.round((x - c.gridOrigin) / TILE) * TILE;
+  for (let i = 0; i < 12 && _tileTaken(c, t, self); i++) t += (dirIfTaken || 1) * TILE;
+  return t;
+}
+
+/** Spend player AP; the turn passes when it runs out. */
+function _spendPlayerAp(gs, n) {
+  const c = gs.combat;
+  c.playerAp = Math.max(0, c.playerAp - n);
+  if (c.playerAp <= 0 && c.phase === 'action') { c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 0.7; }
+}
 const CFG_COMBAT_INTRO = 1.2; // s — freeze with "COMBAT" banner when a fight starts
 
 // Melee weapons wear out: number of swings before they break (repair at the workshop)
@@ -119,6 +166,17 @@ function startCombat(gs, enemies, playerWx, encounterWx) {
     exploreState.animFrame = 0;
   }
 
+  // Line everyone up on tiles: enemies at least one tile away, each on its own tile
+  const c0 = gs.combat;
+  c0.gridOrigin = c0.playerWx;
+  const side = (encounterWx || c0.playerWx + 200) >= c0.playerWx ? 1 : -1;
+  c0.compWx = c0.playerWx - side * TILE;
+  for (const e of c0.enemies) {
+    let x = e.worldX;
+    if (Math.abs(x - c0.playerWx) < TILE) x = c0.playerWx + side * TILE;
+    e.worldX = _snapToGrid(c0, x, e, side);
+  }
+
   _rollCombatOpening(gs, enemyCombatants);
   Audio.startCombatMusic();
 }
@@ -182,25 +240,21 @@ function combatLog(gs, text, type) {
 
 // ── Player actions ────────────────────────────────────────────────────────────
 
-function playerMoveLeft(gs) {
+function _playerMove(gs, dir) {
   const c = gs.combat;
   if (c.turn !== 'player' || c.phase !== 'action') return;
-  if (c.playerAp < 1) { combatLog(gs, 'No AP left to move.', 'warn'); return; }
-  c.playerAp--;
-  c.playerWx = Math.max(10, c.playerWx - COMBAT_STEP);
-  combatLog(gs, 'Moved left.', 'normal');
-  if (c.playerAp <= 0) { c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 0.6; }
+  if (c.playerAp < AP_COST.move) { combatLog(gs, 'No AP left to move.', 'warn'); return; }
+  const maxX = typeof combatMaxX === 'function' ? combatMaxX(gs) : CFG.WORLD_W - 10;
+  const nx = c.playerWx + dir * TILE;
+  if (nx < 10 || nx > maxX) { combatLog(gs, "Can't go further.", 'warn'); return; }
+  if (c.enemies.some(e => !e.dead && Math.abs(e.worldX - nx) < TILE / 2)) { combatLog(gs, 'Blocked by an enemy.', 'warn'); return; }
+  c.playerWx = nx;
+  if (c.companion && !c.compDown && Math.abs(c.compWx - nx) < TILE / 2) c.compWx -= dir * TILE;   // swap past your companion
+  combatLog(gs, dir < 0 ? 'Moved left.' : 'Moved right.', 'normal');
+  _spendPlayerAp(gs, AP_COST.move);
 }
-
-function playerMoveRight(gs) {
-  const c = gs.combat;
-  if (c.turn !== 'player' || c.phase !== 'action') return;
-  if (c.playerAp < 1) { combatLog(gs, 'No AP left to move.', 'warn'); return; }
-  c.playerAp--;
-  c.playerWx = Math.min(typeof combatMaxX === 'function' ? combatMaxX(gs) : CFG.WORLD_W - 10, c.playerWx + COMBAT_STEP);
-  combatLog(gs, 'Moved right.', 'normal');
-  if (c.playerAp <= 0) { c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 0.6; }
-}
+function playerMoveLeft(gs)  { _playerMove(gs, -1); }
+function playerMoveRight(gs) { _playerMove(gs, 1); }
 
 function playerEndTurn(gs) {
   const c = gs.combat;
@@ -224,8 +278,9 @@ function playerHitChance(gs, target) {
   if (nightFactor(gs.time) > 0.5 && p.trait !== 'night_owl') hit -= 10;
   if (c && c.ambush) hit += c.ambushBonus || 20;     // they haven't noticed you yet (better sneak, bigger bonus)
   if (isRanged && c && target.worldX !== undefined) {
-    const dist = Math.abs(c.playerWx - target.worldX);
-    if (dist > 150) hit -= (dist - 150) / 10;
+    // accurate out to half the weapon's reach, then -6% per tile
+    const tiles = tilesBetween(c.playerWx, target.worldX), half = Math.ceil(weaponCombatStats(weapDef.id).range / 2);
+    if (tiles > half) hit -= (tiles - half) * 6;
   }
   return Math.round(clamp(hit, 10, 90));
 }
@@ -239,14 +294,13 @@ function playerAttack(gs, targetIdx) {
   const weapDef  = p.equipped.weapon ? getItemDef(p.equipped.weapon) : null;
   const isRanged = weapDef && weapDef.weaponType === 'firearm';
 
-  // Melee range check (only for in-world combat)
-  if (gs.inCombat && !isRanged) {
-    const dist = Math.abs(c.playerWx - target.worldX);
-    if (dist > MELEE_RANGE) {
-      combatLog(gs, 'Too far — move closer for melee!', 'warn');
-      return;
-    }
+  // Reach (tiles) and AP cost depend on the weapon
+  const ws = weaponCombatStats(weapDef ? weapDef.id : null);
+  if (gs.inCombat && tilesBetween(c.playerWx, target.worldX) > ws.range) {
+    combatLog(gs, ws.range === 1 ? 'Too far — get next to them!' : `Out of range (${ws.range} tiles).`, 'warn');
+    return;
   }
+  if (c.playerAp < ws.ap) { combatLog(gs, `Need ${ws.ap} AP to attack.`, 'warn'); return; }
 
   let dmgMin = 4, dmgMax = 9, hit = c.player.accuracy;
 
@@ -310,8 +364,8 @@ function playerAttack(gs, targetIdx) {
 
   if (checkCombatVictory(gs)) return;
 
-  c.turn = 'enemy';
-  c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
+  c.busyUntil = Date.now() + 450;      // let the swing / shot play out
+  _spendPlayerAp(gs, ws.ap);
 }
 
 function playerReload(gs) {
@@ -320,18 +374,15 @@ function playerReload(gs) {
   const wd = p.equipped.weapon ? getItemDef(p.equipped.weapon) : null;
   if (!wd || wd.weaponType !== 'firearm') { combatLog(gs, 'Nothing to reload.', 'warn'); return; }
   const spares = p.ammo[wd.ammoType] || 0;
-  if (spares <= 0) {
-    combatLog(gs, 'No spare ammo!', 'danger');
-    c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
-    return;
-  }
+  if (spares <= 0) { combatLog(gs, 'No spare ammo!', 'danger'); return; }
+  if (c.playerAp < AP_COST.reload) { combatLog(gs, `Need ${AP_COST.reload} AP to reload.`, 'warn'); return; }
   const needed = c.player.magazineSize - c.player.magazine;
   const loaded = Math.min(needed, spares);
   c.player.magazine    += loaded;
   p.loaded[wd.ammoType] = c.player.magazine;
   p.ammo[wd.ammoType]  -= loaded;
   combatLog(gs, `Reloaded (${c.player.magazine}/${c.player.magazineSize}).`, 'good');
-  c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
+  _spendPlayerAp(gs, AP_COST.reload);
 }
 
 function playerUseItem(gs, itemId) {
@@ -339,6 +390,7 @@ function playerUseItem(gs, itemId) {
   const p   = gs.parent;
   const inv = p.inventory;
   if (countInInventory(inv, itemId) < 1) { combatLog(gs, 'Item not found.', 'warn'); return; }
+  if (c.playerAp < AP_COST.item) { combatLog(gs, 'No AP left.', 'warn'); return; }
   const def = getItemDef(itemId);
   useItem(p, inv, itemId, gs);
   combatLog(gs, `Used ${def.name}.`, 'good');
@@ -347,7 +399,7 @@ function playerUseItem(gs, itemId) {
     p.wounded = false;
     combatLog(gs, 'Wounds treated.', 'good');
   }
-  c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
+  _spendPlayerAp(gs, AP_COST.item);
 }
 
 function playerFlee(gs) {
@@ -360,15 +412,15 @@ function playerFlee(gs) {
     const minDist = alive.length > 0
       ? Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX)))
       : 999;
-    if (minDist < FLEE_MIN_DIST) {
-      combatLog(gs, `Too close to flee! Need ${FLEE_MIN_DIST - Math.round(minDist)}m more distance.`, 'warn');
+    if (minDist < FLEE_MIN_DIST - TILE / 2) {
+      combatLog(gs, `Too close to flee! Get ${Math.max(1, Math.ceil((FLEE_MIN_DIST - minDist) / TILE))} more tile(s) away.`, 'warn');
       return;
     }
-    if (c.playerAp < 2) {
-      combatLog(gs, 'Need 2 AP to attempt flee.', 'warn');
+    if (c.playerAp < AP_COST.flee) {
+      combatLog(gs, `Need ${AP_COST.flee} AP to attempt flee.`, 'warn');
       return;
     }
-    c.playerAp -= 2;
+    c.playerAp -= AP_COST.flee;
   }
 
   const fleeChance = 30 + p.agility * 6 + p.skills.stealth * 4;
@@ -378,8 +430,7 @@ function playerFlee(gs) {
     c.pendingAction = 'fled'; c.pendingTimer = 1.0;
   } else {
     combatLog(gs, 'Couldn\'t escape!', 'danger');
-    c.turn = 'enemy';
-    c.pendingAction = 'enemy'; c.pendingTimer = 0.7;
+    _spendPlayerAp(gs, 0);
   }
 }
 
@@ -395,6 +446,8 @@ function enemyTurn(gs) {
     if (enemy.dead) continue;
 
     let ap = enemyMaxAp(enemy);
+    let attacks = 0;
+    const atkAp = enemyAttackAp(enemy), reach = enemyRangeTiles(enemy);
 
     while (ap > 0) {
       const pDist = gs.inCombat ? Math.abs(c.playerWx - enemy.worldX) : 0;
@@ -402,17 +455,16 @@ function enemyTurn(gs) {
       const comp = (gs.exploreCompanionId && c.companion && !c.compDown) ? c.companion : null;
       const cDist = comp ? Math.abs(c.compWx - enemy.worldX) : Infinity;
       if (enemy._targetComp === undefined || ap === enemyMaxAp(enemy)) {
-        enemy._targetComp = !!comp && (cDist < pDist - 15 || (cDist <= MELEE_RANGE && chance(30)));
+        enemy._targetComp = !!comp && (cDist < pDist - TILE / 2 || (cDist <= MELEE_RANGE && chance(30)));
       }
       const targetComp = enemy._targetComp && !!comp;
-      const dist   = targetComp ? cDist : pDist;
       const targetX = targetComp ? c.compWx : c.playerWx;
+      const tiles   = gs.inCombat ? tilesBetween(targetX, enemy.worldX) : 1;
 
-      // Can attack: ranged weapon or within melee range
-      const canAttack = enemy.isRanged || dist <= MELEE_RANGE;
-
-      if (canAttack && ap >= 2) {
-        ap -= 2;
+      if (tiles <= reach && ap >= atkAp && attacks < 2) {
+        // Attack (costs AP; at most two per turn)
+        ap -= atkAp;
+        attacks++;
         const hit = clamp((enemy.accuracy || 60) - (gs.parent.agility || 5), 10, 90);
         const delay = 300 * attackOrder++;
         enemy._atkT0  = Date.now() + delay;
@@ -420,7 +472,7 @@ function enemyTurn(gs) {
         const impact = delay + (enemy.isRanged ? 60 : 200);
         if (targetComp) {
           _enemyHitsCompanion(gs, enemy, impact);
-          break;
+          continue;
         }
         if (chance(hit)) {
           const dmg   = randInt(enemy.damage[0], enemy.damage[1]) + (c.surprised ? 2 : 0);
@@ -450,14 +502,13 @@ function enemyTurn(gs) {
           combatLog(gs, `${enemy.name} misses.`, 'normal');
           _fx(gs, 'miss', 'player', 0, enemy.worldX, impact);
         }
-        break; // one attack per enemy per turn
-      } else if (!canAttack && ap >= 1) {
-        // Move toward player
+      } else if (tiles > reach && ap >= 1) {
+        // Step one tile closer (1 AP), unless someone is in the way
+        const dir = targetX > enemy.worldX ? 1 : -1;
+        const nx = enemy.worldX + dir * TILE;
+        if (gs.inCombat && _tileTaken(c, nx, enemy)) break;
         ap -= 1;
-        if (gs.inCombat) {
-          const dir = targetX > enemy.worldX ? 1 : -1;
-          enemy.worldX += dir * 35;
-        }
+        if (gs.inCombat) enemy.worldX = nx;
       } else {
         break;
       }
@@ -479,11 +530,13 @@ function enemyTurn(gs) {
     } else if (alive.length) {
       const tgt = alive.reduce((a, e) => Math.abs(e.worldX - c.compWx) < Math.abs(a.worldX - c.compWx) ? e : a);
       let d = Math.abs(tgt.worldX - c.compWx);
-      if (d > MELEE_RANGE) {
-        const step = Math.min(d - 40, 80);
-        c.compWx += (tgt.worldX > c.compWx ? 1 : -1) * step;
-        d = Math.abs(tgt.worldX - c.compWx);
+      // up to two tiles toward the target, then attack if adjacent
+      for (let step = 0; step < 2 && tilesBetween(tgt.worldX, c.compWx) > 1; step++) {
+        const nx = c.compWx + (tgt.worldX > c.compWx ? 1 : -1) * TILE;
+        if (_tileTaken(c, nx, 'comp')) break;
+        c.compWx = nx;
       }
+      d = Math.abs(tgt.worldX - c.compWx);
       if (d <= MELEE_RANGE) {
         c.compAtkT0 = Date.now() + delay;
         const compHit = clamp(55 + (comp.skills?.melee || 1) * 4 - (tgt.agility || 3) * 2, 15, 85);
@@ -572,6 +625,14 @@ function updateCombat(gs, dt) {
   const c = gs.combat;
   if (!c) return;
   if (c.introTimer > 0) { c.introTimer -= dt; return; }
+  if (c.openingShot) {
+    // fire the aimed shot as soon as the banner clears (nearest enemy in reach)
+    c.openingShot = false;
+    const alive = c.enemies.filter(e => !e.dead);
+    const tgt = alive.reduce((a, e) => (!a || Math.abs(e.worldX - c.playerWx) < Math.abs(a.worldX - c.playerWx) ? e : a), null);
+    if (tgt) { c.targetIdx = alive.indexOf(tgt); playerAttack(gs, c.enemies.indexOf(tgt)); }
+    return;
+  }
   if (!c.pendingAction) return;
   c.pendingTimer -= dt;
   if (c.pendingTimer > 0) return;

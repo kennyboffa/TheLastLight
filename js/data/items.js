@@ -91,6 +91,14 @@ const ITEMS_DB = {
   backpack:      { id:'backpack',      name:'Backpack',       type:'backpack', weight:1.0, value:58, carryBonus:12, desc:'Standard hiking pack.' },
   mil_backpack:  { id:'mil_backpack',  name:'Military Pack',  type:'backpack', weight:1.5, value:110,carryBonus:20, desc:'Large military-grade pack.' },
 
+  // ── BIKE PARTS (build a bicycle at the shelter: halves travel time) ──────
+  bike_wheels:     { id:'bike_wheels',     name:'Bike Wheels',     type:'material', weight:2.0, value:30, desc:'A pair of bicycle wheels. Tyres still hold air.' },
+  bike_frame:      { id:'bike_frame',      name:'Bike Frame',      type:'material', weight:3.0, value:35, desc:'A bent but solid bicycle frame.' },
+  bike_chain:      { id:'bike_chain',      name:'Bike Chain',      type:'material', weight:0.4, value:20, desc:'Rusty, but it still turns.' },
+  bike_handlebars: { id:'bike_handlebars', name:'Handlebars',      type:'material', weight:0.8, value:20, desc:'Bicycle handlebars with worn grips.' },
+  screws_nuts:     { id:'screws_nuts',     name:'Screws & Nuts',   type:'material', weight:0.1, value:4,  desc:'A handful of bolts, screws and nuts.', stackable:true },
+  bicycle:         { id:'bicycle',         name:'Bicycle',         type:'misc',     weight:0,   value:150, desc:'Patched together from scavenged parts. Halves travel time.' },
+
   // ── CLOTHING (armor = damage blocked per hit; fractions block a point some of the time)
   hoodie:        { id:'hoodie',        name:'Hoodie',         type:'clothing', slot:'chest', weight:0.6, value:10, armor:0,
     desc:'Grey and faded. Warm enough.' },

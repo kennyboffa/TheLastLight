@@ -1765,6 +1765,109 @@ def it_rope():
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# World map backdrop (roads, markers and fog are drawn by the game on top).
+# Location spots must match WORLD_MAP_POS in js/screens/exploreSelect.js.
+# ════════════════════════════════════════════════════════════════════════════
+
+MAP_W, MAP_H = 540, 360
+MAP_POS = {'shelter': (270, 190), 'forest': (200, 222), 'church': (338, 222), 'rooftop': (355, 120),
+           'suburb': (170, 120), 'pharmacy': (420, 175), 'mall': (445, 80), 'village': (90, 255),
+           'police': (470, 270), 'factory': (110, 330), 'hospital': (500, 40), 'bunker': (60, 50)}
+
+
+def world_map():
+    rng = np.random.default_rng(404)
+    W, H = MAP_W, MAP_H
+    img = Image.new('RGB', (W, H), (40, 40, 32))
+    d = ImageDraw.Draw(img)
+    # broad terrain tint: greener west, greyer east
+    base = np.zeros((H, W, 3))
+    xs = np.linspace(0, 1, W)[None, :]
+    base[..., 0] = 44 + 10 * xs; base[..., 1] = 46 - 2 * xs; base[..., 2] = 34 + 12 * xs
+    img = Image.fromarray(base.clip(0, 255).astype(np.uint8)); d = ImageDraw.Draw(img)
+    # fields
+    for _ in range(26):
+        x, y = rng.integers(0, W), rng.integers(0, H)
+        w, h = rng.integers(20, 60), rng.integers(12, 34)
+        c = tuple(int(v) for v in rng.choice([(58, 54, 38), (50, 52, 36), (62, 58, 44)]))
+        d.rectangle([x, y, x + w, y + h], fill=c)
+    # forests (west / around the forest & village)
+    for cx, cy, r, n in [(200, 240, 55, 260), (90, 250, 60, 260), (150, 175, 40, 140), (40, 140, 45, 160), (250, 300, 40, 120)]:
+        for _ in range(n):
+            a = rng.uniform(0, 2 * np.pi); rr = r * np.sqrt(rng.random())
+            x, y = cx + np.cos(a) * rr, cy + np.sin(a) * rr * 0.8
+            s_ = rng.integers(2, 5)
+            g = tuple(int(v) for v in rng.choice([(30, 44, 28), (36, 52, 32), (26, 38, 24), (44, 58, 36)]))
+            d.ellipse([x - s_, y - s_, x + s_, y + s_], fill=g)
+    # river: north to south, bending
+    pts = [(250, -5), (240, 40), (262, 90), (300, 130), (296, 160), (262, 250), (282, 300), (300, 365)]
+    d.line(pts, fill=(32, 40, 44), width=7)
+    d.line(pts, fill=(44, 56, 62), width=3)
+    # city blocks (north-east), ruined gaps
+    for bx in range(330, 540, 13):
+        for by in range(4, 320, 13):
+            dist = np.sqrt(((bx - 485) / 130) ** 2 + ((by - 150) / 150) ** 2)
+            if rng.random() > 1.25 - dist or rng.random() < 0.15:   # dense core, ragged edges
+                continue
+            x0, y0 = bx + int(rng.integers(-2, 3)), by + int(rng.integers(-2, 3))
+            w, h = rng.integers(7, 12), rng.integers(7, 12)
+            g = int(rng.integers(58, 84))
+            d.rectangle([x0, y0, x0 + w, y0 + h], fill=(g, g, g + 4))
+            if rng.random() < 0.3:
+                d.rectangle([x0 + 2, y0 + 2, x0 + w - 2, y0 + h - 2], fill=(g - 22, g - 22, g - 18))
+    # suburbs: small house dots around suburb / church
+    for cx, cy in [(170, 120), (338, 222), (355, 120)]:
+        for _ in range(26):
+            x, y = cx + rng.normal(0, 22), cy + rng.normal(0, 16)
+            d.rectangle([x, y, x + 3, y + 3], fill=(78, 70, 62))
+    # industrial yards (south-west) and the bunker hill (north-west)
+    for _ in range(14):
+        x, y = 70 + rng.integers(0, 90), 300 + rng.integers(0, 50)
+        d.rectangle([x, y, x + rng.integers(8, 18), y + rng.integers(5, 10)], fill=(74, 68, 58))
+    d.ellipse([30, 25, 95, 80], fill=(56, 52, 44)); d.ellipse([42, 36, 80, 66], fill=(48, 46, 40))
+    # grain, speckles and vignette
+    a = np.array(img, dtype=float)
+    a += rng.normal(0, 7, (H, W, 1)) + rng.normal(0, 2.5, (H, W, 3))
+    spk = rng.random((H, W)) < 0.03
+    a[spk] *= 0.7
+    yy, xx = np.mgrid[0:H, 0:W]
+    v = ((xx - W / 2) / (W / 2)) ** 2 + ((yy - H / 2) / (H / 2)) ** 2
+    a *= (1 - 0.35 * np.clip(v - 0.3, 0, 1))[..., None]
+    return Image.fromarray(a.clip(0, 255).astype(np.uint8)).convert('RGBA')
+
+
+def it_bike_part(kind):
+    if kind == 'wheels':
+        s = _item(16, 9)
+        t = s.material('#2a2a2a', 8); r = s.material('#8a8e92', 8)
+        for x0 in (0, 8):
+            s.ellipse(x0, 1, x0 + 7, 8, t); s.ellipse(x0 + 2, 3, x0 + 5, 6, r); s.ellipse(x0 + 3, 4, x0 + 4, 5, t)
+    elif kind == 'frame':
+        s = _item(16, 10)
+        f = s.material('#8a3a2a', 12, 0.05)
+        s.line([(1, 9), (6, 2), (14, 2), (10, 9), (1, 9)], f, width=2); s.line([(6, 2), (10, 9)], f, width=2)
+        s.rect(13, 0, 14, 3, f)
+    elif kind == 'chain':
+        s = _item(14, 8)
+        c = s.material('#7a7a74', 8, 0.05); o = s.material('#4a4a46', 6)
+        s.ellipse(0, 0, 13, 7, c); s.ellipse(2, 2, 11, 5, o)
+        for x in range(1, 13, 2):
+            s.px(x, 0, o); s.px(x, 7, o)
+    elif kind == 'handlebars':
+        s = _item(16, 8)
+        m = s.material('#9a9a9a', 8, 0.03); g = s.material('#2a2a2a', 8)
+        s.line([(1, 2), (6, 4), (10, 4), (15, 2)], m, width=2); s.rect(7, 4, 8, 7, m)
+        s.rect(0, 1, 2, 3, g); s.rect(14, 1, 15, 3, g)
+    elif kind == 'screws':
+        s = _item(12, 7)
+        m = s.material('#a8a8a0', 8, 0.03); d = s.material('#5a5a56', 6)
+        for x, y in ((0, 3), (5, 1), (8, 4)):
+            s.rect(x, y, x + 3, y + 2, m); s.px(x + 1, y + 1, d)
+        s.line([(3, 0), (3, 6)], d)
+    return s.finish(outline=0.35)
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Parallax background layers (tile horizontally: width = 736, shapes wrap)
 # and ground strips. Kept low-contrast so the playfield stays readable.
 # ════════════════════════════════════════════════════════════════════════════
@@ -2067,6 +2170,10 @@ if __name__ == '__main__':
         'item_wood.png': lambda: it_wood(0), 'item_wood_2.png': lambda: it_wood(1), 'item_wood_3.png': lambda: it_wood(2),
         'item_rope.png': it_rope,
     })
+    jobs.update({'map_world.png': world_map,
+                 'item_bike_wheels.png': lambda: it_bike_part('wheels'), 'item_bike_frame.png': lambda: it_bike_part('frame'),
+                 'item_bike_chain.png': lambda: it_bike_part('chain'), 'item_bike_handlebars.png': lambda: it_bike_part('handlebars'),
+                 'item_screws_nuts.png': lambda: it_bike_part('screws')})
     for _id, _fn in ITEM_ART.items():
         jobs['item_%s.png' % _id] = _fn
     for name, fn in jobs.items():

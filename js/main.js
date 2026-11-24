@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.46';
+const GAME_VERSION = 'v0.47';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -313,6 +313,7 @@ function handleKeyPress(key) {
     if (GS.screen === 'title')      { Audio.resume(); titleAdvance(); return; }
     if (GS.screen === 'intro')      { introAdvance(); return; }
     if (GS.screen === 'gameOver')   { resetGame(); return; }
+    if (GS.screen === 'travel')     { travelSkip(GS); return; }
   }
 
   if (GS.screen === 'explore') {
@@ -447,6 +448,8 @@ function update(dt) {
     updateExplore(gs, dt);
   if (gs.screen === 'explore' && gs.inCombat)
     updateCombat(gs, dt);
+  if (gs.screen === 'travel' && !(gs.screenFade && gs.screenFade.active))
+    updateTravel(gs, dt);
 
   // Shelter ambient events (skip if day transition just started this frame)
   if (gs.screen === 'shelter' && !gs.dayFade.active) {
@@ -497,6 +500,9 @@ function render(ctx) {
       break;
     case 'packScreen':
       renderPackScreen(ctx, gs);
+      break;
+    case 'travel':
+      renderTravel(ctx, gs);
       break;
     case 'explore':
       renderExplore(ctx, gs);
@@ -656,6 +662,9 @@ function handleClick(mx, my, gs) {
       break;
     case 'packScreen':
       packScreenClick(mx, my, gs);
+      break;
+    case 'travel':
+      travelSkip(gs);
       break;
     case 'explore':
       exploreClick(mx, my, gs);

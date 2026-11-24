@@ -55,6 +55,7 @@ function _finishLoad(gs) {
   gs.combat   = null;
   gs.inCombat = false;
   gs.isRaid   = false;
+  gs.travel   = null;
   gs.event    = null;
   gs.explore  = null;
   gs.paused   = false;

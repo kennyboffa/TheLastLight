@@ -234,11 +234,19 @@ function _genRoom(kind, theme, quality, enemyChance, diff) {
   return room;
 }
 
+// Floor length per kind of building: a cabin is one main room (plus maybe a
+// bedroom), houses and shops are modest, big public buildings get the full hall.
+const FLOOR_WIDTH = { cabin: 380, shed: 360, house: 620, shop: 620, pharmacy: 560, hall: 700, crypt: 520 };
+function floorWidthFor(bdef) {
+  if (bdef.width) return bdef.width;
+  return FLOOR_WIDTH[bdef.plan] || FLOOR_WIDTH[bdef.theme] || BUILDING_W;
+}
+
 /** Build one floor: exit/stairs, room doors, furniture, containers, enemies. */
 function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
   const theme   = bdef.theme || 'urban';
   const quality = bdef.lootQuality || 'light';
-  const W = BUILDING_W;
+  const W = floorWidthFor(bdef);
   const fl = {
     width: W,
     exitX:       floorIdx === 0 ? 55 : null,
@@ -259,7 +267,7 @@ function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
     const kinds = [...plan.kinds].sort(() => Math.random() - 0.5);
     for (let r = 0; r < n; r++) {
       for (let tries = 0; tries < 30; tries++) {
-        const x = 180 + randInt(0, W - 380);
+        const x = 180 + randInt(0, Math.max(0, W - 380));
         if (_overlaps(x, x + DOOR_W, busy, 70)) continue;
         const kind = kinds[r % kinds.length];
         fl.rooms.push(_genRoom(kind, theme, quality, bdef.enemyChance || 15, diff));
@@ -282,7 +290,7 @@ function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
   };
   for (let i = 0; i < cCount; i++) {
     for (let tries = 0; tries < 30; tries++) {
-      const cx = 90 + randInt(0, W - 180);
+      const cx = 90 + randInt(0, Math.max(0, W - 180));
       if (_overlaps(cx - 14, cx + 14, busy, 30)) continue;
       fl.containers.push(_makeContainer(cx, randChoice(typesByTheme[theme] || ['locker', 'crate', 'chest', 'bag']), theme, quality));
       busy.push([cx - 14, cx + 14]);
@@ -291,7 +299,7 @@ function genBuildingFloorArea(floorIdx, totalFloors, bdef, diff) {
   }
 
   // Someone (or something) may be inside
-  _maybeIndoorEncounter(fl, (bdef.enemyChance || 15) * 0.5, diff, 320, W - 140);
+  _maybeIndoorEncounter(fl, (bdef.enemyChance || 15) * 0.5, diff, Math.min(320, Math.round(W * 0.55)), Math.max(Math.min(320, Math.round(W * 0.55)) + 10, W - 60));
   return fl;
 }
 

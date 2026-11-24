@@ -98,8 +98,12 @@ function renderFog(ctx, playerScreenX, playerScreenY, gs, isIndoor) {
 
 // ── Init exploration ──────────────────────────────────────────────────────────
 
-function startExploration(gs, loc) {
+function startExploration(gs, loc, arrived) {
   if (!loc) loc = randChoice(LOCATIONS_DB);
+  // First visit lifts the fog over it on the world map
+  if (!gs.visitedLocations) gs.visitedLocations = Object.keys(gs.locationStates || {});
+  if (!gs.visitedLocations.includes(loc.id)) gs.visitedLocations.push(loc.id);
+  if (gs.mapNew) gs.mapNew = gs.mapNew.filter(id => id !== loc.id);
 
   // Places that remember progress are generated from a fixed seed (per run),
   // so buildings, rooms, furniture and containers are the same every visit.
@@ -358,9 +362,11 @@ function startExploration(gs, loc) {
   Audio.stopShelterMusic();
   Audio.startMusic();
 
-  // Travel time: harder locations take longer to reach (diff 1-2: +1h, diff 3-4: +2h)
-  const travelMins = loc.difficulty >= 3 ? 120 : 60;
-  gs.time = Math.min(gs.time + travelMins, CFG.DAY_END - 60);
+  // Travel time: walked on the world map beforehand (beginTravel); callers that
+  // jump straight in still pay the trip
+  if (!arrived && typeof travelMinutes === 'function') {
+    gs.time = Math.min(gs.time + travelMinutes(gs, loc.id), CFG.DAY_END - 60);
+  }
 
   gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: null, pendingFn: () => {
     gs.screen   = 'explore';
@@ -795,7 +801,7 @@ function interactBuilding(gs) {
       bi.floorIdx++;
       bi.roomIdx = null;
       bi.px = bld.floors[bi.floorIdx].stairsDownX || 110;
-      bi.scrollX = 0;
+      bi.scrollX = areaScroll(bld.floors[bi.floorIdx], 0);
       notify(`Floor ${bi.floorIdx + 1} / ${bld.numFloors}`, 'info');
       return;
     }
@@ -804,8 +810,9 @@ function interactBuilding(gs) {
       Audio.step(); Audio.step(true);
       bi.floorIdx--;
       bi.roomIdx = null;
-      bi.px = bld.floors[bi.floorIdx].stairsUpX || BUILDING_W - 110;
-      bi.scrollX = clamp(bi.px - viewW(es) * 0.45, 0, Math.max(0, BUILDING_W - viewW(es)));
+      const flW = bld.floors[bi.floorIdx].width || BUILDING_W;
+      bi.px = bld.floors[bi.floorIdx].stairsUpX || flW - 110;
+      bi.scrollX = areaScroll(bld.floors[bi.floorIdx], bi.px - viewW(es) * 0.45);
       notify(`Floor ${bi.floorIdx + 1} / ${bld.numFloors}`, 'info');
       return;
     }
@@ -1177,6 +1184,11 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
+  // Crows on the ground and overhead (harmless, scatter when you come close)
+  if (typeof drawOutdoorCritters === 'function') {
+    drawOutdoorCritters(ctx, es, gs.inCombat && gs.combat ? gs.combat.playerWx : es.px, GROUND_Y, es.scrollX, viewW(es), !!gs.inCombat);
+  }
+
   // Bodies, enemies, player (incl. combat reactions)
   const _outSearching = es.containers.some(c => c.searching);
   drawExploreActors(ctx, gs, es, {
@@ -1354,6 +1366,11 @@ function renderBuildingInterior(ctx, gs, es) {
 
   // Containers (searchable furniture is drawn by the furniture pass)
   for (const c of area.containers) drawAreaContainer(ctx, c, near(c.wx, 30));
+
+  // Mice and rats scurrying along the skirting
+  if (typeof drawIndoorCritters === 'function') {
+    drawIndoorCritters(ctx, area, gs.inCombat && gs.combat ? gs.combat.playerWx : bi.px, GROUND_Y);
+  }
 
   // Bodies, enemies, player
   const searching = area.containers.some(c => c.searching);
@@ -2800,15 +2817,17 @@ function handleMapPickup(mapId, gs) {
     ['suburb', 'pharmacy'].forEach(id => {
       if (!gs.unlockedLocations.includes(id)) gs.unlockedLocations.push(id);
     });
-    addLog('Found a map — Suburban Ruins and City Pharmacy are now accessible!', 'good');
-    notify('NEW AREAS UNLOCKED: Suburbs + Pharmacy!', 'good');
+    gs.mapNew = [...new Set([...(gs.mapNew || []), 'suburb', 'pharmacy'])];
+    addLog('Found a map — Suburban Ruins and City Pharmacy are now marked on your world map.', 'good');
+    notify('New areas marked on your map: Suburbs + Pharmacy!', 'good');
   } else if (mapId === 'area_map_2') {
     if (!gs.unlockedLocations) gs.unlockedLocations = ['forest', 'church'];
     ['mall', 'hospital', 'factory', 'police', 'bunker', 'rooftop', 'village'].forEach(id => {
       if (!gs.unlockedLocations.includes(id)) gs.unlockedLocations.push(id);
     });
-    addLog('Found a detailed map — all remaining areas are now accessible!', 'good');
-    notify('ALL AREAS UNLOCKED!', 'good');
+    gs.mapNew = [...new Set([...(gs.mapNew || []), 'mall', 'hospital', 'factory', 'police', 'bunker', 'rooftop', 'village'])];
+    addLog('Found a detailed map — the rest of the region is now marked on your world map.', 'good');
+    notify('Every area is now marked on your map!', 'good');
   }
 }
 
@@ -2875,11 +2894,14 @@ function endExploration(gs) {
     gs.screen    = 'shelter';
     gs.zoomAnim  = { scale: 1.0, target: 1.0 };
   } else {
+    const homeFrom = es.location;
     gs.screenFade = { active: true, alpha: 0, phase: 'out', titleText: null, pendingFn: () => {
       exploreState = null;
       gs.keys      = {};
-      gs.screen    = 'shelter';
       gs.zoomAnim  = { scale: 1.0, target: 1.0 };
+      // walk home on the world map (time passes); then the shelter
+      if (homeFrom && typeof beginTravel === 'function' && WORLD_MAP_POS[homeFrom.id]) beginTravel(gs, homeFrom, 'home');
+      else gs.screen = 'shelter';
     }};
   }
 }

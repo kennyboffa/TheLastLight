@@ -300,7 +300,11 @@ function finishTask(gs, who, task) {
     }
     case 'craft': {
       const recipe = RECIPES_DB.find(r => r.id === task.recipeId);
-      if (recipe && recipe.special === 'repairWeapon') {
+      if (recipe && recipe.special === 'bike') {
+        gs.shelter.hasBike = true;
+        notify('The bicycle is ready! Trips take half the time.', 'good');
+        addLog('Built a bicycle from scavenged parts. Travel time is halved.', 'good');
+      } else if (recipe && recipe.special === 'repairWeapon') {
         const w = gs.parent.equipped.weapon;
         if (w && WEAPON_DURABILITY[w]) {
           gs.parent.weaponWear = gs.parent.weaponWear || {};

@@ -123,7 +123,7 @@ function packScreenClick(mx, my, gs) {
       packUI.selected = null; packUI.selectedSide = null;
       const loc = gs._pendingLoc;
       gs._pendingLoc = null;
-      startExploration(gs, loc);
+      beginTravel(gs, loc, 'out');      // walk there on the world map, then explore
       return;
     }
     if (hitTest(mx, my, cb.no.x, cb.no.y, cb.no.w, cb.no.h)) {

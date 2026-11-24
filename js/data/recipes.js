@@ -119,6 +119,9 @@ const RECIPES_DB = [
     cost:{ wood:2, cloth:1 }, needsWorkshop:false, craftTime:0.25, desc:'Improvised torch / matches. Provides light.' },
   { id:'r_repair',    name:'Repair Weapon',  output:'tools',        qty:0, special:'repairWeapon',
     cost:{ metal:2 }, needsWorkshop:true, needsTools:true, craftTime:0.5, desc:'Restore your equipped melee weapon to full durability.' },
+  { id:'r_bike',      name:'Bicycle',        output:'bicycle',      qty:0, special:'bike',
+    cost:{ bike_wheels:1, bike_frame:1, bike_chain:1, bike_handlebars:1, screws_nuts:6 }, needsWorkshop:false, craftTime:2,
+    desc:'Bolt the scavenged parts together. Halves travel time on the map.' },
   { id:'r_spear',     name:'Spear',          output:'spear',        qty:1,
     cost:{ wood:3, metal:2 }, needsWorkshop:false, craftTime:0.75, desc:'A wooden shaft with a sharpened metal tip. Good reach.' },
 

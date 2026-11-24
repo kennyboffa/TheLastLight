@@ -90,6 +90,7 @@ const GS = {
     bedroomBed2: false,
     bedroomBed3: false,
     hasRaincatcher:   false,
+    hasBike:          false,   // halves travel time on the world map
     campfire: false,
     noiseBudget: 100,
     noiseToday: 0,
@@ -208,6 +209,11 @@ const GS = {
 
   // ── Event cooldowns (last fired day per event id) ─────────────────────────
   eventLastFired: {},
+
+  // ── World map ─────────────────────────────────────────────────────────────
+  visitedLocations: [],   // fog lifts over these on the world map
+  mapNew: [],             // marked by a found map, not yet looked at
+  travel: null,           // trip in progress on the world map
 
   // ── Tutorial hints / shelter raids ────────────────────────────────────────
   hintsSeen: {},

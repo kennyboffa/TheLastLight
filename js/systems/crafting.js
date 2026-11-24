@@ -131,6 +131,7 @@ function craftItem(gs, recipeId, qty, who) {
 
   const recipe = RECIPES_DB.find(r => r.id === recipeId);
   if (!recipe) return { ok: false, msg: 'Unknown recipe.' };
+  if (recipe.special === 'bike' && gs.shelter.hasBike) return { ok: false, msg: 'You already have a bicycle.' };
   if (recipe.special === 'repairWeapon') {
     const w = gs.parent.equipped.weapon;
     if (!w || !WEAPON_DURABILITY[w]) return { ok: false, msg: 'Equip a melee weapon to repair.' };

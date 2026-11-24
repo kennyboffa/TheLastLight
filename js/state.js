@@ -214,6 +214,7 @@ const GS = {
   visitedLocations: [],   // fog lifts over these on the world map
   mapNew: [],             // marked by a found map, not yet looked at
   travel: null,           // trip in progress on the world map
+  traders: {},            // church / city trader: alive, stock, grudges
 
   // ── Tutorial hints / shelter raids ────────────────────────────────────────
   hintsSeen: {},

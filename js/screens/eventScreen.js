@@ -79,16 +79,20 @@ function renderEvent(ctx, gs) {
     // Show choices
     if (ev.choices) {
       gs._eventChoiceBounds = [];
-      for (let i = 0; i < ev.choices.length; i++) {
-        const btnH = 24;
+      // Conditional choices (`when`) are hidden; questions already asked are dimmed
+      const vis = ev.choices.map((c, i) => ({ c, i })).filter(o => !o.c.when || o.c.when(gs));
+      const btnH = vis.length > 6 ? 20 : 24, gap = vis.length > 6 ? 4 : 6;
+      vis.forEach((o, n) => {
+        const asked = ev._asked && ev._asked[o.i];
         const hov  = hitTest(mx, my, panX + 14, textY, panW - 28, btnH);
         if (hov) fillRect(ctx, panX + 10, textY - 1, panW - 20, btnH + 2, C.highlight);
         fillRect(ctx, panX + 10, textY, panW - 20, btnH, C.btnBg);
         strokeRect(ctx, panX + 10, textY, panW - 20, btnH, hov ? C.border2 : C.border);
-        drawText(ctx, `${i + 1}.  ${ev.choices[i].label}`, panX + 20, textY + 16, hov ? C.textBright : C.text, 9);
-        gs._eventChoiceBounds.push({ x: panX+10, y: textY, w: panW-20, h: btnH, idx: i });
-        textY += btnH + 6;
-      }
+        const col = asked ? C.textDim : (hov ? C.textBright : C.text);
+        drawText(ctx, `${n + 1}.  ${o.c.label}${asked ? '  ✓' : ''}`, panX + 20, textY + btnH - 8, col, 9);
+        gs._eventChoiceBounds.push({ x: panX+10, y: textY, w: panW-20, h: btnH, idx: o.i });
+        textY += btnH + gap;
+      });
     }
   }
 
@@ -114,6 +118,24 @@ function eventClick(mx, my, gs) {
   for (const bound of gs._eventChoiceBounds) {
     if (hitTest(mx, my, bound.x, bound.y, bound.w, bound.h)) {
       const choice = gs.event.choices[bound.idx];
+      if (choice && (choice.reply || choice.next)) {
+        // Conversation: a question answered in place, or a step to another node
+        const ev = gs.event;
+        if (choice.reply && !choice.next && ev._asked && ev._asked[bound.idx]) return;   // already asked
+        if (choice.effect) choice.effect(GS);
+        if (choice.reply) {
+          ev._asked = ev._asked || {};
+          ev._asked[bound.idx] = true;
+          ev.text = typeof choice.reply === 'function' ? choice.reply(GS) : choice.reply;
+        }
+        if (choice.next) {
+          const node = typeof choice.next === 'function' ? choice.next(GS) : choice.next;
+          if (node) gs.event = Object.assign(node, { type: node.type || ev.type, title: node.title || ev.title, id: node.id || ev.id });
+        }
+        eventUI.openLockFrames = 2;
+        gs._eventChoiceBounds = null;
+        return;
+      }
       if (choice) {
         const result = choice.action(GS);
         // If action returned null (e.g. started combat), close cleanly

@@ -122,11 +122,19 @@ function startExploration(gs, loc, arrived) {
       const baseRelX = loc.randomLayout
         ? Math.floor(zone.w * 0.1) + randInt(0, Math.floor(zone.w * 0.65))
         : bdef.relX;
-      const bx = zone.x + baseRelX;
+      const bx0 = zone.x + baseRelX;
       // Building size comes from its facade sprite; tents use the tent sprite size
       const facade = bdef.isTent ? null : pickBuildingSprite(bdef.theme || 'urban', bdef.label || zone.name, bdef.plan);
       const bw     = bdef.isTent ? 72 : facade.w;
       const bh     = bdef.isTent ? 46 : facade.h;
+      // never overlap a neighbour: slide along until there's a gap
+      let bx = bx0;
+      for (let guard = 0; guard < 8; guard++) {
+        const hit = buildings.find(o => bx < o.bx + o.bw + 14 && bx + bw + 14 > o.bx);
+        if (!hit) break;
+        bx = hit.bx + hit.bw + 14;
+      }
+      if (bx + bw > CFG.WORLD_W - 40) continue;
       const nFloors = bdef.numFloors || 1;
       const floors  = [];
       for (let fi = 0; fi < nFloors; fi++) {
@@ -146,11 +154,16 @@ function startExploration(gs, loc, arrived) {
     // Add a small generic structure for zones with no explicit buildings but outdoor loot
     if ((zone.buildings || []).length === 0 && zone.lootTable &&
         !zone.lootTable.startsWith('nature') && !zone.lootTable.startsWith('water')) {
-      const bx = zone.x + Math.floor(zone.w * 0.4);
       const g = genericBuildingStyle(loc, zone);
       const facade = pickBuildingSprite(g.facade || g.theme, zone.name, g.plan);
       const bw = facade.w;
       const bh = facade.h;
+      let bx = zone.x + Math.floor(zone.w * 0.4 - bw / 3);
+      for (let guard = 0; guard < 8; guard++) {
+        const hit = buildings.find(o => bx < o.bx + o.bw + 14 && bx + bw + 14 > o.bx);
+        if (!hit) break;
+        bx = hit.bx + hit.bw + 14;
+      }
       buildings.push({
         bx, bw, bh,
         label: zone.name,
@@ -338,6 +351,9 @@ function startExploration(gs, loc, arrived) {
       });
     }
   }
+
+  // Traders live in their own buildings
+  if (typeof placeTraders === 'function') placeTraders(gs, loc, buildings);
 
   // Inject area maps into specific buildings if not yet found
   if (!gs.foundMaps) gs.foundMaps = { area_map_1: false, area_map_2: false };
@@ -776,6 +792,7 @@ function interactBuilding(gs) {
   const bld  = es.buildings[bi.bldgIdx];
   const fl   = bld.floors[bi.floorIdx];
   const area = curArea(es);
+  if (typeof interactTrader === 'function' && interactTrader(gs, area, bi.px)) return;
 
   if (area.isRoom) {
     // Back out to the hallway, in front of this room's door
@@ -1351,7 +1368,7 @@ function renderBuildingInterior(ctx, gs, es) {
         strokeRect(ctx, ex, GROUND_Y - 30, 18, 30, '#2a2a40');
         drawText(ctx, 'EXIT', ex + 9, GROUND_Y - 33, '#3a6a3a', 7, 'center');
       }
-      if (near(ex, 30)) drawText(ctx, '[E] Exit', ex + 9, GROUND_Y - 46, C.textBright, 7, 'center');
+      if (near(ex, 30)) drawText(ctx, '[E] Exit', ex + 9, GROUND_Y - 66, C.textBright, 7, 'center');
     }
     // Stairs
     if (area.stairsUpX !== null) {
@@ -1366,6 +1383,9 @@ function renderBuildingInterior(ctx, gs, es) {
 
   // Containers (searchable furniture is drawn by the furniture pass)
   for (const c of area.containers) drawAreaContainer(ctx, c, near(c.wx, 30));
+
+  // Traders at home
+  if (typeof drawAreaNpcs === 'function') drawAreaNpcs(ctx, gs, area, gs.inCombat && gs.combat ? gs.combat.playerWx : bi.px, GROUND_Y);
 
   // Mice and rats scurrying along the skirting
   if (typeof drawIndoorCritters === 'function') {
@@ -2314,6 +2334,8 @@ const ENEMY_WEAPONS = {
   survivor_bandit: ['knife', 'crowbar'],
   singularity_cultist: ['machete'],
   boss_raider_chief: ['shotgun'],
+  trader_church: ['axe'],
+  trader_city: ['shotgun'],
 };
 function enemyWeaponId(en) {
   const list = ENEMY_WEAPONS[en.id];
@@ -2324,6 +2346,10 @@ function enemyWeaponId(en) {
 function _drawWorldEnemy(ctx, wx, groundY, sprite, weapon, facing) {
   const frame = Math.floor(Date.now() / 300) % 2;
   const f = facing || -1;
+  if (sprite && sprite.startsWith('trader_') && typeof TRADERS !== 'undefined') {
+    const t = TRADERS[sprite.slice(7)];
+    if (t && drawCharSprite(ctx, t.sprite, wx, groundY, 2, f, 48, weapon || { id: t.weapon })) return;
+  }
   switch (sprite) {
     case 'drone':
     case 'drone_heavy': drawDroneSprite(ctx, wx, groundY - 28, 2, frame); break;

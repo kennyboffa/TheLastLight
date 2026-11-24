@@ -10,7 +10,7 @@ const FLEE_MIN_DIST  = 3 * TILE;        // px — must be at least 3 tiles from 
 // AP cost and reach (in tiles) of each way to attack. Unarmed = '_fists'.
 const WEAPON_COMBAT = {
   _fists:  { ap: 2, range: 1 },
-  knife:   { ap: 2, range: 1 }, pipe:    { ap: 2, range: 1 },
+  knife:   { ap: 2, range: 1 }, pipe:    { ap: 2, range: 1 }, axe: { ap: 3, range: 1 },
   machete: { ap: 3, range: 1 }, bat:     { ap: 3, range: 1 }, crowbar: { ap: 3, range: 1 },
   spear:   { ap: 2, range: 2 },                                  // long reach
   pistol:  { ap: 2, range: 6 }, shotgun: { ap: 3, range: 4 }, rifle:   { ap: 3, range: 10 },
@@ -54,7 +54,7 @@ function _spendPlayerAp(gs, n) {
 const CFG_COMBAT_INTRO = 1.2; // s — freeze with "COMBAT" banner when a fight starts
 
 // Melee weapons wear out: number of swings before they break (repair at the workshop)
-const WEAPON_DURABILITY = { knife: 40, machete: 45, crowbar: 70, pipe: 50, bat: 35, spear: 30 };
+const WEAPON_DURABILITY = { knife: 40, machete: 45, crowbar: 70, pipe: 50, bat: 35, spear: 30, axe: 60 };
 
 function weaponCondition(p, id) {
   if (!WEAPON_DURABILITY[id]) return null;
@@ -596,6 +596,7 @@ function _enemyHitsCompanion(gs, enemy, impact) {
 }
 
 function collectLoot(gs, enemy) {
+  if (enemy._fixedLoot) { enemy._loot = enemy._fixedLoot.map(s => ({ ...s })); return; }   // a trader's whole stock
   enemy._loot = [];
   if (!enemy.drops) return;
   for (const [id, min, max] of enemy.drops) {
@@ -656,6 +657,8 @@ function endCombat(gs, result) {
     triggerGameOver(gs, `${gs.parent.name} was killed in combat.`);
     return;
   }
+
+  if (c._traderId && typeof traderCombatEnded === 'function') traderCombatEnded(gs, c, result);
 
   // A shelter raid ends back in the shelter, not in exploration
   if (gs.isRaid && typeof finishRaid === 'function') { finishRaid(gs, result, c); return; }

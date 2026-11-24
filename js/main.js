@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.47';
+const GAME_VERSION = 'v0.48';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -286,6 +286,8 @@ canvas.addEventListener('wheel', (e) => {
     }
   } else if (GS.screen === 'packScreen') {
     packScreenScroll(delta, GS);
+  } else if (GS.screen === 'trade') {
+    tradeScroll(delta, GS);
   } else if (GS.screen === 'explore' && typeof exploreScroll === 'function') {
     exploreScroll(delta, GS);
   }
@@ -322,17 +324,13 @@ function handleKeyPress(key) {
   }
 
   if (GS.screen === 'lootPickup') { lootPickupKey(key, GS); return; }
+  if (GS.screen === 'trade') { if (key === 'escape') { GS.screen = 'explore'; } return; }
 
   if (GS.screen === 'event') {
-    if (key >= '1' && key <= '9') {
-      const idx = parseInt(key) - 1;
-      const ev  = GS.event;
-      if (ev && ev.choices && idx < ev.choices.length && !eventUI.resultText) {
-        const choice = ev.choices[idx];
-        const result = choice.action(GS);
-        eventUI.resultText  = result || '';
-        eventUI.resultTimer = 180;
-      }
+    if (key >= '1' && key <= '9' && !eventUI.resultText && eventUI.openLockFrames <= 0) {
+      // number keys pick the n-th visible choice, exactly like clicking it
+      const b = (GS._eventChoiceBounds || [])[parseInt(key) - 1];
+      if (b) eventClick(b.x + 2, b.y + 2, GS);
     }
     if (key === 'enter' && eventUI.resultText) closeEvent(GS);
     return;
@@ -510,6 +508,9 @@ function render(ctx) {
     case 'lootPickup':
       renderLootPickup(ctx, gs);
       break;
+    case 'trade':
+      renderTrade(ctx, gs);
+      break;
     case 'event':
       renderEvent(ctx, gs);
       break;
@@ -671,6 +672,9 @@ function handleClick(mx, my, gs) {
       break;
     case 'lootPickup':
       lootPickupClick(mx, my, gs);
+      break;
+    case 'trade':
+      tradeClick(mx, my, gs);
       break;
     case 'event':
       eventClick(mx, my, gs);

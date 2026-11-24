@@ -93,7 +93,10 @@ const LOCATIONS_DB = [
         buildings:[
           { relX:250, label:'Department Store', numFloors:3, theme:'mall',    lootQuality:'mall',    enemyChance:28 },
         ]},
-      { id:'food',     name:'Food Court',      x:1550, w:500, bgColor:'#0c0c06', lootTable:'food_heavy',    enemyChance:18 },
+      { id:'food',     name:'Food Court',      x:1550, w:500, bgColor:'#0c0c06', lootTable:'food_heavy',    enemyChance:18,
+        buildings:[
+          { relX:180, label:"Vera's Exchange",  numFloors:1, theme:'mall', plan:'shop', lootQuality:'mall', enemyChance:0, required:true },
+        ]},
       { id:'back',     name:'Staff Offices',   x:2050, w:450, bgColor:'#0a0a05', lootTable:'mixed_rare',    enemyChance:30, requiresLockpick:true,
         buildings:[
           { relX:150, label:'Staff Area',       numFloors:1, theme:'office',  lootQuality:'medium',  enemyChance:25 },
@@ -189,20 +192,26 @@ const LOCATIONS_DB = [
   {
     id: 'church',
     name: 'Old Church',
-    desc: 'A stone church at the edge of the district. Some survivors used it as a shelter early on — donations and supplies may remain. The crypt below was locked.',
+    desc: 'A stone church at the edge of the district, with its rectory, a tool shed and an old storehouse by the graveyard. A trader called Brother Aldo lives in the rectory.',
     difficulty: 1,
     bgTheme: 'suburb',
     ambientDesc: 'Stained glass. Silence that feels different from other silences. Someone left candles burning.',
     zones: [
-      { id:'yard',    name:'Courtyard',     x:0,    w:450, bgColor:'#0d0d0a', lootTable:'home_light',   enemyChance:8 },
+      { id:'yard',    name:'Courtyard',     x:0,    w:450, bgColor:'#0d0d0a', lootTable:'home_light',   enemyChance:8,
+        buildings:[
+          { relX:150, label:'The Rectory',  numFloors:1, theme:'house', plan:'house', lootQuality:'home', enemyChance:0, required:true },
+        ]},
       { id:'hall',    name:'Main Hall',     x:450,  w:500, bgColor:'#0c0c08', lootTable:'church_main',  enemyChance:10,
         buildings:[
           { relX:180, label:'Church Hall',  numFloors:2, theme:'church', lootQuality:'home', enemyChance:10 },
         ]},
-      { id:'tower',   name:'Bell Tower',    x:950,  w:350, bgColor:'#0b0b07', lootTable:'mixed_light',  enemyChance:14 },
-      { id:'crypt',   name:'Crypt',         x:1300, w:450, bgColor:'#080806', lootTable:'church_main',  enemyChance:20, requiresLockpick:true,
+      { id:'garden',  name:'Rectory Garden', x:950,  w:350, bgColor:'#0b0b07', lootTable:'mixed_light',  enemyChance:14,
         buildings:[
-          { relX:140, label:'Underground Crypt', numFloors:1, theme:'church', plan:'crypt', lootQuality:'crypt', enemyChance:18, bossChance:8 },
+          { relX:120, label:'Tool Shed',    numFloors:1, theme:'cabin', plan:'shed', lootQuality:'cabin', enemyChance:10 },
+        ]},
+      { id:'graves',  name:'Graveyard',     x:1300, w:450, bgColor:'#080806', lootTable:'church_main',  enemyChance:20, requiresLockpick:true,
+        buildings:[
+          { relX:140, label:'Old Storehouse', numFloors:1, theme:'house', plan:'storage', lootQuality:'crypt', enemyChance:18, bossChance:8 },
         ]},
     ],
   },
@@ -302,6 +311,7 @@ const BUILDING_LOOT = {
   pharmacy_pharma:   [['bandage',1,4],['painkiller',1,2],['medkit',0,1],['antibiotics',0,1],['chemicals',0,1]],
   pharmacy_pharma_rare:[['medkit',1,2],['antibiotics',1,2],['bandage',2,4],['painkiller',1,3],['chemicals',1,2]],
   church_home:       [['cloth',1,2],['book',0,1],['matches',0,1],['canned_beans',0,1],['bandage',0,1],['note_prayer',0,1]],
+  house_crypt:       [['bandage',0,2],['matches',0,1],['book',0,1],['metal',0,2],['rope',0,1],['note_singularity',0,1],['screws_nuts',1,2,20]],
   church_crypt:      [['bandage',0,2],['painkiller',0,1],['antibiotics',0,1],['matches',0,1],['book',0,1],['metal',0,1],['note_singularity',0,1]],
   generic_light:     [['screws_nuts',1,2,10],['cloth',0,1],['matches',0,1],['batteries',0,1]],
   generic_medium:    [['hoodie',1,1,5],['jeans',1,1,5],['cloth',0,2],['canned_beans',0,1],['bandage',0,1],['rope',0,1]],

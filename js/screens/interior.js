@@ -20,6 +20,7 @@ const ROOM_PLAN = {
   crypt:    { n: [0, 1], kinds: ['Ossuary', 'Burial Chamber'] },
   cabin:    { n: [0, 1], kinds: ['Bedroom'] },
   shed:     { n: [0, 0], kinds: [] },
+  storage:  { n: [1, 2], kinds: ['Storage', 'Tool Room'] },
   police:   { n: [2, 3], kinds: ['Holding Cell', 'Interrogation', 'Locker Room', 'Evidence Room', 'Office'] },
   bunker:   { n: [1, 2], kinds: ['Barracks', 'Armory', 'Radio Room', 'Storage'] },
   school:   { n: [2, 3], kinds: ['Classroom', 'Classroom', "Teachers' Room", 'Restroom'] },
@@ -79,6 +80,8 @@ const HALL_FURNITURE = {
   school:   [['f_table'], ['f_bookshelf'], ['f_table']],
   hall:     [['f_table'], ['f_bookshelf'], ['f_sofa']],
   shop:     [['f_store_shelf', 4, 'f_store_shelf'], ['f_table']],
+  shed:     [['s_workbench'], ['s_shelf']],
+  storage:  [['s_shelf'], ['s_crates'], ['s_barrel', 4, 's_barrel']],
   tent:     [['debris']],
 };
 
@@ -99,7 +102,7 @@ const SEARCHABLE_FURNITURE = {
   f_filing: 'cabinet', s_shelf: 'shelf', s_medcab: 'cabinet',
 };
 
-const DOOR_W = 22;
+const DOOR_W = 35;   // matches f_door.png (taller than a person)
 
 // ── Area helpers ──────────────────────────────────────────────────────────────
 
@@ -236,7 +239,7 @@ function _genRoom(kind, theme, quality, enemyChance, diff) {
 
 // Floor length per kind of building: a cabin is one main room (plus maybe a
 // bedroom), houses and shops are modest, big public buildings get the full hall.
-const FLOOR_WIDTH = { cabin: 380, shed: 360, house: 620, shop: 620, pharmacy: 560, hall: 700, crypt: 520 };
+const FLOOR_WIDTH = { cabin: 380, shed: 360, house: 620, shop: 620, pharmacy: 560, hall: 700, crypt: 520, storage: 560 };
 function floorWidthFor(bdef) {
   if (bdef.width) return bdef.width;
   return FLOOR_WIDTH[bdef.plan] || FLOOR_WIDTH[bdef.theme] || BUILDING_W;
@@ -343,6 +346,6 @@ function drawRoomDoor(ctx, x, groundY, label, near, prompt) {
     fillRect(ctx, x, groundY - 34, DOOR_W, 34, '#0c0a08');
     strokeRect(ctx, x, groundY - 34, DOOR_W, 34, '#3a3026');
   }
-  drawText(ctx, label, x + DOOR_W / 2, groundY - 40, C.textDim, 6, 'center');
-  if (near) drawText(ctx, prompt, x + DOOR_W / 2, groundY - 50, C.textBright, 7, 'center');
+  drawText(ctx, label, x + DOOR_W / 2, groundY - 60, C.textDim, 6, 'center');
+  if (near) drawText(ctx, prompt, x + DOOR_W / 2, groundY - 70, C.textBright, 7, 'center');
 }

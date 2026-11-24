@@ -263,7 +263,7 @@ function exploreSelectClick(mx, my, gs) {
 /** Walk to (dir 'out') or home from (dir 'home') a location while time passes. */
 function beginTravel(gs, loc, dir) {
   const mins = travelMinutes(gs, loc.id);
-  gs.travel = { locId: loc.id, dir, mins, spent: 0, t: 0, dur: clamp(mins / 25, 1.6, 4.5) };
+  gs.travel = { locId: loc.id, dir, mins, spent: 0, t: 0, dur: clamp(mins / 12.5, 3.2, 9) };   // walk at a readable pace; game time is the same
   gs.screen = 'travel';
   gs.keys = {};
   gs.mouse.down = false;

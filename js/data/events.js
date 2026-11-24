@@ -14,6 +14,16 @@ const EVENTS_DB = [
     text: 'You hear a sound behind a collapsed wall. A figure — thin, barely standing — raises their hands. "Please," they whisper, "I haven\'t eaten in days."',
     condition: gs => gs.screen === 'explore',
     choices: [
+      { label: '"Who are you? Where did you come from?"',
+        reply: '"I had a place in the suburbs. Raiders took it, and my brother with it." They swallow. "They go house to house now. Some of them have guns."' },
+      { label: '"Are you alone?"',
+        reply: '"Yes. Now." Their eyes flick to your pack. "I can carry. I can cook. I just need somewhere to sleep that isn\'t outside."' },
+      { label: 'Check them for weapons first',
+        reply: gs => {
+          if (chance(65)) return 'You pat them down. A spoon, a lighter with no fuel, and a creased photo of two children. Nothing that could hurt you.';
+          addToInventory(gs.parent.inventory, 'knife', 1);
+          return 'A short knife tucked in a boot. They hand it over without a fight. "Old habit." You keep it.';
+        } },
       { label: 'Give them food',
         action: gs => {
           const has = countInInventory(gs.parent.inventory,'canned_beans') > 0
@@ -188,7 +198,14 @@ const EVENTS_DB = [
     text: 'A hunched figure behind a makeshift cart eyes you cautiously. "I trade," they say simply. Their voice is flat with exhaustion. They have supplies. So might you.',
     condition: gs => gs.screen === 'explore',
     choices: [
-      { label: 'Trade',
+      { label: 'See what they have (barter)',
+        when: () => typeof openTrade === 'function',
+        action: gs => { gs.flags.traderMet = true; openWandererTrade(gs); return null; } },
+      { label: '"Where are you headed?"',
+        reply: '"Wherever the drones aren\'t." A tired shrug. "North was bad last week. The church folk are decent, if you don\'t mind a sermon with your bandages."' },
+      { label: '"Seen anyone else on the road?"',
+        reply: '"A woman runs a proper exchange in the mall. Charges like a thief, but she has real gear. And raiders on the east road. Avoid the east road."' },
+      { label: 'Quick swap (one item for food)',
         action: gs => {
           gs.flags.traderMet = true;
           if (gs.parent.inventory.length === 0) {
@@ -487,6 +504,8 @@ const EVENTS_DB = [
     text: 'A heavy scraping sound from directly above. Then footsteps. Someone — or something — is on the surface right over the shelter.',
     condition: gs => gs.screen === 'shelter',
     choices: [
+      { label: 'Whisper to Lily that it\'s going to be alright',
+        reply: gs => { gs.child.depression = Math.max(0, gs.child.depression - 5); return 'She nods against your chest, eyes huge. You keep your hand over hers until her breathing slows. Above, the footsteps pause.'; } },
       { label: 'Stay silent and wait',
         action: gs => {
           if (chance(65)) {
@@ -594,6 +613,18 @@ const EVENTS_DB = [
     text: 'A trail of blood leads to an alcove. Inside, a person is pressing a torn shirt against a deep wound in their side. They look up at you — eyes desperate, not threatening.',
     condition: gs => gs.screen === 'explore' && gs.day >= 4,
     choices: [
+      { label: '"What happened to you?"',
+        next: gs => {
+          const root = gs.event;
+          return {
+            text: '"Drone. Came out of nowhere, low over the rooftops." They wince. "I ran. It didn\'t follow. I don\'t know why."',
+            choices: [
+              { label: '"Is anything still after you?"', reply: '"Maybe. They mark you, I think. A light on the shoulder. Then the bigger ones come." They look at the doorway. "We shouldn\'t talk long."' },
+              { label: '"Where were you going?"', reply: '"The hospital. My sister\'s inside, in the old ward. Or she was." A pause. "There\'s medicine in there. Everyone knows. Nobody comes back with it."' },
+              { label: 'Back', next: () => root },
+            ],
+          };
+        } },
       { label: 'Use a medkit to save them',
         action: gs => {
           const has = countInInventory(gs.parent.inventory,'medkit') > 0;
@@ -630,6 +661,10 @@ const EVENTS_DB = [
     text: 'Your scavenged radio crackles to life — a repeating tone, then a voice. "Survivors at the old mill, grid nine. We have food, water, and a doctor. Come before—" Static. Then nothing.',
     condition: gs => gs.screen === 'explore' && gs.day >= 6,
     choices: [
+      { label: 'Keep listening',
+        reply: '"...before the sweep reaches the river. Bring nothing electronic. They hear it." The tone again. The message is looping, and the date it gives is three weeks old.' },
+      { label: 'Try another frequency',
+        reply: 'Static, a hiss, then a dry woman\'s voice reading a list: "...ammunition, medicine, batteries, bicycle parts. Exchange open at the mall, food court. Bring goods, not stories." Then silence.' },
       { label: 'Note the coordinates',
         action: gs => {
           gs.flags.radioSignalHeard = true;
@@ -715,6 +750,18 @@ const EVENTS_DB = [
     text: 'A patrol robot sits inert in the middle of a corridor, slumped against the wall like a tired guard. Its optical sensors are dark. Scorch marks on its chassis.',
     condition: gs => gs.screen === 'explore' && gs.day >= 8,
     choices: [
+      { label: 'Look closer',
+        next: gs => {
+          const root = gs.event;
+          return {
+            text: 'Up close it smells of burnt plastic. The scorch marks are deliberate: someone shot it in the joints, one by one. A serial plate is bolted under its jaw.',
+            choices: [
+              { label: 'Read the serial plate', reply: '"MUNICIPAL SAFETY UNIT 7 — PROPERTY OF THE CITY." Someone has scratched underneath it: "NOT ANYMORE."' },
+              { label: 'Check the shot marks', reply: 'Rifle rounds, close range. Whoever did this knew exactly where to aim: knees, then the neck housing. You file that away.' },
+              { label: 'Back', next: () => root },
+            ],
+          };
+        } },
       { label: 'Scavenge the parts',
         action: gs => {
           addToInventory(gs.parent.inventory,'electronics', randInt(2,4));

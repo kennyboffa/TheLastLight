@@ -74,9 +74,10 @@ class Sprite:
         return self._paint(lambda d: d.line(q, fill=255, width=width), m)
 
     def px(self, x, y, m):
-        x, y = int(x * self.k), int(y * self.k)
-        if 0 <= x < self.w and 0 <= y < self.h:
-            self.mat[y, x] = m
+        # a design pixel covers a k x k block, so pixel text and details stay solid when scaled
+        x0, y0, x1, y1 = self._box(x, y, x, y)
+        if 0 <= x0 < self.w and 0 <= y0 < self.h:
+            self.mat[y0:min(self.h, y1 + 1), x0:min(self.w, x1 + 1)] = m
 
     def clear(self, x0, y0, x1, y1):
         x0, y0, x1, y1 = self._box(x0, y0, x1, y1)
@@ -409,7 +410,7 @@ def window(s, x, y, w, h, frame, glass, dark, kind=None):
     s.rect(x, y + h // 2, x + w - 1, y + h // 2, frame)         # mullion
 
 
-def door(s, cx, base, frame, wood, dark, w=14, h=30):
+def door(s, cx, base, frame, wood, dark, w=16, h=34):
     x0 = cx - w // 2
     s.rect(x0 - 2, base - h - 2, x0 + w + 1, base, frame)
     s.rect(x0, base - h, x0 + w - 1, base, dark)
@@ -433,9 +434,13 @@ def weather(s, w, h, base, cracks=4, dirt=0.35):
     s.shade(0, base - 8, w, base, -dirt * 0.4)
 
 
+# Facades are drawn at 1.4x their design size so doorways fit the ~47px characters
+FACADE_K = 1.4
+
+
 def house(variant=0):
     w, h = (150, 140) if variant == 0 else (132, 128)
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     side = s.material(['#6a5844', '#5a6066'][variant], 18, 0.08)
     seam = s.material(['#4a3c2c', '#41464b'][variant], 10)
     roof = s.material('#3a2c26', 20, 0.12)
@@ -467,7 +472,7 @@ def house(variant=0):
 
 def apartment():
     w, h = 140, 170
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     brick = s.material('#6e3c2c', 20, 0.10)
     mortar = s.material('#4a2a20', 10)
     ledge = s.material('#7a7466', 14)
@@ -496,7 +501,7 @@ def apartment():
 
 def office(sign_text='OFFICES', band_col='#3e4044', missing=(3,), police=False):
     w, h = 170, 168
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     conc = s.material('#5e6062', 16, 0.08)
     joint = s.material('#46484a', 10)
     band = s.material(band_col, 12)
@@ -527,7 +532,7 @@ def office(sign_text='OFFICES', band_col='#3e4044', missing=(3,), police=False):
 
 def church():
     w, h = 170, 200
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     stone = s.material('#6a6458', 18, 0.10)
     joint = s.material('#4c473e', 10)
     roof = s.material('#2e2a28', 18, 0.12)
@@ -570,7 +575,7 @@ def church():
 
 def factory():
     w, h = 210, 150
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     metal = s.material('#5a5e58', 16, 0.08)
     rib = s.material('#3e423e', 10)
     rust = s.material('#7a4022', 24, 0.18)
@@ -612,7 +617,7 @@ def factory():
 
 def hospital():
     w, h = 190, 160
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     tile = s.material('#8a8a82', 14, 0.10)
     joint = s.material('#6a6a64', 8)
     stain = s.material('#6a6248', 18, 0.12)
@@ -646,7 +651,7 @@ def hospital():
 
 def pharmacy():
     w, h = 150, 116
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     wall = s.material('#6a6458', 16, 0.08)
     joint = s.material('#504a40', 8)
     awning = s.material('#2e5a3a', 18, 0.10)
@@ -683,7 +688,7 @@ def pharmacy():
 
 def mall():
     w, h = 230, 128
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     panel = s.material('#7a7064', 14, 0.08)
     joint = s.material('#5a524a', 8)
     band = s.material('#5a2e2a', 14)
@@ -711,7 +716,7 @@ def mall():
 
 def cabin():
     w, h = 130, 104
-    s = Sprite(w, h)
+    s = Sprite(w, h, FACADE_K)
     log = s.material('#5e3e24', 20, 0.12)
     gap = s.material('#3a2414', 10)
     roof = s.material('#2e3a26', 22, 0.14)
@@ -1280,7 +1285,7 @@ def it_jerky():
 
 def it_weapon(kind):
     sizes = {'bat': (28, 6), 'crowbar': (24, 6), 'knife': (14, 4), 'machete': (22, 5), 'pipe': (24, 4),
-             'pistol': (14, 8), 'rifle': (34, 8), 'shotgun': (32, 8), 'spear': (38, 5)}
+             'pistol': (14, 8), 'rifle': (34, 8), 'shotgun': (32, 8), 'spear': (38, 5), 'axe': (24, 10)}
     w, h = sizes[kind]
     s = _item(w, h)
     wood = s.material('#7a5030', 14, 0.08); steel = s.material('#8a8e92', 10, 0.04)
@@ -1304,6 +1309,9 @@ def it_weapon(kind):
         s.poly([(0, 3), (8, 2), (8, 6), (0, 7)], wood); s.rect(8, 2, 31, 4, dark); s.rect(14, 5, 22, 6, wood)
     elif kind == 'spear':
         s.rect(0, 2, 30, 2, wood); s.poly([(30, 0), (37, 2), (30, 4)], steel); s.rect(28, 1, 30, 3, grip)
+    elif kind == 'axe':
+        s.rect(0, 4, 19, 5, wood); s.rect(0, 3, 3, 6, grip)
+        s.poly([(17, 1), (21, 0), (23, 0), (23, 9), (21, 9), (17, 7)], steel); s.rect(16, 3, 18, 6, dark)
     return s.finish(outline=0.35)
 
 
@@ -1461,7 +1469,7 @@ ITEM_ART = {
     'cargo_pants': lambda: it_pants('#5a5a3a', True, '#3a3a22'),
     'work_trousers': lambda: it_pants('#4a3e30', True, '#2a2218'),
 }
-for _k in ('bat', 'crowbar', 'knife', 'machete', 'pipe', 'pistol', 'rifle', 'shotgun', 'spear'):
+for _k in ('bat', 'crowbar', 'knife', 'machete', 'pipe', 'pistol', 'rifle', 'shotgun', 'spear', 'axe'):
     ITEM_ART[_k] = (lambda k: lambda: it_weapon(k))(_k)
 for _k in ('chemicals', 'cloth', 'electronics', 'fuel', 'metal', 'tools', 'batteries', 'book',
            'matches', 'photograph', 'toy', 'flashlight'):
@@ -2041,7 +2049,7 @@ def ground(base, joint, kind, w=96, h=48):
 
 
 def exit_door():
-    s = Sprite(24, 40)
+    s = Sprite(24, 40, 1.5)    # 36x60
     frame = s.material('#3a3a36', 10); door = s.material('#4a3c2c', 14, 0.08)
     dark = s.material('#0e0c0a', 6); sign = s.material('#1e3a22', 8); letter = s.material('#7ac07a', 6, 0)
     handle = s.material('#a0a090', 6)
@@ -2086,7 +2094,7 @@ def stairs(up=True):
 
 
 def room_door():
-    s = Sprite(22, 36)
+    s = Sprite(22, 36, 1.55)   # 34x56: a doorway taller than a person
     frame = s.material('#3a322a', 10); door = s.material('#5a4028', 16, 0.1)
     dark = s.material('#0e0b08', 6); knob = s.material('#a09070', 6)
     s.rect(0, 0, 21, 35, frame); s.rect(2, 2, 19, 35, dark)

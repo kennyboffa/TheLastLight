@@ -57,6 +57,8 @@ const ITEMS_DB = {
     weight:1.2, value:10, damage:[2,4],  accuracy:72, apCost:3, desc:'Heavy steel pipe.' },
   bat:           { id:'bat',           name:'Baseball Bat',   type:'weapon', weaponType:'melee',
     weight:0.9, value:28, damage:[3,6], accuracy:74, apCost:3, desc:'Classic. Hard swing.' },
+  axe:           { id:'axe',           name:'Wood Axe',       type:'weapon', weaponType:'melee',
+    weight:1.6, value:40, damage:[4,7], accuracy:72, apCost:3, desc:'Heavy and slow. Splits wood and worse.' },
   spear:         { id:'spear',         name:'Spear',          type:'weapon', weaponType:'melee',
     weight:1.0, value:20, damage:[2,5],  accuracy:78, apCost:2, desc:'Reach advantage. Good for keeping distance.' },
 

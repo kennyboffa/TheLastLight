@@ -82,6 +82,43 @@ const Audio = (() => {
     } catch (e) {}
   }
 
+  // ── Rain: a looping hiss, muffled underground / indoors ────────────────────
+  let rain = null;   // { src, filter, gain, muffled }
+  function setRain(on, muffled) {
+    if (!ctx) return;
+    const want = on && enabled && sfxVol > 0.001;
+    try {
+      if (!want) {
+        if (rain) {
+          const r = rain; rain = null;
+          r.gain.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.4);
+          setTimeout(() => { try { r.src.stop(); } catch (e) {} }, 1500);
+        }
+        return;
+      }
+      const vol = (muffled ? 0.035 : 0.06) * sfxVol;
+      const freq = muffled ? 380 : 1400;
+      if (!rain) {
+        const sr = ctx.sampleRate, len = sr * 2;
+        const buf = ctx.createBuffer(1, len, sr);
+        const d = buf.getChannelData(0);
+        let last = 0;
+        for (let i = 0; i < len; i++) { last = last * 0.6 + (Math.random() * 2 - 1) * 0.4; d[i] = last + (Math.random() < 0.0015 ? (Math.random() - 0.5) * 2 : 0); }
+        const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+        const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = freq;
+        const gain = ctx.createGain(); gain.gain.value = 0.0001;
+        src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+        src.start();
+        rain = { src, filter, gain, muffled: null };
+      }
+      if (rain.muffled !== muffled) {
+        rain.muffled = muffled;
+        rain.filter.frequency.setTargetAtTime(freq, ctx.currentTime, 0.3);
+      }
+      rain.gain.gain.setTargetAtTime(vol, ctx.currentTime, 0.6);
+    } catch (e) {}
+  }
+
   function noise(dur, vol, delay) {
     if (!ctx || !enabled) return;
     const v = (vol || 0.12) * sfxVol;
@@ -540,7 +577,8 @@ const Audio = (() => {
     dialogue: () => beep(360, 0.08, 0.04, 'sine'),
 
     // Toggle mute
-    toggle:    () => { enabled = !enabled; if (!enabled) { stopMusic(); stopShelterMusic(); } return enabled; },
+    toggle:    () => { enabled = !enabled; if (!enabled) { stopMusic(); stopShelterMusic(); setRain(false); } return enabled; },
+    setRain,
     isEnabled: () => enabled,
 
     // Volume accessors

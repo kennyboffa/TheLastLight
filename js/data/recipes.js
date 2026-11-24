@@ -73,7 +73,7 @@ const UPGRADES_DB = {
   },
   raincatcher: {
     id:'raincatcher', name:'Rain Catcher',
-    desc:'Collects rainwater. Passively generates dirty water during rain.',
+    desc:'A roofing sheet hidden in the rubble above, piped down into the bunker. Collects water whenever it rains.',
     buildCost: { metal:6, cloth:5 }, needsTools:false, buildNoise:4,
     buildTime:3, requiresRoom:null, key:'hasRaincatcher',
   },
@@ -119,6 +119,9 @@ const RECIPES_DB = [
     cost:{ wood:2, cloth:1 }, needsWorkshop:false, craftTime:0.25, desc:'Improvised torch / matches. Provides light.' },
   { id:'r_repair',    name:'Repair Weapon',  output:'tools',        qty:0, special:'repairWeapon',
     cost:{ metal:2 }, needsWorkshop:true, needsTools:true, craftTime:0.5, desc:'Restore your equipped melee weapon to full durability.' },
+  { id:'r_raincatcher', name:'Rain Catcher', output:'water_bottle', qty:0, special:'raincatcher',
+    cost:{ metal:4, cloth:3, rope:1 }, needsWorkshop:false, craftTime:2,
+    desc:'A roofing sheet hidden in the rubble above, draining down a buried conduit into a jug. Drones see junk. Collects water whenever it rains.' },
   { id:'r_bike',      name:'Bicycle',        output:'bicycle',      qty:0, special:'bike',
     cost:{ bike_wheels:1, bike_frame:1, bike_chain:1, bike_handlebars:1, screws_nuts:6 }, needsWorkshop:false, craftTime:2,
     desc:'Bolt the scavenged parts together. Halves travel time on the map.' },

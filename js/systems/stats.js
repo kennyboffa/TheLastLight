@@ -300,7 +300,11 @@ function finishTask(gs, who, task) {
     }
     case 'craft': {
       const recipe = RECIPES_DB.find(r => r.id === task.recipeId);
-      if (recipe && recipe.special === 'bike') {
+      if (recipe && recipe.special === 'raincatcher') {
+        gs.shelter.hasRaincatcher = true;
+        notify('Rain catcher set up and hidden in the rubble. It fills when it rains.', 'good');
+        addLog('Built a camouflaged rain catcher above the shelter.', 'good');
+      } else if (recipe && recipe.special === 'bike') {
         gs.shelter.hasBike = true;
         notify('The bicycle is ready! Trips take half the time.', 'good');
         addLog('Built a bicycle from scavenged parts. Travel time is halved.', 'good');
@@ -406,6 +410,7 @@ function tickWeather(gs, hrs) {
     // Active rain: count down duration
     w.rainDuration = Math.max(0, (w.rainDuration || 0) - hrs);
     if (w.rainDuration <= 0) {
+      w._rcNotified = false;
       w.type = 'cloudy';
       notify('The rain has stopped.', 'info');
     }
@@ -415,7 +420,7 @@ function tickWeather(gs, hrs) {
       if (w.rainAccum >= 1) {
         w.rainAccum -= 1;
         addToInventory(gs.shelter.storage, 'water_bottle', 1);
-        notify('Raincatcher collected a bottle of water.', 'good');
+        if (!w._rcNotified) { w._rcNotified = true; notify('The rain catcher is filling. +1 water per hour of rain.', 'good'); }
       }
     }
   } else {

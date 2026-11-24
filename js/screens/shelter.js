@@ -239,6 +239,7 @@ function renderShelter(ctx, gs) {
   // Surface scene
   drawSurface(ctx, gs.day * 30, gs.time);
   drawHatch(ctx, MAIN_W / 2, CFG.SURFACE_H - 2);
+  if (typeof drawRaincatcherSurface === 'function') drawRaincatcherSurface(ctx, gs);
 
   // Distant background drone
   drawDistantDrone(ctx, gs);
@@ -294,6 +295,9 @@ function renderShelter(ctx, gs) {
       fillRect(ctx, r1.x + r1.w, r1.y + r1.h/2 - 5, r2.x - (r1.x + r1.w), 10, C.metal);
     }
   }
+
+  // Rain catcher pipe down into the main room
+  if (typeof drawRaincatcherPipe === 'function') drawRaincatcherPipe(ctx, gs);
 
   // Characters in rooms
   drawShelterCharacters(ctx, gs);
@@ -2281,24 +2285,8 @@ function drawShelterWeather(ctx, gs) {
   }
 
   if (w === 'rain') {
-    // Animated rain streaks
-    ctx.save();
-    ctx.strokeStyle = '#3a5a7a';
-    ctx.lineWidth   = 1;
-    ctx.globalAlpha = 0.45;
-    const drops = 22;
-    for (let i = 0; i < drops; i++) {
-      // Pseudo-random but deterministic per frame+drop
-      const seed = (i * 137 + fc * 3) % 1000;
-      const rx   = (seed * SW / 1000 + fc * 0.8) % SW;
-      const ry   = (i * 41 + fc * 5) % SH;
-      ctx.beginPath();
-      ctx.moveTo(Math.round(rx), Math.round(ry));
-      ctx.lineTo(Math.round(rx + 2), Math.round(ry + 7));
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    // Rain over the surface, splashing on the ground above the bunker
+    drawRain(ctx, 0, SW, 0, SH - 2, 1.2);
 
     // Puddle shimmer on ground line
     ctx.save();

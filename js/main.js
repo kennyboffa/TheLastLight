@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.48';
+const GAME_VERSION = 'v0.49';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -425,6 +425,13 @@ function update(dt) {
       sf.alpha = Math.max(0, sf.alpha - 0.025);
       if (sf.alpha <= 0) { sf.active = false; sf.phase = 'idle'; }
     }
+  }
+
+  // Rain you can hear: open air outside, muffled in buildings and underground
+  if (typeof Audio.setRain === 'function') {
+    const raining = gs.weather && gs.weather.type === 'rain' && ['shelter', 'explore', 'travel', 'event', 'trade', 'lootPickup'].includes(gs.screen);
+    const indoors = gs.screen === 'shelter' || (typeof exploreState !== 'undefined' && exploreState && exploreState.building);
+    Audio.setRain(raining, !!indoors);
   }
 
   // Day transition takes priority

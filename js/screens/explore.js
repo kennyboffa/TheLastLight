@@ -2802,21 +2802,10 @@ function drawExploreWeather(ctx, gs) {
   const fc = frameCount;
 
   if (w === 'rain') {
-    ctx.save();
-    ctx.strokeStyle = '#3a5a7a';
-    ctx.lineWidth   = 1;
-    ctx.globalAlpha = 0.38;
-    for (let i = 0; i < 40; i++) {
-      const rx = ((i * 137 + fc * 2.5) % CFG.W);
-      const ry = ((i * 47  + fc * 5)   % GROUND_Y);
-      ctx.beginPath();
-      ctx.moveTo(Math.round(rx), Math.round(ry));
-      ctx.lineTo(Math.round(rx + 2), Math.round(ry + 8));
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-    ctx.restore();
+    drawRain(ctx, 0, CFG.W, 0, FOOT_SCREEN_Y, 1);
+    drawText(ctx, 'Raining: you tire faster', 12, CFG.H - 50, '#9ab0c8', 7, 'left');
   }
+  void fc;
 
   if (w === 'cloudy' || w === 'rain') {
     ctx.save();

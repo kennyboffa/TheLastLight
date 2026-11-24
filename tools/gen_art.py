@@ -1875,6 +1875,46 @@ def it_bike_part(kind):
     return s.finish(outline=0.35)
 
 
+def surf_raincatcher():
+    """A rain catcher disguised as rubble: a dented roofing sheet half buried in
+    debris, tilted so water runs left into a gutter and down a cracked
+    'drainpipe' that looks like junk sticking out of the ground."""
+    rng = np.random.default_rng(91)
+    s = Sprite(64, 36)
+    conc = s.material('#5a5650', 16, 0.08); conc2 = s.material('#4a4640', 14, 0.08)
+    brick = s.material('#6a3e2e', 16, 0.08); dirt = s.material('#3a3226', 16, 0.1)
+    sheet = s.material('#6a6a62', 12, 0.05); ridge = s.material('#4a4a44', 8); rust = s.material('#7a4a2a', 16, 0.12)
+    pipe = s.material('#3e3e3a', 10, 0.04); pipe_hi = s.material('#5a5a54', 8); tarp = s.material('#3a4030', 14, 0.08)
+    # rubble mound along the bottom
+    s.poly([(0, 35), (6, 26), (16, 24), (30, 22), (44, 24), (56, 27), (63, 31), (63, 35)], dirt)
+    for _ in range(16):
+        x, y = int(rng.integers(2, 60)), int(rng.integers(25, 33))
+        w, h = int(rng.integers(3, 7)), int(rng.integers(2, 4))
+        s.rect(x, y, x + w, y + h, [conc, conc2, brick][int(rng.integers(0, 3))])
+    # broken concrete post propping up the high end, a cinder block mid-way
+    s.rect(54, 8, 59, 26, conc2); s.rect(55, 8, 56, 26, conc)
+    s.rect(33, 15, 38, 24, conc)
+    # olive tarp corner peeking out (the funnel under the sheet)
+    s.poly([(10, 22), (22, 15), (26, 19), (14, 25)], tarp)
+    # the tilted roofing sheet: high on the right, low on the left
+    s.poly([(12, 17), (60, 5), (61, 9), (13, 21)], sheet)
+    for k in range(0, 46, 5):                      # corrugation ridges
+        x = 14 + k
+        s.line([(x, 20 - k * 12 // 48), (x + 1, 16 - k * 12 // 48)], ridge)
+    for _ in range(5):
+        x = int(rng.integers(16, 56)); y = 18 - (x - 12) * 12 // 48
+        s.rect(x, y - 1, x + 2, y, rust)
+    # camouflage: bricks and a dead branch lying on top of the sheet
+    s.rect(30, 9, 34, 11, brick); s.rect(44, 6, 47, 8, conc); s.rect(52, 4, 54, 6, conc2)
+    s.line([(20, 12), (40, 10), (46, 6)], dirt)
+    # gutter at the low end and the "broken drainpipe" going into the ground
+    s.rect(6, 19, 13, 21, ridge)
+    s.rect(6, 20, 9, 35, pipe); s.rect(7, 20, 7, 35, pipe_hi)
+    s.rect(5, 27, 10, 28, rust)                    # rusted collar
+    s.shade_gradient('x', 0.18)
+    return s.finish(outline=0.35, mottle=0.06)
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # Parallax background layers (tile horizontally: width = 736, shapes wrap)
 # and ground strips. Kept low-contrast so the playfield stays readable.
@@ -2178,6 +2218,7 @@ if __name__ == '__main__':
         'item_wood.png': lambda: it_wood(0), 'item_wood_2.png': lambda: it_wood(1), 'item_wood_3.png': lambda: it_wood(2),
         'item_rope.png': it_rope,
     })
+    jobs.update({'surf_raincatcher.png': surf_raincatcher})
     jobs.update({'map_world.png': world_map,
                  'item_bike_wheels.png': lambda: it_bike_part('wheels'), 'item_bike_frame.png': lambda: it_bike_part('frame'),
                  'item_bike_chain.png': lambda: it_bike_part('chain'), 'item_bike_handlebars.png': lambda: it_bike_part('handlebars'),

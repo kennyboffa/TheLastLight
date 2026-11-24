@@ -9,7 +9,7 @@ const EVENTS_DB = [
 
   // ─── Exploration events ────────────────────────────────────────────────────
   {
-    id: 'ev_stranger_help',
+    id: 'ev_stranger_help', areas: ['rural','urban','industrial'],
     title: 'A Stranger',
     text: 'You hear a sound behind a collapsed wall. A figure — thin, barely standing — raises their hands. "Please," they whisper, "I haven\'t eaten in days."',
     condition: gs => gs.screen === 'explore',
@@ -57,7 +57,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_drone_patrol',
+    id: 'ev_drone_patrol', areas: ['rural','urban','industrial'],
     title: 'Drone Patrol',
     text: 'A low mechanical hum. You freeze. Above the ruins, a small surveillance drone sweeps its sensors across the street.',
     condition: gs => gs.screen === 'explore',
@@ -193,7 +193,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_trader',
+    id: 'ev_trader', areas: ['wild','rural','urban','industrial'],
     title: 'A Trader',
     text: 'A hunched figure behind a makeshift cart eyes you cautiously. "I trade," they say simply. Their voice is flat with exhaustion. They have supplies. So might you.',
     condition: gs => gs.screen === 'explore',
@@ -250,7 +250,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_memories',
+    id: 'ev_memories', areas: ['rural','urban'],
     title: 'A Photograph',
     text: 'Among the debris, a framed photograph. A family — mother, father, two children — smiling on a beach. The glass is cracked but the image is intact.',
     condition: gs => gs.screen === 'explore',
@@ -271,7 +271,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_supply_cache',
+    id: 'ev_supply_cache', areas: ['rural','urban','industrial'],
     title: 'Hidden Cache',
     text: 'Scratched into the wall: a small arrow. Following it, you find a loose brick. Behind it — a canvas bag, old but sealed.',
     condition: gs => gs.screen === 'explore',
@@ -569,9 +569,66 @@ const EVENTS_DB = [
     ]
   },
 
+  // ─── Wilderness events (forest) ─────────────────────────────────────────────
+  {
+    id: 'ev_snare', areas: ['wild'],
+    title: 'A Snare',
+    text: 'A wire snare strung between two roots, half hidden in the bracken. Something is caught in it: a rabbit, still warm. Someone set this, and recently.',
+    condition: gs => gs.screen === 'explore',
+    choices: [
+      { label: 'Look around for whoever set it',
+        reply: 'Boot prints, small and careful, lead off toward the stream. A few more snares further along, all empty. Whoever it is knows these woods and doesn\'t want to be found.' },
+      { label: 'Take the rabbit',
+        action: gs => {
+          addToInventory(gs.parent.inventory, 'raw_meat', 2);
+          if (chance(30)) { gs.parent.depression = Math.min(100, gs.parent.depression + 4); return 'You take it and reset the snare out of guilt. +2 raw meat. Someone will go hungry tonight, and it won\'t be Lily.'; }
+          return 'You free the rabbit from the wire. +2 raw meat. It\'s a theft, but a small one.';
+        } },
+      { label: 'Leave it for its owner',
+        action: gs => { gs.parent.depression = Math.max(0, gs.parent.depression - 4); return 'You leave it. Out here, a full snare might be the difference between someone living or not. You feel oddly lighter.'; } },
+    ]
+  },
+  {
+    id: 'ev_hunters_hide', areas: ['wild'],
+    title: 'Hunter\'s Hide',
+    text: 'Branches lashed into a low hide against a fallen trunk. Inside: a bedroll gone green with mould, an empty bottle, and a tin box tucked under the log.',
+    condition: gs => gs.screen === 'explore',
+    choices: [
+      { label: 'Read the scratches on the log',
+        reply: 'Tally marks. Forty-one of them, then nothing. Next to the last one, a single word cut deep: "LIGHTS".' },
+      { label: 'Open the tin box',
+        action: gs => {
+          const loot = [['matches', 2], ['batteries', 1], ['jerky', 1], ['rope', 1]];
+          const got = loot.filter(() => chance(60));
+          if (!got.length) got.push(['matches', 1]);
+          got.forEach(([id, q]) => addToInventory(gs.parent.inventory, id, q));
+          return 'Inside, wrapped in oilcloth: ' + got.map(([id, q]) => `${getItemDef(id).name} x${q}`).join(', ') + '. Whoever kept this was ready for a long wait.';
+        } },
+      { label: 'Rest in the hide for a while',
+        action: gs => { gs.parent.tiredness = Math.max(0, gs.parent.tiredness - 12); gs.time += 30; return 'You sit in the dim green quiet for half an hour. Birds come back. For a moment the world feels almost whole.'; } },
+    ]
+  },
+  {
+    id: 'ev_wolf_tracks', areas: ['wild'],
+    title: 'Tracks',
+    text: 'Paw prints in the mud, big ones, several sets. They are fresh, filling slowly with water. Somewhere ahead a branch cracks.',
+    condition: gs => gs.screen === 'explore' && gs.day >= 2,
+    choices: [
+      { label: 'Study the tracks',
+        reply: 'Four, maybe five animals. Moving slowly, nose-down. Hunting, not travelling. They\'ve circled this spot twice.' },
+      { label: 'Circle wide around them (lose time)',
+        action: gs => { gs.time += 40; gs.parent.tiredness = Math.min(100, gs.parent.tiredness + 6); return 'You take the long way through thick brush. It costs you the better part of an hour, but the woods stay quiet.'; } },
+      { label: 'Keep going and stay ready',
+        action: gs => {
+          if (chance(55)) { gs._returnTo = 'explore'; startExploreCombat(gs, [deepClone(ENEMY_TEMPLATES.wolf)]); return null; }
+          return 'You push on, every sense stretched. A grey shape watches from between the trees, then melts away. Not today.';
+        } },
+    ]
+  },
+
   // ─── More explore events ────────────────────────────────────────────────────
   {
-    id: 'ev_ambush',
+    id: 'ev_ambush', areas: ['rural','urban','industrial'],
     title: 'Ambush',
     text: 'Two figures step out from behind rubble ahead of you, blocking the path. One raises a rusted pipe. "Drop the pack," the other says flatly.',
     condition: gs => gs.screen === 'explore' && gs.day >= 3,
@@ -608,7 +665,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_wounded_stranger',
+    id: 'ev_wounded_stranger', areas: ['urban','industrial'],
     title: 'Bleeding Out',
     text: 'A trail of blood leads to an alcove. Inside, a person is pressing a torn shirt against a deep wound in their side. They look up at you — eyes desperate, not threatening.',
     condition: gs => gs.screen === 'explore' && gs.day >= 4,
@@ -656,7 +713,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_radio_signal',
+    id: 'ev_radio_signal', areas: ['wild','rural','urban','industrial'],
     title: 'Signal',
     text: 'Your scavenged radio crackles to life — a repeating tone, then a voice. "Survivors at the old mill, grid nine. We have food, water, and a doctor. Come before—" Static. Then nothing.',
     condition: gs => gs.screen === 'explore' && gs.day >= 6,
@@ -683,7 +740,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_locked_medicine',
+    id: 'ev_locked_medicine', areas: ['rural','urban','industrial'],
     title: 'Locked Cabinet',
     text: 'A metal cabinet, padlocked, with a red cross sticker on the front. It\'s been here a long time — whatever\'s inside is still sealed.',
     condition: gs => gs.screen === 'explore',
@@ -715,7 +772,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_childs_bedroom',
+    id: 'ev_childs_bedroom', areas: ['rural','urban'],
     title: 'A Child\'s Room',
     text: 'A small bedroom, untouched since the evacuation. Drawings on the wall — crayon suns and stick families. A stuffed bear on the pillow. Dust on everything.',
     condition: gs => gs.screen === 'explore',
@@ -745,7 +802,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_deactivated_robot',
+    id: 'ev_deactivated_robot', areas: ['urban','industrial'],
     title: 'Dormant Unit',
     text: 'A patrol robot sits inert in the middle of a corridor, slumped against the wall like a tired guard. Its optical sensors are dark. Scorch marks on its chassis.',
     condition: gs => gs.screen === 'explore' && gs.day >= 8,
@@ -787,7 +844,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_old_message',
+    id: 'ev_old_message', areas: ['rural','urban'],
     title: 'A Last Note',
     text: 'Pinned to a door with a kitchen knife: a handwritten note. "If you\'re reading this we didn\'t make it. Food is in the basement pantry. Lock was never fixed. Be kind to each other." It\'s signed: "The Hartley Family."',
     condition: gs => gs.screen === 'explore',
@@ -848,7 +905,7 @@ const EVENTS_DB = [
   },
 
   {
-    id: 'ev_found_blueprints',
+    id: 'ev_found_blueprints', areas: ['urban','industrial'],
     title: 'Building Plans',
     text: 'A rolled tube wedged behind a fallen shelf. Inside: architectural blueprints, hand-annotated. Someone was planning structural reinforcements for exactly the kind of underground shelter you\'re in.',
     condition: gs => gs.screen === 'explore',
@@ -1265,11 +1322,26 @@ The hospital. I need to go to the hospital.`,
   },
 ];
 
+// What kind of place the current exploration is
+const LOCATION_SETTING = {
+  forest: 'wild', village: 'rural', church: 'rural',
+  suburb: 'urban', mall: 'urban', pharmacy: 'urban', hospital: 'urban', police: 'urban', rooftop: 'urban',
+  factory: 'industrial', bunker: 'industrial',
+};
+function exploreSetting(gs) {
+  const es = typeof exploreState !== 'undefined' ? exploreState : null;
+  return (es && es.location && LOCATION_SETTING[es.location.id]) || 'urban';
+}
+
 // Pick a valid event for current state
 function pickEvent(gs, context) {
   if (!gs.eventLastFired) gs.eventLastFired = {};
+  const setting = context === 'explore' ? exploreSetting(gs) : null;
   const pool = EVENTS_DB.filter(e => {
     if (e.condition && !e.condition(gs)) return false;
+    // Exploration events must fit the place (no alcoves in the forest)
+    if (setting && (!e.areas || !e.areas.includes(setting))) return false;
+    if (context === 'shelter' && e.areas) return false;      // place-bound events only happen out there
     // Prevent the same event from firing again within 3 in-game days
     const lastDay = gs.eventLastFired[e.id] || 0;
     if (gs.day - lastDay < 3) return false;

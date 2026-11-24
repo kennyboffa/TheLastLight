@@ -490,12 +490,16 @@ function updateExplore(gs, dt) {
     }
   }
 
-  // Random events
+  // Random events: at most 2 a day while out, and at least 2 hours apart
+  const evLog = gs.exploreEventLog && gs.exploreEventLog.day === gs.day ? gs.exploreEventLog : (gs.exploreEventLog = { day: gs.day, count: 0, last: -9999 });
+  const canEvent = evLog.count < 2 && gs.time - evLog.last >= 120;
   for (const ev of es.events) {
     if (!ev.triggered && Math.abs(es.px - ev.wx) < ev.distance) {
       ev.triggered = true;
+      if (!canEvent) continue;            // this spot stays quiet
       const eventData = pickEvent(gs, 'explore');
       if (eventData) {
+        evLog.count++; evLog.last = gs.time;
         gs.mouse.down = false; eventUI.openLockFrames = 3; gs.event = eventData; gs.screen = 'event'; gs._returnTo = 'explore'; return;
       }
     }

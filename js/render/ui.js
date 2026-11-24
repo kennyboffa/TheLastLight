@@ -157,6 +157,7 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
   if (person.tiredness > 75)             warns.push('LOW STAMINA');
   if (person.depression > CFG.DEPR_WARN) warns.push('DEPR');
   if (person.infected)                   warns.push('INFECTED');
+  if (person.bleeding)                   warns.push('BLEEDING');
   if (warns.length > 0) {
     drawText(ctx, warns.join(' · '), x + lblW, y, '#cc7730', 6);
     y += 8;

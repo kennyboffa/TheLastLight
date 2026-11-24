@@ -82,6 +82,20 @@ function tickStats(gs, dt) {
 
   // ── Parent ──────────────────────────────────────────────────────────────────
   const p = gs.parent;
+  // An unbandaged wound keeps bleeding: 2 HP per game hour (fights handle it per round)
+  if (p.bleeding && !gs.inCombat) {
+    p._bleedAcc = (p._bleedAcc || 0) + 2 * hrs;
+    if (p._bleedAcc >= 1) {
+      const loss = Math.floor(p._bleedAcc);
+      p._bleedAcc -= loss;
+      p.health = Math.max(0, p.health - loss);
+      if (!p._bleedWarnT || gs.time - p._bleedWarnT >= 120 || gs.time < p._bleedWarnT) {
+        p._bleedWarnT = gs.time;
+        notify(`${p.name} is still bleeding. Use a bandage.`, 'danger');
+      }
+      if (p.health <= 0) { triggerGameOver(gs, `${p.name} bled out.`); return; }
+    }
+  }
   if (!gs.parentMissing) {
     // Trait multipliers for hunger/thirst
     const isNightTime = gs.time < 7 * 60 || gs.time >= 20 * 60;
@@ -736,6 +750,12 @@ function useItem(who, inv, itemId, gs) {
   who.depression = clamp(who.depression + (def.depression  || 0), 0, 100);
   who.health     = clamp(who.health     + Math.round((def.health || 0) * hm), 0, who.maxHealth);
   if (def.clearsInfection && who) who.infected = false;
+  // Bandages and medkits stop bleeding
+  if ((itemId === 'bandage' || itemId === 'medkit') && who.bleeding) {
+    who.bleeding = false;
+    who._bleedAcc = 0;
+    notify(`${who.name}'s bleeding has stopped.`, 'good');
+  }
   if (def.childDeprBonus && gs) gs.child.depression = clamp(gs.child.depression + def.childDeprBonus, 0, 100);
   return true;
 }

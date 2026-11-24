@@ -1271,6 +1271,7 @@ function drawExploreActors(ctx, gs, es, o) {
       const _ex = en._drawX + _hitOffset(en._hitT0, en._hitDir || -enFacing);
       _drawWorldEnemy(ctx, _ex, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing, { id: en.id, walking });
       if (en.dead) continue;
+      if (en.bleeding) { _drawBloodDrips(ctx, en._drawX, GROUND_Y, en.index); fillRect(ctx, en.worldX - 27, GROUND_Y - 53, 3, 4, '#c02020'); fillRect(ctx, en.worldX - 26, GROUND_Y - 54, 1, 1, '#c02020'); }
       drawStatBar(ctx, en.worldX - 22, GROUND_Y - 52, 44, 5,
         en.hp, en.maxHp, (en.hp / en.maxHp) > 0.5 ? '#aa2222' : '#dd1010');
       drawText(ctx, en.name, en.worldX, GROUND_Y - 57, '#cc4444', 7, 'center');
@@ -1321,6 +1322,7 @@ function drawExploreActors(ctx, gs, es, o) {
     if (gs.parent.sneaking && !pc) ctx.globalAlpha = 0.72;      // keeping to the shadows
     drawParent(ctx, hx, PLAYER_FOOT - PARENT_SPRITE_DROP, 2, facing, o.animFrame, gs.parent.gender, o.pose, weapon);
     ctx.restore();
+    if (gs.parent.bleeding) _drawBloodDrips(ctx, hx, PLAYER_FOOT, 0);
   }
   if (pc) {
     drawStatBar(ctx, px - 22, PLAYER_FOOT - 52, 44, 5,
@@ -1486,7 +1488,13 @@ function drawExploreHUD(ctx, gs, es) {
     if (st.label === 'HP' && hasVest(p)) drawArmorIcon(ctx, 154, sy - 1);
     sy += 15;
   }
-  if (p.wounded) drawText(ctx, 'WOUNDED', 162, 118, '#cc3030', 8, 'right');
+  if (p.wounded) drawText(ctx, 'WOUNDED', 198, 123, '#cc3030', 7, 'right');
+  if (p.bleeding) {
+    const a = 0.6 + 0.4 * Math.sin(Date.now() / 220);
+    ctx.save(); ctx.globalAlpha = a;
+    drawText(ctx, 'BLEEDING', 52, 123, '#e03030', 7, 'left', true);
+    ctx.restore();
+  }
 
   // Mini log strip — last 2 messages below the status bars
   if (gs.log && gs.log.length > 0) {
@@ -1976,6 +1984,7 @@ function _itemEffectText(d) {
   if (d.hunger) parts.push(`food ${sgn(-d.hunger)}`);
   if (d.thirst) parts.push(`water ${sgn(-d.thirst)}`);
   if (d.clearsInfection) parts.push('cures infection');
+  if (d.id === 'bandage' || d.id === 'medkit') parts.push('stops bleeding');
   return parts.join(', ');
 }
 
@@ -2165,6 +2174,10 @@ function combatFx(gs, type, who, amount, fromX, delayMs) {
     else { who._hitT0 = now; who._hitDir = away; }
     _spray(es, x, y, away, machine, 6 + Math.min(16, amount * 2));
     es.floaters.push({ x, y: y - 18, text: '-' + amount, color: isPlayer ? '#ff5a4a' : '#ffd8a8', t0: now });
+  } else if (type === 'bleed') {
+    // no spray or flinch: just the loss, in dark red, and a couple of drops
+    es.floaters.push({ x, y: y - 10, text: '-' + amount, color: '#c02020', t0: now });
+    _spray(es, x, y + 6, 1, false, 2);
   } else if (type === 'miss') {
     es.floaters.push({ x, y: y - 18, text: isPlayer ? 'DODGE' : 'MISS', color: '#b8b4a0', t0: now });
   } else if (type === 'death') {
@@ -2185,6 +2198,22 @@ function archiveCorpses(gs, c) {
                       t0: en._deathT0 || 0, weapon: enemyWeaponId(en), where: areaKey(es),
                       loot: en._loot || [], name: en.name });
   }
+}
+
+// Drops of blood falling from a bleeding character, and a few spots where they land
+function _drawBloodDrips(ctx, x, groundY, seed) {
+  const t = Date.now() + (seed || 0) * 397;
+  ctx.save();
+  ctx.fillStyle = '#9a1010';
+  for (let i = 0; i < 2; i++) {
+    const k = ((t / 700) + i * 0.5) % 1;
+    const dx = ((i * 5 + (seed || 0) * 3) % 7) - 3;
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(Math.round(x + dx), Math.round(groundY - 22 + k * 21), 1, 2);
+  }
+  ctx.globalAlpha = 0.6;
+  ctx.fillRect(Math.round(x - 3), groundY, 2, 1); ctx.fillRect(Math.round(x + 2), groundY, 1, 1);
+  ctx.restore();
 }
 
 // Draw one fallen body (k = 0..1 through the fall). `dir` is the direction it falls.

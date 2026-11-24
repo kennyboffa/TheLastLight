@@ -26,6 +26,57 @@ function weaponCombatStats(id) {
 function playerAttackStats(gs) { return weaponCombatStats(gs.parent.equipped.weapon); }
 function tilesBetween(a, b) { return Math.round(Math.abs(a - b) / TILE); }
 
+// ── Bleeding ─────────────────────────────────────────────────────────────────
+// Hits can open a bleeding wound (not on machines). In a fight a bleeder loses
+// 1-3 HP every round; the player keeps bleeding afterwards (2 HP per game hour)
+// until a bandage or medkit stops it.
+const BLEED_WEAPONS = new Set(['knife', 'machete', 'axe', 'spear', 'pistol', 'rifle', 'shotgun']);
+function bleedChance(weaponId, attacker) {
+  if (attacker && attacker.type === 'animal') return 30;              // teeth and claws
+  if (weaponId && BLEED_WEAPONS.has(weaponId)) return 30;             // blades and bullets
+  return 12;                                                          // fists, clubs, pipes
+}
+
+/** Bleeding damage at the start of a round. Returns true if it killed. */
+function _bleedTick(gs, who) {
+  const c = gs.combat;
+  const dmg = randInt(1, 3);
+  if (who === 'player') {
+    c.player.hp -= dmg;
+    gs.parent.health = Math.max(0, gs.parent.health - dmg);
+    _fx(gs, 'bleed', 'player', dmg, c.playerWx, 0);
+    combatLog(gs, `${gs.parent.name} is bleeding (-${dmg}).`, 'danger');
+    if (c.player.hp <= 0) {
+      _fx(gs, 'death', 'player', 0, c.playerWx + 1, 20);
+      c.phase = 'defeat';
+      combatLog(gs, `${gs.parent.name} bled out.`, 'danger');
+      c.pendingAction = 'defeat'; c.pendingTimer = 1.6;
+      return true;
+    }
+    return false;
+  }
+  who.hp -= dmg;
+  _fx(gs, 'bleed', who, dmg, who.worldX, 0);
+  combatLog(gs, `${who.name} bleeds (-${dmg}).`, 'good');
+  if (who.hp <= 0) {
+    who.dead = true;
+    _fx(gs, 'death', who, 0, who.worldX + 1, 60);
+    combatLog(gs, `${who.name} bled out.`, 'good');
+    collectLoot(gs, who);
+    const _xp = { machine: 20, human: 15, animal: 10 };
+    giveXP(gs.parent, Math.round((_xp[who.type] || 12) * (who.isBoss ? 3 : 1)), gs);
+    return true;
+  }
+  return false;
+}
+
+function _startPlayerBleeding(gs, why) {
+  if (gs.parent.bleeding) return;
+  gs.parent.bleeding = true;
+  combatLog(gs, why || `${gs.parent.name} is bleeding!`, 'danger');
+  notify('Bleeding: use a bandage to stop it.', 'danger');
+}
+
 // Enemies: an attack costs 2 AP (bosses 3); shooters reach 6 tiles, everyone else 1
 function enemyAttackAp(e) { return e.atkAp || (e.isBoss ? 3 : 2); }
 function enemyRangeTiles(e) { return e.isRanged ? (e.rangeTiles || 6) : 1; }
@@ -347,6 +398,10 @@ function playerAttack(gs, targetIdx) {
     _fx(gs, 'hit', target, damage, c.playerWx, isRanged ? 60 : 200);
     combatLog(gs, `${p.name} hits ${target.name} for ${damage} dmg.`, 'good');
     Audio.hit();
+    if (target.hp > 0 && !target.bleeding && target.type !== 'machine' && chance(bleedChance(weapDef ? weapDef.id : null))) {
+      target.bleeding = true;
+      combatLog(gs, `${target.name} is bleeding!`, 'good');
+    }
     if (target.hp <= 0) {
       target.dead = true;
       _fx(gs, 'death', target, 0, c.playerWx, isRanged ? 80 : 220);
@@ -441,6 +496,11 @@ function enemyTurn(gs) {
   if (!c || c.phase !== 'action') return;
 
   c.ambush = false;
+  // Bleeding enemies lose blood before they act
+  for (const enemy of c.enemies) {
+    if (!enemy.dead && enemy.bleeding) _bleedTick(gs, enemy);
+  }
+  if (checkCombatVictory(gs)) return;
   let attackOrder = 0;   // stagger attack animations so each one is visible
   for (const enemy of c.enemies) {
     if (enemy.dead) continue;
@@ -486,10 +546,14 @@ function enemyTurn(gs) {
             combatLog(gs, 'Wound may be infected!', 'danger');
             notify('Infection risk — use antibiotics.', 'danger');
           }
+          if (c.player.hp > 0 && chance(bleedChance(enemyWeaponId && enemyWeaponId(enemy), enemy))) {
+            _startPlayerBleeding(gs, `The wound is bleeding!`);
+          }
           if (!gs.parent.wounded && gs.parent.health / gs.parent.maxHealth < 0.35) {
             gs.parent.wounded = true;
             combatLog(gs, `${gs.parent.name} is seriously wounded.`, 'danger');
             notify('Seriously wounded — use a medkit!', 'danger');
+            _startPlayerBleeding(gs, `${gs.parent.name} is badly hurt and bleeding.`);
           }
           if (c.player.hp <= 0) {
             _fx(gs, 'death', 'player', 0, enemy.worldX, impact + 20);
@@ -563,6 +627,8 @@ function enemyTurn(gs) {
   }
 
   c.surprised = false;   // the surprise only lasts their opening round
+  // Your own bleeding wound costs blood every round
+  if (gs.parent.bleeding && c.phase === 'action' && _bleedTick(gs, 'player')) return;
   // Reset player AP for next turn; input waits until the attack animations finish
   c.playerAp = c.player.maxAp;
   c.busyUntil = attackOrder ? Date.now() + 300 * (attackOrder - 1) + 550 : 0;

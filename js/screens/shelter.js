@@ -600,12 +600,18 @@ function drawCharPanel(ctx, gs, mx, my) {
   }
 
   let y = py + (who.trait ? 36 : 28);
-  const sw = PW - 16;
-  drawStatBar(ctx, px+8, y, sw, 6, who.health, who.maxHealth, C.hp,         null, 'HP');      y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.hunger,     100, C.hunger,     null, 'Food');     y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.thirst,     100, C.thirst,     null, 'Water');    y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.tiredness,  100, C.tiredness,  null, 'Stamina');  y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.depression, 100, C.depression, null, 'Mood');     y += 12;
+  // Labelled bars: only HP fills up as a need, the rest drain as they get worse
+  const lw = 44, sw = PW - 16 - lw;
+  const bar = (label, val, max, col, last) => {
+    drawText(ctx, label, px + 8 + lw - 4, y + 6, C.textDim, 7, 'right');
+    drawStatBar(ctx, px + 8 + lw, y, sw, 6, val, max, col, null, true);
+    y += last ? 12 : 10;
+  };
+  bar('HP', who.health, who.maxHealth, C.hp);
+  bar('Food', 100 - who.hunger, 100, C.hunger);
+  bar('Water', 100 - who.thirst, 100, C.thirst);
+  bar('Stamina', 100 - who.tiredness, 100, C.tiredness);
+  bar('Mood', 100 - who.depression, 100, C.depression, true);
   // Illness indicator for Lily
   if (sel === 'child' && gs.flags && gs.flags.lilySick) {
     const illCol = gs.flags.lilyCured ? '#3aaa50' : '#cc6644';
@@ -1637,6 +1643,9 @@ function drawSettingsMenu(ctx, gs, mx, my) {
 
   const closeX = px + W2 - 66, closeY = py + H2 - 26;
   drawButton(ctx, closeX, closeY, 58, 20, 'Close', hitTest(mx, my, closeX, closeY, 58, 20));
+  const quitX = px + 8;
+  drawButton(ctx, quitX, closeY, 120, 20, 'Quit to Main Menu', hitTest(mx, my, quitX, closeY, 120, 20));
+  gs._settingsQuit = { x: quitX, y: closeY, w: 120, h: 20 };
 
   gs._settingsBtns = {
     minus:      { x: scaleBtns.minusX, y: scaleBtns.minusY, w: 26, h: 20 },
@@ -2109,6 +2118,21 @@ function handleMenuClick(mx, my, gs) {
     }
     if (hitTest(mx, my, btns.close.x, btns.close.y, btns.close.w, btns.close.h)) {
       M.activeMenu = null; return;
+    }
+    const q = gs._settingsQuit;
+    if (q && hitTest(mx, my, q.x, q.y, q.w, q.h)) {
+      M.activeMenu = null;
+      gs.event = {
+        id: 'quit_confirm', type: 'event', title: 'Quit to Main Menu',
+        text: 'Leave this game and go back to the main menu? Anything since your last save will be lost unless you save now.',
+        choices: [
+          { label: 'Save, then quit', action: g => { saveGame(g); quitToTitle(g); return null; } },
+          { label: 'Quit without saving', action: g => { quitToTitle(g); return null; } },
+          { label: 'Cancel', action: () => null },
+        ],
+      };
+      gs.screen = 'event'; gs._returnTo = 'shelter'; eventUI.openLockFrames = 3;
+      return;
     }
     // Click outside closes
     const W2 = 250, H2 = 350;

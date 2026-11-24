@@ -174,21 +174,160 @@ function renderTitle(ctx, gs) {
 
   ctx.restore();
 
-  // ── "Press any key" prompt ────────────────────────────────────────────────
-  if (t.ready) {
-    const pulse = 0.38 + 0.28 * Math.sin(Date.now() / 720);
-    ctx.save();
-    ctx.globalAlpha = pulse;
-    ctx.font = '8px monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = '#706858';
-    ctx.fillText('CLICK OR PRESS ANY KEY TO CONTINUE', W / 2, Math.round(H * 0.76));
-    ctx.restore();
-  }
+  // ── Main menu ─────────────────────────────────────────────────────────────
+  if (t.ready) drawTitleMenu(ctx, gs);
 }
 
 function titleAdvance() {
   initIntro();
   setScreen('intro');
+}
+
+// ── Main menu: Continue / New Game / Load Game / Profile / Quit ─────────────
+
+const titleUI = { panel: null, confirmDelete: false };
+
+function _saveSlots() {
+  const slots = [];
+  const a = typeof getAutosaveInfo === 'function' && getAutosaveInfo();
+  const m = typeof getSaveInfo === 'function' && getSaveInfo();
+  if (a) slots.push({ kind: 'auto', label: 'Autosave', ...a });
+  if (m) slots.push({ kind: 'manual', label: 'Saved game', ...m });
+  return slots;
+}
+
+function _fmtSaved(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+function _fmtGameTime(m) { m = Math.round(m || 0); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
+
+function _menuButtons(gs) {
+  const slots = _saveSlots();
+  const latest = slots.slice().sort((x, y) => (y.savedAt || 0) - (x.savedAt || 0))[0];
+  const list = [];
+  if (latest) list.push({ id: 'continue', label: `Continue  (Day ${latest.day})`, slot: latest });
+  list.push({ id: 'new', label: 'New Game' });
+  list.push({ id: 'load', label: 'Load Game', disabled: !slots.length });
+  list.push({ id: 'profiles', label: `Profile: ${activeProfile().name}` });
+  list.push({ id: 'quit', label: 'Quit' });
+  return list;
+}
+
+function _loadSlot(gs, slot) {
+  Audio.resume();
+  if (slot.kind === 'auto') loadAutosave(gs); else loadGame(gs);
+  titleUI.panel = null;
+}
+
+function drawTitleMenu(ctx, gs) {
+  const W = CFG.W, H = CFG.H, mx = gs.mouse.x, my = gs.mouse.y;
+  const cx = W / 2, bw = 200, bh = 20, gap = 6;
+  titleUI._btns = [];
+  const btn = (x, y, w, label, id, extra, disabled) => {
+    drawButton(ctx, x, y, w, bh, label, !disabled && hitTest(mx, my, x, y, w, bh), false, !!disabled);
+    if (!disabled) titleUI._btns.push({ x, y, w, h: bh, id, ...(extra || {}) });
+  };
+  let y = Math.round(H * 0.57);
+
+  if (!titleUI.panel) {
+    for (const b of _menuButtons(gs)) { btn(cx - bw / 2, y, bw, b.label, b.id, { slot: b.slot }, b.disabled); y += bh + gap; }
+    return;
+  }
+  const pw = 300, px = cx - pw / 2, py = y - 8, ph = H - py - 12;
+  drawPanel(ctx, px, py, pw, ph, 'rgba(10,10,16,0.92)', '#3a3020');
+  let ty = py + 16;
+  if (titleUI.panel === 'load') {
+    drawText(ctx, `LOAD GAME  —  ${activeProfile().name}`, cx, ty, '#c4a030', 9, 'center', true); ty += 14;
+    const slots = _saveSlots();
+    if (!slots.length) { drawText(ctx, 'No saved games on this profile.', cx, ty + 10, C.textDim, 8, 'center'); ty += 24; }
+    for (const sl of slots) {
+      btn(px + 12, ty, pw - 24, `${sl.label}: Day ${sl.day}, ${_fmtGameTime(sl.time)}`, 'loadSlot', { slot: sl });
+      drawText(ctx, `saved ${_fmtSaved(sl.savedAt)}`, cx, ty + bh + 8, '#5a5a66', 6, 'center');
+      ty += bh + 16;
+    }
+    btn(cx - 40, py + ph - bh - 8, 80, 'Back', 'back');
+  } else if (titleUI.panel === 'profiles') {
+    drawText(ctx, 'PROFILES', cx, ty, '#c4a030', 9, 'center', true); ty += 12;
+    drawText(ctx, 'Each profile has its own saved games.', cx, ty, C.textDim, 7, 'center'); ty += 8;
+    const act = activeProfileId();
+    for (const pr of listProfiles().slice(0, 4)) {
+      btn(px + 12, ty, pw - 24, `${pr.id === act ? '✓ ' : ''}${pr.name}`, 'pickProfile', { pid: pr.id });
+      ty += bh + 4;
+    }
+    const by = py + ph - bh - 8;
+    btn(px + 12, by, 84, 'New profile', 'newProfile', null, listProfiles().length >= 4);
+    btn(px + 102, by, 96, titleUI.confirmDelete ? 'Really delete?' : 'Delete current', 'delProfile', null, listProfiles().length <= 1);
+    btn(px + pw - 82, by, 70, 'Back', 'back');
+  } else if (titleUI.panel === 'confirmNew') {
+    const sl = _saveSlots().find(s2 => s2.kind === 'auto');
+    drawText(ctx, 'START A NEW GAME?', cx, ty, '#c4a030', 9, 'center', true); ty += 18;
+    ty = drawWrapped(ctx, `${activeProfile().name} has a game in progress${sl ? ` (Day ${sl.day})` : ''}. A new game will replace this profile's autosave. A manual save is kept.`,
+      px + 16, ty, pw - 32, 8, C.text, 12) + 10;
+    btn(px + 16, py + ph - bh - 8, 130, 'Start new game', 'newConfirmed');
+    btn(px + pw - 100, py + ph - bh - 8, 84, 'Cancel', 'back');
+  } else if (titleUI.panel === 'quit') {
+    drawText(ctx, 'QUIT', cx, ty, '#c4a030', 9, 'center', true); ty += 22;
+    drawWrapped(ctx, 'The game runs in your browser. You can close this tab or window now; your saves stay on this computer.', px + 16, ty, pw - 32, 8, C.text, 12);
+    btn(cx - 40, py + ph - bh - 8, 80, 'Back', 'back');
+  }
+}
+
+function titleClick(mx, my, gs) {
+  const t = gs.title;
+  if (!t || !t.ready) { if (t) { t.alpha = 1; t.textAlpha = 1; t.ready = true; } return; }   // click skips the fade-in
+  const b = (titleUI._btns || []).find(r => hitTest(mx, my, r.x, r.y, r.w, r.h));
+  if (!b) return;
+  Audio.resume();
+  if (b.id !== 'delProfile') titleUI.confirmDelete = false;
+  switch (b.id) {
+    case 'continue': _loadSlot(gs, b.slot); break;
+    case 'loadSlot': _loadSlot(gs, b.slot); break;
+    case 'new':
+      if (_saveSlots().some(s2 => s2.kind === 'auto')) titleUI.panel = 'confirmNew';
+      else titleAdvance();
+      break;
+    case 'newConfirmed': titleUI.panel = null; titleAdvance(); break;
+    case 'load': titleUI.panel = 'load'; break;
+    case 'profiles': titleUI.panel = 'profiles'; break;
+    case 'pickProfile': setActiveProfile(b.pid); break;
+    case 'newProfile': {
+      const name = window.prompt('Name for the new profile:', `Player ${listProfiles().length + 1}`);
+      if (name !== null) createProfile(name);
+      break;
+    }
+    case 'delProfile':
+      if (!titleUI.confirmDelete) { titleUI.confirmDelete = true; break; }
+      titleUI.confirmDelete = false;
+      deleteProfile(activeProfileId());
+      break;
+    case 'quit':
+      titleUI.panel = 'quit';
+      try { window.close(); } catch (e) {}
+      break;
+    case 'back': titleUI.panel = null; break;
+  }
+}
+
+/** Keyboard on the title: Enter/Space picks the first menu option, Esc backs out. */
+function titleKey(key, gs) {
+  const t = gs.title;
+  if (!t) return;
+  if (!t.ready) { t.alpha = 1; t.textAlpha = 1; t.ready = true; return; }
+  if (key === 'escape') { titleUI.panel = null; return; }
+  if ((key === 'enter' || key === ' ') && !titleUI.panel) {
+    const first = _menuButtons(gs)[0];
+    Audio.resume();
+    if (first.id === 'continue') _loadSlot(gs, first.slot); else titleAdvance();
+  }
+}
+
+/** Leave the current game for the main menu. */
+function quitToTitle(gs) {
+  if (typeof resetGame === 'function') resetGame();
+  GS.screen = 'title';
+  initTitle();
+  const t = GS.title; t.alpha = 1; t.textAlpha = 1; t.ready = true;
+  titleUI.panel = null;
 }

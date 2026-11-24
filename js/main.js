@@ -8,7 +8,7 @@ const ctx    = canvas.getContext('2d');
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.52';
+const GAME_VERSION = 'v0.53';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -311,8 +311,8 @@ window.addEventListener('keyup', (e) => {
 });
 
 function handleKeyPress(key) {
+  if (GS.screen === 'title') { titleKey(key, GS); return; }
   if (key === 'enter' || key === ' ') {
-    if (GS.screen === 'title')      { Audio.resume(); titleAdvance(); return; }
     if (GS.screen === 'intro')      { introAdvance(); return; }
     if (GS.screen === 'gameOver')   { resetGame(); return; }
     if (GS.screen === 'travel')     { travelSkip(GS); return; }
@@ -653,8 +653,7 @@ function handleClick(mx, my, gs) {
 
   switch (gs.screen) {
     case 'title':
-      Audio.resume();
-      titleAdvance();
+      titleClick(mx, my, gs);
       break;
     case 'intro':
       introAdvance();

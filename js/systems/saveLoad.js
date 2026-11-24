@@ -4,6 +4,47 @@
 const SAVE_KEY      = 'tll_save_v1';
 const AUTOSAVE_KEY  = 'tll_autosave_v1';
 
+// ── Profiles: each player on this computer has their own saves ───────────────
+// The first profile ('default') uses the original keys so existing saves stay put.
+const PROFILES_KEY = 'tll_profiles';
+const ACTIVE_PROFILE_KEY = 'tll_active_profile';
+
+function _lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function _lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function _lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+function listProfiles() {
+  try {
+    const list = JSON.parse(_lsGet(PROFILES_KEY) || 'null');
+    if (Array.isArray(list) && list.length) return list;
+  } catch (e) {}
+  return [{ id: 'default', name: 'Player 1' }];
+}
+function _saveProfiles(list) { _lsSet(PROFILES_KEY, JSON.stringify(list)); }
+function activeProfileId() {
+  const id = _lsGet(ACTIVE_PROFILE_KEY);
+  return id && listProfiles().some(p => p.id === id) ? id : listProfiles()[0].id;
+}
+function activeProfile() { return listProfiles().find(p => p.id === activeProfileId()) || listProfiles()[0]; }
+function setActiveProfile(id) { _lsSet(ACTIVE_PROFILE_KEY, id); }
+function createProfile(name) {
+  const list = listProfiles();
+  const p = { id: 'p' + Date.now().toString(36), name: (name || '').trim().slice(0, 16) || `Player ${list.length + 1}` };
+  list.push(p); _saveProfiles(list); setActiveProfile(p.id);
+  return p;
+}
+function deleteProfile(id) {
+  let list = listProfiles();
+  if (list.length <= 1) return false;
+  _lsDel(_profileKey(SAVE_KEY, id)); _lsDel(_profileKey(AUTOSAVE_KEY, id));
+  list = list.filter(p => p.id !== id); _saveProfiles(list);
+  if (activeProfileId() === id || !list.some(p => p.id === activeProfileId())) setActiveProfile(list[0].id);
+  return true;
+}
+function _profileKey(base, id) { id = id || activeProfileId(); return id === 'default' ? base : `${base}__${id}`; }
+function _saveKey() { return _profileKey(SAVE_KEY); }
+function _autoKey() { return _profileKey(AUTOSAVE_KEY); }
+
 // Fields that should NOT be persisted (runtime UI/input state or display prefs)
 const SKIP_FIELDS = ['mouse', 'keys', 'dayFade', 'screenFade', 'notifications', 'intro', 'cc', 'userScale', 'zoomAnim'];
 
@@ -19,7 +60,7 @@ function saveGame(gs) {
     data._savedAt = Date.now();
     data._saveDay = gs.day;
     data._saveTime = gs.time;
-    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(_saveKey(), JSON.stringify(data));
     notify('Game saved.', 'good');
     return true;
   } catch (e) {
@@ -30,7 +71,7 @@ function saveGame(gs) {
 
 function loadGame(gs) {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(_saveKey());
     if (!raw) { notify('No save found.', 'warn'); return false; }
     const data = JSON.parse(raw);
     // Restore all saved keys onto GS
@@ -85,12 +126,12 @@ function _finishLoad(gs) {
 }
 
 function hasSave() {
-  return !!localStorage.getItem(SAVE_KEY);
+  return !!localStorage.getItem(_saveKey());
 }
 
 function getSaveInfo() {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(_saveKey());
     if (!raw) return null;
     const data = JSON.parse(raw);
     return {
@@ -117,7 +158,7 @@ function autoSaveGame(gs) {
     data._saveDay  = gs.day;
     data._saveTime = gs.time;
     data._isAuto   = true;
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(data));
+    localStorage.setItem(_autoKey(), JSON.stringify(data));
   } catch (e) {
     // Silent — autosave failures shouldn't interrupt gameplay
   }
@@ -125,7 +166,7 @@ function autoSaveGame(gs) {
 
 function loadAutosave(gs) {
   try {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    const raw = localStorage.getItem(_autoKey());
     if (!raw) { notify('No autosave found.', 'warn'); return false; }
     const data = JSON.parse(raw);
     for (const key of Object.keys(data)) {
@@ -143,12 +184,12 @@ function loadAutosave(gs) {
 }
 
 function hasAutosave() {
-  return !!localStorage.getItem(AUTOSAVE_KEY);
+  return !!localStorage.getItem(_autoKey());
 }
 
 function getAutosaveInfo() {
   try {
-    const raw = localStorage.getItem(AUTOSAVE_KEY);
+    const raw = localStorage.getItem(_autoKey());
     if (!raw) return null;
     const data = JSON.parse(raw);
     return { day: data._saveDay || 1, time: data._saveTime || 0, savedAt: data._savedAt || 0, runId: data.runId || null };

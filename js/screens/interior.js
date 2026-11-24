@@ -346,6 +346,6 @@ function drawRoomDoor(ctx, x, groundY, label, near, prompt) {
     fillRect(ctx, x, groundY - 34, DOOR_W, 34, '#0c0a08');
     strokeRect(ctx, x, groundY - 34, DOOR_W, 34, '#3a3026');
   }
-  drawText(ctx, label, x + DOOR_W / 2, groundY - 60, C.textDim, 6, 'center');
-  if (near) drawText(ctx, prompt, x + DOOR_W / 2, groundY - 70, C.textBright, 7, 'center');
+  // The room's name only shows with the prompt, when you're at the door
+  if (near) drawText(ctx, `${prompt} ${label}`, x + DOOR_W / 2, groundY - 64, C.textBright, 7, 'center');
 }

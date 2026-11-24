@@ -4,7 +4,8 @@
 // Difficulty multiplier for stat decay
 // Share of loot that turns up: normal finds 20% less than it used to,
 // easy keeps the old amount, hard is scarcer still.
-const LOOT_FIND = { easy: 1.0, normal: 0.8, hard: 0.65 };
+// (then 35% scarcer again across the board)
+const LOOT_FIND = { easy: 0.65, normal: 0.52, hard: 0.42 };
 function lootFindMult(gs) { return LOOT_FIND[(gs || GS).difficulty] || 0.8; }
 /** Each found unit survives with the difficulty's find chance. */
 function thinLoot(qty) {

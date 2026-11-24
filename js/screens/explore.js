@@ -1154,7 +1154,7 @@ function renderOutdoor(ctx, gs, es) {
   for (const bld of es.buildings) {
     if (bld.bx + bld.bw < _viewL || bld.bx > _viewR) continue;
     if (bld.isTent) {
-      drawExploreTent(ctx, bld.bx + bld.bw / 2, GROUND_Y, bld.bw, bld.bh, bld.label);
+      drawExploreTent(ctx, bld.bx + bld.bw / 2, GROUND_Y, bld.bw, bld.bh, null);
       if (Math.abs(es.px - (bld.bx + bld.bw / 2)) < 30) {
         if (bld._tentSearched && bld._tentLoot && bld._tentLoot.length) {
           drawText(ctx, '[E] Take items', bld.bx + bld.bw / 2, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
@@ -1166,12 +1166,13 @@ function renderOutdoor(ctx, gs, es) {
       }
     } else {
       if (bld.theme === 'cabin' && !bld.sprite) {
-        drawExploreCabin(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label);
+        drawExploreCabin(ctx, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, null);
       } else {
-        drawExploreBuildingByTheme(ctx, bld.theme, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, bld.label, bld.sprite);
+        drawExploreBuildingByTheme(ctx, bld.theme, bld.bx, GROUND_Y - bld.bh, bld.bw, bld.bh, null, bld.sprite);
       }
+      // No signs over buildings: the name shows only when you're at the door
       if (Math.abs(es.px - (bld.doorX + 8)) < 24) {
-        drawText(ctx, '[E] Enter', bld.doorX + 8, GROUND_Y - bld.bh - 8, C.textBright, 7, 'center');
+        drawText(ctx, `[E] Enter ${bld.label}`, bld.doorX + 8, GROUND_Y - 62, C.textBright, 7, 'center');
       }
     }
   }
@@ -1345,8 +1346,6 @@ function renderBuildingInterior(ctx, gs, es) {
   fillRect(ctx, 0, 0, 8, GROUND_Y, '#161620');
   fillRect(ctx, W - 8, 0, 8, GROUND_Y, '#161620');
 
-  const where = area.isRoom ? `${bld.label}  —  ${area.label}` : `${bld.label}  —  Floor ${bi.floorIdx + 1} / ${bld.numFloors}`;
-  drawText(ctx, where, W / 2, 20, C.textDim, 7, 'center');
 
   // Ceiling lamps (some broken)
   for (let lx = 130; lx < W - 100; lx += 200) {
@@ -1429,7 +1428,7 @@ function drawAreaContainer(ctx, c, isNear) {
   if (c.searching) {
     drawSearchBar(ctx, c.wx, top - 4, c.searchProgress / (c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration));
   } else if (isNear) {
-    drawText(ctx, c.searched ? '[E] Take items' : `[E] Search${isFurn ? ' ' + c.type : ''}`, c.wx, top - 4, C.textBright, 7, 'center');
+    drawText(ctx, c.searched ? '[E] Take items' : `[E] Search ${c.type}`, c.wx, top - 4, C.textBright, 7, 'center');
   }
 }
 
@@ -2617,7 +2616,6 @@ function drawExploreContainer(ctx, wx, groundY, type, highlighted) {
       ctx.restore();
     }
     drawEnvSpriteFit(ctx, spriteKey, wx, groundY, targetH);
-    drawText(ctx, type, wx, groundY - fit.height - 4, C.textDim, 6, 'center');
     return;
   }
   // Fallback procedural
@@ -2629,7 +2627,6 @@ function drawExploreContainer(ctx, wx, groundY, type, highlighted) {
   strokeRect(ctx, wx - w / 2, groundY - h, w, h, br);
   const icon = { locker:'▪', cabinet:'▪', chest:'▬', crate:'▦', shelf:'≡', barrel:'○', bag:'◇' }[type] || '▪';
   drawText(ctx, icon, wx, groundY - h / 2 - 1, '#6a6040', 6, 'center');
-  drawText(ctx, type, wx, groundY - h - 4, C.textDim, 5, 'center');
 }
 
 function drawExploreContainerEmpty(ctx, wx, groundY) {

@@ -434,16 +434,18 @@ function drawGameOver(ctx, gs) {
 
   const mx = gs.mouse.x, my = gs.mouse.y;
 
-  // Autosave option — shown if an autosave exists
-  const autoInfo = (typeof getAutosaveInfo === 'function') && getAutosaveInfo();
+  // Retry from this run's last morning autosave (never one from an older game)
+  const info = (typeof getAutosaveInfo === 'function') && getAutosaveInfo();
+  const autoInfo = info && gs.runId && info.runId === gs.runId ? info : null;
   let btnY = 170;
   if (autoInfo) {
-    const abx = cx - 90, abw = 180, abh = 24;
+    const abx = cx - 110, abw = 220, abh = 24;
     const autoBtnHov = hitTest(mx, my, abx, btnY, abw, abh);
-    drawButton(ctx, abx, btnY, abw, abh, `Continue — Day ${autoInfo.day}`, autoBtnHov, false, false);
-    drawText(ctx, '(autosave)', cx, btnY + abh + 10, '#555566', 7, 'center');
+    const label = autoInfo.day === gs.day ? `Retry Day ${autoInfo.day} from the morning` : `Retry from Day ${autoInfo.day} morning`;
+    drawButton(ctx, abx, btnY, abw, abh, label, autoBtnHov, false, false);
+    gs._gameOverAutoBtn = { x: abx, y: btnY, w: abw, h: abh };
+    drawText(ctx, '(autosave from the start of that day)', cx, btnY + abh + 10, '#555566', 7, 'center');
     btnY += abh + 20;
-    gs._gameOverAutoBtn = { x: abx, y: btnY - abh - 20, w: abw, h: abh };
   } else {
     gs._gameOverAutoBtn = null;
   }

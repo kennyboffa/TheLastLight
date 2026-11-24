@@ -64,6 +64,7 @@ function _finishLoad(gs) {
   gs.screenFade = { active: false, alpha: 0, phase: 'idle', pendingFn: null };
   gs.notifications = [];
   if (gs.parent) gs.parent.isExploring = false;
+  if (!gs.runId) gs.runId = 'old' + Date.now().toString(36);   // saves from before run ids
   if (gs.parent && typeof normalizeEquipment === 'function') normalizeEquipment(gs.parent);
   if (gs.child)  gs.child.isAlone = false;
   for (const s of (gs.survivors || [])) s.isExploring = false;
@@ -150,7 +151,7 @@ function getAutosaveInfo() {
     const raw = localStorage.getItem(AUTOSAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    return { day: data._saveDay || 1, time: data._saveTime || 0, savedAt: data._savedAt || 0 };
+    return { day: data._saveDay || 1, time: data._saveTime || 0, savedAt: data._savedAt || 0, runId: data.runId || null };
   } catch (e) {
     return null;
   }

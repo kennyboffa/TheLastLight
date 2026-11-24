@@ -429,6 +429,7 @@ function finalizeCharacter(gs) {
   // Apply difficulty
   gs.difficulty = cc.difficulty || 'normal';
   gs.worldSeed  = Math.floor(Math.random() * 1e9);   // layout seed for this run
+  gs.runId      = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);   // ties autosaves to this playthrough
 
   Object.assign(gs.parent, {
     name:    cc.name.trim() || (cc.gender === 'father' ? 'Mark' : 'Amanda'),
@@ -465,6 +466,8 @@ function finalizeCharacter(gs) {
   addToInventory(storage, 'flannel_shirt', 1);
 
   setScreen('shelter');
+  // Morning of day 1: the first point you can retry from after dying
+  if (typeof autoSaveGame === 'function') autoSaveGame(gs);
   Audio.startShelterMusic();
   const diffLabel = DIFFICULTIES[gs.difficulty].label;
   addLog(`Day 1. ${gs.parent.name} and Lily are hiding below ground. Difficulty: ${diffLabel}.`, 'info');

@@ -129,7 +129,7 @@ function drawStatsPanel(ctx, gs) {
 function drawPersonStats(ctx, person, x, y, w, compact) {
   const bh  = compact ? 7 : 8;
   const gap = compact ? 11 : 12;
-  const lblW = 36;
+  const lblW = 44;   // fits 'Stamina'
 
   const hpPct   = person.health / person.maxHealth;
   const hpColor = hpPct > 0.6 ? C.hp : hpPct > 0.3 ? '#cc6020' : '#dd1010';
@@ -137,10 +137,11 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
 
   const stats = [
     { label: 'HP',     value: person.health,     max: person.maxHealth, color: hpColor },
-    { label: 'Hunger', value: person.hunger,      max: 100, color: C.hunger },
-    { label: 'Thirst', value: person.thirst,      max: 100, color: C.thirst },
-    { label: 'Tired',  value: person.tiredness,   max: 100, color: C.tiredness },
-    { label: 'Mood',   value: person.depression,  max: 100, color: dcolor },
+    // Only health fills up as a need; everything else shows what's left and drains
+    { label: 'Food',    value: 100 - person.hunger,     max: 100, color: C.hunger },
+    { label: 'Water',   value: 100 - person.thirst,     max: 100, color: C.thirst },
+    { label: 'Stamina', value: 100 - person.tiredness,  max: 100, color: C.tiredness },
+    { label: 'Mood',    value: 100 - person.depression, max: 100, color: dcolor },
   ];
 
   for (const s of stats) {
@@ -153,7 +154,7 @@ function drawPersonStats(ctx, person, x, y, w, compact) {
   const warns = [];
   if (person.hunger > CFG.HUNGER_WARN)   warns.push('HUNGRY');
   if (person.thirst > CFG.THIRST_WARN)   warns.push('THIRSTY');
-  if (person.tiredness > 75)             warns.push('TIRED');
+  if (person.tiredness > 75)             warns.push('LOW STAMINA');
   if (person.depression > CFG.DEPR_WARN) warns.push('DEPR');
   if (person.infected)                   warns.push('INFECTED');
   if (warns.length > 0) {

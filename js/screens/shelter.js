@@ -602,10 +602,10 @@ function drawCharPanel(ctx, gs, mx, my) {
   let y = py + (who.trait ? 36 : 28);
   const sw = PW - 16;
   drawStatBar(ctx, px+8, y, sw, 6, who.health, who.maxHealth, C.hp,         null, 'HP');      y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, who.hunger,        100,    C.hunger,     null, 'Hunger');   y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, who.thirst,        100,    C.thirst,     null, 'Thirst');   y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, who.tiredness,     100,    C.tiredness,  null, 'Tired');    y += 10;
-  drawStatBar(ctx, px+8, y, sw, 6, who.depression,    100,    C.depression, null, 'Depr.');    y += 12;
+  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.hunger,     100, C.hunger,     null, 'Food');     y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.thirst,     100, C.thirst,     null, 'Water');    y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.tiredness,  100, C.tiredness,  null, 'Stamina');  y += 10;
+  drawStatBar(ctx, px+8, y, sw, 6, 100 - who.depression, 100, C.depression, null, 'Mood');     y += 12;
   // Illness indicator for Lily
   if (sel === 'child' && gs.flags && gs.flags.lilySick) {
     const illCol = gs.flags.lilyCured ? '#3aaa50' : '#cc6644';

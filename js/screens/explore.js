@@ -1463,13 +1463,13 @@ function drawExploreHUD(ctx, gs, es) {
     { label:'HP',    val: p.health,    max: p.maxHealth, color: hpColor },
     { label:'Food',  val: 100 - p.hunger,  max: 100, color: C.hunger },
     { label:'Water', val: 100 - p.thirst,  max: 100, color: C.thirst },
-    { label:'Rest',  val: 100 - p.tiredness, max: 100, color: C.tiredness },
+    { label:'Stamina', val: 100 - p.tiredness, max: 100, color: C.tiredness },
     { label:'Mood',  val: 100 - p.depression, max: 100, color: dColor },
   ];
   let sy = 47;
   for (const st of STATS) {
     drawText(ctx, st.label, 10, sy + 7, C.textDim, 8, 'left');
-    drawStatBar(ctx, 40, sy, 110, 7, st.val, st.max, st.color, null, false);
+    drawStatBar(ctx, 52, sy, 98, 7, st.val, st.max, st.color, null, false);
     if (st.label === 'HP' && hasVest(p)) drawArmorIcon(ctx, 154, sy - 1);
     sy += 15;
   }

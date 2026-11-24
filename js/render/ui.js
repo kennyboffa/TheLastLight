@@ -207,25 +207,33 @@ function drawNotifications(ctx, gs, startX, startY, centered, maxWidth) {
 
 const HINT_MS = 8000;
 
-function showHint(gs, id, text) {
+// Each tip belongs to a place ('shelter' or 'explore') and only shows there.
+function showHint(gs, id, text, where) {
   if (!gs.hintsSeen) gs.hintsSeen = {};
   if (gs.hintsSeen[id]) return;
   gs.hintsSeen[id] = true;
   if (!gs._hintQueue) gs._hintQueue = [];
-  gs._hintQueue.push(text);
+  gs._hintQueue.push({ text, where: where || (gs.screen === 'shelter' ? 'shelter' : 'explore') });
 }
 
-function drawHint(ctx, gs, cx, y, maxW) {
+function drawHint(ctx, gs, cx, y, maxW, where) {
   const q = gs._hintQueue;
   if (!q || !q.length) return;
-  if (!gs._hintT0) gs._hintT0 = Date.now();
-  const age = Date.now() - gs._hintT0;
-  if (age > HINT_MS) { q.shift(); gs._hintT0 = 0; return; }
+  const i = q.findIndex(h => typeof h === 'string' || !where || h.where === where);
+  if (i < 0) return;                                  // tips for elsewhere wait until you're there
+  if (typeof q[i] === 'string') q[i] = { text: q[i], where };
+  const entry = q[i], text = entry.text;
+  // Count only time actually on screen, so a tip interrupted by leaving gets its full showing later
+  const now = Date.now();
+  if (entry.last && now - entry.last < 250) entry.shown = (entry.shown || 0) + (now - entry.last);
+  entry.last = now;
+  const age = entry.shown || 0;
+  if (age > HINT_MS) { q.splice(i, 1); return; }
   const a = Math.min(1, age / 300, (HINT_MS - age) / 700);
   // wrap
   const perLine = Math.floor((maxW - 20) / 6.2);
   const lines = []; let cur = '';
-  for (const w of q[0].split(' ')) {
+  for (const w of text.split(' ')) {
     if ((cur + ' ' + w).trim().length > perLine) { lines.push(cur); cur = w; } else cur = (cur + ' ' + w).trim();
   }
   if (cur) lines.push(cur);

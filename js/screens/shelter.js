@@ -337,7 +337,7 @@ function renderShelter(ctx, gs) {
   drawNotifications(ctx, gs, 10, 20, false, MAIN_W - 110);
   if (!shelterUI.activeMenu && !gs.dayFade.active) {
     showHint(gs, 'shelter', 'Click a character to give them tasks. Use Cook to cook raw meat, Storage to manage supplies, and build a Workshop to craft and repair weapons.');
-    drawHint(ctx, gs, MAIN_W / 2, CFG.H - 44, 420);
+    drawHint(ctx, gs, MAIN_W / 2, CFG.H - 44, 420, 'shelter');
   }
 
   // Day transition

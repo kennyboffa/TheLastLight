@@ -1081,7 +1081,7 @@ function renderExplore(ctx, gs) {
   drawZoneTitleCard(ctx, es);
   drawExploreHUD(ctx, gs, es);
   if (es.invOpen) drawExploreInventory(ctx, gs, es);
-  if (!es.invOpen) drawHint(ctx, gs, 428, 112, 400);   // top band, clear of the HUD panels and the fight
+  if (!es.invOpen) drawHint(ctx, gs, 428, 112, 400, 'explore');   // top band, clear of the HUD panels and the fight
   if (gs.inCombat && gs.combat && gs.combat.introTimer > 0) _drawCombatBanner(ctx, gs.combat.introTimer, gs.combat);
   // Notifications centered between left HUD panels and right clock to avoid overlap
   drawNotifications(ctx, gs, CFG.W / 2, 14, true);

@@ -1939,73 +1939,70 @@ WALK_ARM = [-2, 0, 2, 0]
 
 
 def human_frame(L, frame):
-    """frame: 0,1 = idle (breathing), 2..5 = walk."""
-    s = Sprite(32, 48)
+    """Three-quarter view like the hand-drawn characters: head turned toward the
+    facing side, body mostly toward the viewer, both arms hanging at the sides,
+    both legs visible. frame 0,1 = idle (breathing), 2..5 = walk. 24x46 (a touch
+    smaller than the 47px player)."""
+    s = Sprite(24, 46)
     walk = frame >= 2
     ph = frame - 2 if walk else 0
-    up = 1 if frame == 1 else 0                         # breathing: upper body dips a pixel
-    bob = 1 if walk and ph in (1, 3) else 0             # head bob on passing steps
-    oy = up + bob
-    skin = _flat(s, L['skin']); skin_d = _flat(s, _shade(L['skin'], 0.82))
-    top = _flat(s, L['top']); top_d = _flat(s, L['top2'])
-    legs = _flat(s, L['legs']); legs_d = _flat(s, _shade(L['legs'], 0.75))
+    oy = (1 if frame == 1 else 0) + (1 if walk and ph in (1, 3) else 0)   # breathing / step bob
+    skin = _flat(s, L['skin']); skin_d = _flat(s, _shade(L['skin'], 0.8))
+    top = _flat(s, L['top']); top_d = _flat(s, L['top2']); top_l = _flat(s, _shade(L['top'], 1.2))
+    legs = _flat(s, L['legs']); legs_d = _flat(s, _shade(L['legs'], 0.72))
     boots = _flat(s, L['boots']); dark = _flat(s, '#141210')
-    hat = _flat(s, L['hat_c']); hair = _flat(s, L['hair']); extra = _flat(s, L['extra_c'])
-    fx, bx = (WALK_FRONT[ph], WALK_BACK[ph]) if walk else (1, -1)
-    hip_y = 27
-    # back leg, then front leg (thigh + shin) and boots
-    for dx, mat in ((bx, legs_d), (fx, legs)):
-        knee = (15 + dx * 0.4 + (1 if mat == legs else 0), 36)
-        foot = (15 + dx + (1 if mat == legs else 0), 44)
-        hip = (15 + (1 if mat == legs else 0), hip_y)
-        s.line([hip, knee], mat, width=3); s.line([knee, foot], mat, width=3)
-        s.rect(int(foot[0]) - 1, 45, int(foot[0]) + 3, 47, boots)
-    # back arm (behind the body)
-    sw = WALK_ARM[ph] if walk else 0
-    s.line([(13, 12 + oy), (13 - sw, 24 + oy)], top_d, width=2)
-    s.rect(12 - sw, 24 + oy, 13 - sw, 25 + oy, skin_d)
-    # torso: lit front edge, shadowed back, shoulder seam
-    s.rect(11, 10 + oy, 19, hip_y, top)
-    s.rect(19, 11 + oy, 19, hip_y - 2, _flat(s, _shade(L['top'], 1.22)))
-    s.rect(11, 11 + oy, 11, hip_y - 2, top_d)
-    s.rect(12, 10 + oy, 18, 10 + oy, top_d)
-    s.rect(11, hip_y - 1, 19, hip_y, dark)              # belt
+    hat = _flat(s, L['hat_c']); hat_d = _flat(s, _shade(L['hat_c'], 0.7)); hair = _flat(s, L['hair'])
+    extra = _flat(s, L['extra_c'])
+    # legs: left (far) and right (near); in the walk one steps forward as the other goes back
+    stride = [2, 0, -2, 0][ph] if walk else 0
+    lift = [0, 1, 0, 1][ph] if walk else 0
+    hip = 25
+    for x0, d, mat, l in ((7, -stride, legs_d, 0), (11, stride, legs, lift)):
+        s.poly([(x0, hip), (x0 + 2, hip), (x0 + 2 + d, 42 - l), (x0 + d, 42 - l)], mat)
+        s.rect(x0 + d, 42 - l, x0 + d + 3, 45 - l, boots)                    # boot, toe toward the facing side
+    # torso: broad shoulders narrowing to the waist
+    s.poly([(5, 9 + oy), (16, 9 + oy), (15, 12 + oy), (14, hip), (7, hip), (6, 12 + oy)], top)
+    s.rect(14, 10 + oy, 14, hip - 1, top_l)                                   # lit near side
+    s.rect(7, 12 + oy, 7, hip - 1, top_d)                                     # shaded far side
+    s.rect(7, hip - 1, 14, hip, dark)                                         # belt
     if L['extra'] == 'vest':
-        s.rect(12, 12 + oy, 19, 24, top_d); s.rect(15, 12 + oy, 16, 24, dark)
+        s.rect(8, 11 + oy, 13, hip - 2, top_d); s.rect(10, 11 + oy, 10, hip - 2, dark)
     if L['extra'] in ('coat', 'robe'):
-        # long coat / robe over the thighs (a robe reaches the ankles, swinging a little)
-        bottom = 43 if L['extra'] == 'robe' else 36
-        sway = (fx - bx) // 3 if walk else 0
-        s.poly([(11, 10 + oy), (19, 10 + oy), (20 + max(0, sway), bottom), (10 + min(0, sway), bottom)], top)
-        s.line([(15, 12 + oy), (15, bottom)], top_d)
+        bottom = 42 if L['extra'] == 'robe' else 34
+        sway = stride // 2
+        s.poly([(6, 12 + oy), (15, 12 + oy), (16 + max(0, sway), bottom), (5 + min(0, sway), bottom)], top)
+        s.line([(10, 12 + oy), (10, bottom)], top_d)
         if L['extra'] == 'robe':
-            s.rect(11, 22, 19, 23, extra)               # sash
-            s.ellipse(14, 14 + oy, 17, 17 + oy, extra)  # sigil
-    # head
-    s.rect(15, 8 + oy, 16, 10 + oy, skin)               # neck
-    s.rect(13, 1 + oy, 19, 8 + oy, skin)                # face block
-    s.rect(19, 4 + oy, 20, 5 + oy, skin)                # nose
-    s.px(18, 3 + oy, dark)                              # eye
-    s.rect(13, 1 + oy, 14, 7 + oy, hair)                # back of the head
+            s.rect(7, 21, 14, 22, extra)                                      # sash
+            s.ellipse(9, 13 + oy, 12, 16 + oy, extra)                         # sigil
+    # arms hang at both sides and swing a little when walking; hands show skin
+    sw = [-1, 0, 1, 0][ph] if walk else 0
+    s.rect(5, 10 + oy, 5, 22 + oy, top_d); s.rect(5 - sw, 22 + oy, 5 - sw, 24 + oy, skin_d)    # far arm
+    s.rect(15, 10 + oy, 16, 22 + oy, top); s.rect(15 + sw, 22 + oy, 16 + sw, 24 + oy, skin)    # near arm
+    hand = (16 + sw, 24 + oy)
+    # neck and head, turned toward the facing side
+    s.rect(10, 7 + oy, 12, 9 + oy, skin)
+    s.rect(9, 1 + oy, 14, 7 + oy, skin)                                       # face
+    s.rect(15, 3 + oy, 15, 4 + oy, skin)                                      # nose
+    s.px(13, 3 + oy, dark)                                                    # eye
     h = L['hat']
+    if h != 'bald':
+        s.rect(8, 0 + oy, 10, 5 + oy, hair); s.rect(8, 0 + oy, 14, 1 + oy, hair)  # hair framing the back
     if h == 'hood':
-        s.poly([(11, 9 + oy), (12, 0 + oy), (18, -1 + oy), (19, 2 + oy), (15, 2 + oy), (14, 9 + oy)], hat)
+        s.poly([(6, 9 + oy), (7, 0 + oy), (13, -1 + oy), (15, 1 + oy), (11, 1 + oy), (10, 8 + oy)], hat)
+        s.line([(7, 2 + oy), (7, 8 + oy)], hat_d)
     elif h == 'cap':
-        s.rect(12, 0 + oy, 19, 2 + oy, hat); s.rect(19, 2 + oy, 22, 2 + oy, hat)
+        s.rect(8, -1 + oy, 14, 1 + oy, hat); s.rect(14, 1 + oy, 17, 1 + oy, hat)
     elif h == 'beanie':
-        s.ellipse(12, -1 + oy, 19, 4 + oy, hat); s.rect(12, 2 + oy, 19, 3 + oy, _flat(s, _shade(L['hat_c'], 0.7)))
+        s.ellipse(7, -2 + oy, 14, 3 + oy, hat); s.rect(7, 1 + oy, 14, 2 + oy, hat_d)
     elif h == 'beret':
-        s.ellipse(12, -1 + oy, 20, 3 + oy, hat); s.rect(14, 6 + oy, 19, 8 + oy, hair)   # beard
+        s.ellipse(7, -2 + oy, 15, 2 + oy, hat); s.rect(10, 5 + oy, 14, 7 + oy, hair)    # beard
     elif h == 'bald':
-        s.rect(13, 1 + oy, 14, 3 + oy, skin_d); s.px(15, 1 + oy, dark)
+        s.rect(9, 0 + oy, 13, 0 + oy, skin_d); s.px(10, 2 + oy, extra)        # shaved, a painted mark
     if L['extra'] == 'bandana':
-        s.rect(15, 6 + oy, 20, 8 + oy, extra)
-    # front arm and hand (weapon is drawn at the hand by the game)
-    hand = (17 + sw, 24 + oy)
-    s.line([(17, 12 + oy), (17 + sw // 2, 19 + oy), hand], top, width=2)
-    s.rect(hand[0], hand[1], hand[0] + 1, hand[1] + 1, skin)
-    s.shade_gradient('x', 0.1)
-    return s.finish(outline=0.22, grain_scale=0.6), (hand[0], hand[1] + 1)
+        s.rect(11, 5 + oy, 15, 7 + oy, extra)
+    s.shade_gradient('x', 0.08)
+    return s.finish(outline=0.18, grain_scale=0.6), hand
 
 
 def _shade(hexc, k):

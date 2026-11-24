@@ -1206,6 +1206,11 @@ function renderOutdoor(ctx, gs, es) {
     }
   }
 
+  // Paper scraps blowing through built-up areas
+  if (typeof drawPaperScraps === 'function' && es.location.id !== 'forest') {
+    drawPaperScraps(ctx, es, es.scrollX, viewW(es), GROUND_Y);
+  }
+
   // Crows on the ground and overhead (harmless, scatter when you come close)
   if (typeof drawOutdoorCritters === 'function') {
     drawOutdoorCritters(ctx, es, gs.inCombat && gs.combat ? gs.combat.playerWx : es.px, GROUND_Y, es.scrollX, viewW(es), !!gs.inCombat);
@@ -1243,7 +1248,7 @@ function drawExploreActors(ctx, gs, es, o) {
   const _now = Date.now();
   for (const cp of es.corpses) {
     if ((cp.where || 'out') !== o.where) continue;
-    _drawCorpse(ctx, cp.x, cp.sprite, cp.dir, cp.t0, cp.weapon, _now);
+    _drawCorpse(ctx, cp.x, cp.sprite, cp.dir, cp.t0, cp.weapon, _now, cp.look);
     if (!gs.inCombat && cp.loot && cp.loot.length && Math.abs(o.px - cp.x) < 28) {
       drawText(ctx, '[E] Search body', cp.x, GROUND_Y - 22, C.textBright, 7, 'center');
     }
@@ -1251,13 +1256,20 @@ function drawExploreActors(ctx, gs, es, o) {
 
   if (gs.inCombat && gs.combat) {
     for (const en of gs.combat.enemies) {
-      const enFacing = gs.combat.playerWx >= en.worldX ? 1 : -1;
+      // Glide between tiles (walk cycle plays while moving)
+      const _pn = performance.now();
+      if (en._drawX === undefined) en._drawX = en.worldX;
+      const _dtv = Math.min(0.1, (_pn - (en._drawT || _pn)) / 1000); en._drawT = _pn;
+      en._drawX += (en.worldX - en._drawX) * Math.min(1, _dtv * 6);
+      if (Math.abs(en.worldX - en._drawX) < 0.4) en._drawX = en.worldX;
+      const walking = Math.abs(en.worldX - en._drawX) > 0.6;
+      const enFacing = walking ? (en.worldX > en._drawX ? 1 : -1) : (gs.combat.playerWx >= en.worldX ? 1 : -1);
       if (en.dead && en._deathT0) {
-        _drawCorpse(ctx, en.worldX, en.sprite, en._deathDir || -enFacing, en._deathT0, enemyWeaponId(en), _now);
+        _drawCorpse(ctx, en.worldX, en.sprite, en._deathDir || -enFacing, en._deathT0, enemyWeaponId(en), _now, enemyLookFor(en.id, en.sprite));
         continue;
       }
-      const _ex = en.worldX + _hitOffset(en._hitT0, en._hitDir || -enFacing);
-      _drawWorldEnemy(ctx, _ex, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing);
+      const _ex = en._drawX + _hitOffset(en._hitT0, en._hitDir || -enFacing);
+      _drawWorldEnemy(ctx, _ex, GROUND_Y, en.sprite, { id: enemyWeaponId(en), t0: en._atkT0 }, enFacing, { id: en.id, walking });
       if (en.dead) continue;
       drawStatBar(ctx, en.worldX - 22, GROUND_Y - 52, 44, 5,
         en.hp, en.maxHp, (en.hp / en.maxHp) > 0.5 ? '#aa2222' : '#dd1010');
@@ -1274,10 +1286,12 @@ function drawExploreActors(ctx, gs, es, o) {
       if (enc.triggered || enc.killed) continue;
       // Patrol oscillation (visual only — detection still uses enc.wx)
       const patrolWx = enc.wx + Math.sin(_now / 1400 + i * 2.1) * o.patrolAmp;
+      const pv = Math.cos(_now / 1400 + i * 2.1);            // patrol velocity: walks, pauses at the turn
       const weapon = enc.ids ? enemyWeaponId({ id: enc.ids[0], index: 0 }) : 'pipe';
       ctx.save();
       ctx.globalAlpha = 0.82;
-      _drawWorldEnemy(ctx, patrolWx, GROUND_Y, enc.previewSprite || 'human_hostile', { id: weapon });
+      _drawWorldEnemy(ctx, patrolWx, GROUND_Y, enc.previewSprite || 'human_hostile', { id: weapon }, pv >= 0 ? 1 : -1,
+                      { id: enc.ids && enc.ids[0], walking: Math.abs(pv) > 0.3 });
       ctx.restore();
     }
   }
@@ -2167,14 +2181,14 @@ function archiveCorpses(gs, c) {
   if (!es || !c) return;
   for (const en of c.enemies) {
     if (!en.dead) continue;
-    es.corpses.push({ x: en.worldX, sprite: en.sprite, dir: en._deathDir || 1,
+    es.corpses.push({ x: en.worldX, sprite: en.sprite, look: enemyLookFor(en.id, en.sprite), dir: en._deathDir || 1,
                       t0: en._deathT0 || 0, weapon: enemyWeaponId(en), where: areaKey(es),
                       loot: en._loot || [], name: en.name });
   }
 }
 
 // Draw one fallen body (k = 0..1 through the fall). `dir` is the direction it falls.
-function _drawCorpse(ctx, x, sprite, dir, t0, weapon, now) {
+function _drawCorpse(ctx, x, sprite, dir, t0, weapon, now, look) {
   const k = t0 ? Math.min(1, Math.max(0, (now - t0) / FX_FALL_MS)) : 1;
   const e = 1 - (1 - k) * (1 - k);                      // ease-out
   const facing = -dir;                                   // was facing its attacker
@@ -2196,18 +2210,19 @@ function _drawCorpse(ctx, x, sprite, dir, t0, weapon, now) {
     const yy = GROUND_Y - 28 + e * 20;
     ctx.translate(x, yy);
     ctx.rotate(dir * e * 0.5);
-    drawDroneSprite(ctx, 0, 0, 2, 0);
+    if (!drawEnemyAnimated(ctx, 'drone', 0, 28, 1, false, null, 0)) drawDroneSprite(ctx, 0, 0, 2, 0);
   } else if (sprite === 'wolf') {
     ctx.translate(x, GROUND_Y);
     ctx.scale(1, 1 - 0.45 * e);                           // slumps onto its side
     ctx.rotate(dir * e * 0.15);
-    drawWolfSprite(ctx, 0, 0, 2, facing, 0);
+    if (!drawEnemyAnimated(ctx, look || 'wolf', 0, 0, facing, false, null, 0)) drawWolfSprite(ctx, 0, 0, 2, facing, 0);
   } else {
     // people and robots topple backwards, pivoting on their feet
     const lift = (sprite === 'robot' ? 17 : 10) * e;
     ctx.translate(x, GROUND_Y - lift);
     ctx.rotate(dir * e * Math.PI / 2);
-    if (sprite === 'robot') drawRobotSprite(ctx, 0, 0, 2, facing);
+    if (look && drawEnemyAnimated(ctx, look, 0, 0, facing, false, null, 0)) { /* drawn */ }
+    else if (sprite === 'robot') drawRobotSprite(ctx, 0, 0, 2, facing);
     else drawHumanEnemy(ctx, 0, 0, 2, facing, 0, null);
   }
   ctx.restore();
@@ -2346,13 +2361,16 @@ function enemyWeaponId(en) {
   return list[(en.index || 0) % list.length];   // stable per enemy, varied within a group
 }
 
-function _drawWorldEnemy(ctx, wx, groundY, sprite, weapon, facing) {
+function _drawWorldEnemy(ctx, wx, groundY, sprite, weapon, facing, opts) {
   const frame = Math.floor(Date.now() / 300) % 2;
   const f = facing || -1;
   if (sprite && sprite.startsWith('trader_') && typeof TRADERS !== 'undefined') {
     const t = TRADERS[sprite.slice(7)];
     if (t && drawCharSprite(ctx, t.sprite, wx, groundY, 2, f, 48, weapon || { id: t.weapon })) return;
   }
+  // Animated sheet in the hand-drawn characters' style
+  const look = enemyLookFor(opts && opts.id, sprite);
+  if (drawEnemyAnimated(ctx, look, wx, groundY, f, !!(opts && opts.walking), weapon)) return;
   switch (sprite) {
     case 'drone':
     case 'drone_heavy': drawDroneSprite(ctx, wx, groundY - 28, 2, frame); break;
@@ -2404,7 +2422,8 @@ function drawExploreTent(ctx, cx, groundY, w, h, label) {
 function drawExploreTree(ctx, x, groundY) {
   const v = _envVariant(x, 3);
   const key = ['tree_1','tree_2','tree_3'][v];
-  if (drawEnvSprite(ctx, key, x, groundY, 52, 90)) return;
+  // about two in three trees catch the wind noticeably
+  if (drawEnvSpriteSway(ctx, key, x, groundY, _envVariant(x * 3, 3) ? 3 : 1, x)) return;
   // Fallback procedural
   fillRect(ctx, x - 3, groundY - 30, 6, 30, '#3a2810');
   ctx.fillStyle = '#18380e';
@@ -2416,7 +2435,7 @@ function drawExploreTree(ctx, x, groundY) {
 }
 
 function drawExploreBush(ctx, x, groundY) {
-  if (drawEnvSprite(ctx, 'bush', x, groundY, 46, 30)) return;
+  if (drawEnvSpriteSway(ctx, 'bush', x, groundY, 3, x)) return;
   ctx.save();
   ctx.fillStyle = '#1a3a0e';
   ctx.beginPath();
@@ -2433,7 +2452,7 @@ function drawExploreBush(ctx, x, groundY) {
 
 function drawExploreGrass(ctx, x, groundY) {
   const key = _envVariant(x, 2) === 0 ? 'grass_1' : 'grass_2';
-  if (drawEnvSprite(ctx, key, x, groundY, 50, 18)) return;
+  if (drawEnvSpriteSway(ctx, key, x, groundY, 2.5, x)) return;
   ctx.save();
   ctx.strokeStyle = '#1e3a10';
   ctx.lineWidth = 1;
@@ -2462,7 +2481,7 @@ function drawExploreBones(ctx, x, groundY) {
 }
 
 function drawExploreTallTree(ctx, x, groundY) {
-  if (drawEnvSprite(ctx, 'large_tree', x, groundY, 58, 130)) return;
+  if (drawEnvSpriteSway(ctx, 'large_tree', x, groundY, 4, x)) return;
   fillRect(ctx, x - 3, groundY - 50, 6, 50, '#221508');
   ctx.fillStyle = '#0a1e06';
   ctx.beginPath(); ctx.moveTo(x, groundY-128); ctx.lineTo(x-10, groundY-96); ctx.lineTo(x+10, groundY-96); ctx.closePath(); ctx.fill();
@@ -2475,7 +2494,7 @@ function drawExploreTallTree(ctx, x, groundY) {
 }
 
 function drawExploreDeadTree(ctx, x, groundY) {
-  if (drawEnvSprite(ctx, 'dead_tree', x, groundY, 54, 115)) return;
+  if (drawEnvSpriteSway(ctx, 'dead_tree', x, groundY, 2, x)) return;
   fillRect(ctx, x - 3, groundY - 55, 6, 55, '#1e1208');
   ctx.save();
   ctx.strokeStyle = '#221408'; ctx.lineWidth = 2;
@@ -2485,7 +2504,7 @@ function drawExploreDeadTree(ctx, x, groundY) {
 }
 
 function drawExploreWideBush(ctx, x, groundY) {
-  if (drawEnvSprite(ctx, 'bush_berry', x, groundY, 60, 32)) return;
+  if (drawEnvSpriteSway(ctx, 'bush_berry', x, groundY, 3, x)) return;
   ctx.save();
   ctx.fillStyle = '#0e2008';
   ctx.beginPath();

@@ -179,3 +179,45 @@ function drawOutdoorCritters(ctx, es, playerX, groundY, viewLeft, viewW, inComba
   }
   es._skyBirds = es._skyBirds.filter(b => b.life < 40 && b.x > viewLeft - 200 && b.x < viewLeft + viewW + 200);
 }
+
+// ── Paper scraps (built-up areas) ────────────────────────────────────────────
+// Litter that lies in the street and lifts into the air when a gust comes.
+
+function _spawnPapers(worldW) {
+  const out = [];
+  for (let i = 0; i < 26; i++) {
+    out.push({ x: 60 + Math.random() * (worldW - 120), y: 0, vx: 0, vy: 0, state: 'rest',
+               flip: Math.random() * 6, shade: Math.random() < 0.3 ? '#a8a290' : '#d2cbb6' });
+  }
+  return out;
+}
+
+function drawPaperScraps(ctx, es, viewLeft, viewW, groundY) {
+  if (!es._papers) es._papers = _spawnPapers(CFG.WORLD_W);
+  if (!es._paperClock) es._paperClock = performance.now();
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - es._paperClock) / 1000);
+  es._paperClock = now;
+  const { g } = windNow();
+  for (const p of es._papers) {
+    if (p.state === 'rest') {
+      if (g > 0.45 && Math.random() < dt * g * 0.6) {           // a gust picks it up
+        p.state = 'fly'; p.vx = 30 + Math.random() * 45; p.vy = -(25 + Math.random() * 35);
+      }
+    } else {
+      p.flip += dt * (6 + g * 8);
+      p.vx += (g * 70 - p.vx) * dt * 0.8;                       // carried along by the wind
+      p.vy += (18 - g * 22) * dt + Math.sin(p.flip * 1.7) * dt * 30;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.y >= 0) { p.y = 0; p.vy = 0; if (g < 0.5 || Math.random() < 0.3) p.state = 'rest'; else p.vy = -15 - Math.random() * 20; }
+      if (p.y < -160) p.vy = Math.abs(p.vy) * 0.3;
+      if (p.x > CFG.WORLD_W - 20) p.x = 20;                      // drifts back in from the far end
+    }
+    if (p.x < viewLeft - 10 || p.x > viewLeft + viewW + 10) continue;
+    const edge = p.state === 'fly' && Math.floor(p.flip) % 2;   // tumbling: flat, then edge-on
+    ctx.fillStyle = p.shade;
+    const x = Math.round(p.x), y = Math.round(groundY - 1 + p.y);
+    if (edge) ctx.fillRect(x, y - 3, 1, 4);
+    else { ctx.fillRect(x - 2, y - 2, 6, 3); ctx.fillStyle = '#8a8474'; ctx.fillRect(x - 1, y, 4, 1); ctx.fillRect(x + 2, y - 2, 1, 1); }
+  }
+}

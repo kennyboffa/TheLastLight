@@ -1916,6 +1916,204 @@ def surf_raincatcher():
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# Animated enemies in the style of the hand-drawn characters: clean flat
+# colours, light shading, slim side-view figures. Each sheet is a strip of
+# frames: idle0, idle1, walk0..walk3. Hand positions per frame go to
+# js/data/enemy_art.js so held weapons follow the animation.
+# ════════════════════════════════════════════════════════════════════════════
+
+def _flat(s, color):
+    return s.material(color, 3, 0.0)
+
+
+HUMAN_LOOKS = {
+    'raider':  dict(skin='#d8a07a', hat='hood',   hat_c='#4a4a32', top='#5a4030', top2='#46321f', legs='#3a3a38', boots='#1e1a16', extra='bandana', extra_c='#8a2a22', hair='#2a1c14'),
+    'armed':   dict(skin='#c08a64', hat='cap',    hat_c='#22262a', top='#2e3436', top2='#8a7a52', legs='#4a4e36', boots='#1a1a18', extra='vest',    extra_c='#8a7a52', hair='#1a1410'),
+    'bandit':  dict(skin='#e4b490', hat='beanie', hat_c='#5a2a2a', top='#4a3a2e', top2='#3a2c22', legs='#3a4a6a', boots='#2a2018', extra='coat',    extra_c='#4a3a2e', hair='#6a4a2a'),
+    'cultist': dict(skin='#d8a888', hat='bald',   hat_c='#d8a888', top='#8a8a80', top2='#6e6e66', legs='#8a8a80', boots='#2a2622', extra='robe',    extra_c='#a03a2a', hair='#3a2a20'),
+    'chief':   dict(skin='#a87050', hat='beret',  hat_c='#8a2222', top='#2a2a2e', top2='#1e1e22', legs='#2e2e30', boots='#141414', extra='coat',    extra_c='#2a2a2e', hair='#1a1410'),
+}
+WALK_FRONT = [4, 1, -3, 1]     # foot offsets (px) through the walk cycle
+WALK_BACK = [-3, 0, 4, 0]
+WALK_ARM = [-2, 0, 2, 0]
+
+
+def human_frame(L, frame):
+    """frame: 0,1 = idle (breathing), 2..5 = walk."""
+    s = Sprite(32, 48)
+    walk = frame >= 2
+    ph = frame - 2 if walk else 0
+    up = 1 if frame == 1 else 0                         # breathing: upper body dips a pixel
+    bob = 1 if walk and ph in (1, 3) else 0             # head bob on passing steps
+    oy = up + bob
+    skin = _flat(s, L['skin']); skin_d = _flat(s, _shade(L['skin'], 0.82))
+    top = _flat(s, L['top']); top_d = _flat(s, L['top2'])
+    legs = _flat(s, L['legs']); legs_d = _flat(s, _shade(L['legs'], 0.75))
+    boots = _flat(s, L['boots']); dark = _flat(s, '#141210')
+    hat = _flat(s, L['hat_c']); hair = _flat(s, L['hair']); extra = _flat(s, L['extra_c'])
+    fx, bx = (WALK_FRONT[ph], WALK_BACK[ph]) if walk else (1, -1)
+    hip_y = 27
+    # back leg, then front leg (thigh + shin) and boots
+    for dx, mat in ((bx, legs_d), (fx, legs)):
+        knee = (15 + dx * 0.4 + (1 if mat == legs else 0), 36)
+        foot = (15 + dx + (1 if mat == legs else 0), 44)
+        hip = (15 + (1 if mat == legs else 0), hip_y)
+        s.line([hip, knee], mat, width=3); s.line([knee, foot], mat, width=3)
+        s.rect(int(foot[0]) - 1, 45, int(foot[0]) + 3, 47, boots)
+    # back arm (behind the body)
+    sw = WALK_ARM[ph] if walk else 0
+    s.line([(13, 12 + oy), (13 - sw, 24 + oy)], top_d, width=2)
+    s.rect(12 - sw, 24 + oy, 13 - sw, 25 + oy, skin_d)
+    # torso: lit front edge, shadowed back, shoulder seam
+    s.rect(11, 10 + oy, 19, hip_y, top)
+    s.rect(19, 11 + oy, 19, hip_y - 2, _flat(s, _shade(L['top'], 1.22)))
+    s.rect(11, 11 + oy, 11, hip_y - 2, top_d)
+    s.rect(12, 10 + oy, 18, 10 + oy, top_d)
+    s.rect(11, hip_y - 1, 19, hip_y, dark)              # belt
+    if L['extra'] == 'vest':
+        s.rect(12, 12 + oy, 19, 24, top_d); s.rect(15, 12 + oy, 16, 24, dark)
+    if L['extra'] in ('coat', 'robe'):
+        # long coat / robe over the thighs (a robe reaches the ankles, swinging a little)
+        bottom = 43 if L['extra'] == 'robe' else 36
+        sway = (fx - bx) // 3 if walk else 0
+        s.poly([(11, 10 + oy), (19, 10 + oy), (20 + max(0, sway), bottom), (10 + min(0, sway), bottom)], top)
+        s.line([(15, 12 + oy), (15, bottom)], top_d)
+        if L['extra'] == 'robe':
+            s.rect(11, 22, 19, 23, extra)               # sash
+            s.ellipse(14, 14 + oy, 17, 17 + oy, extra)  # sigil
+    # head
+    s.rect(15, 8 + oy, 16, 10 + oy, skin)               # neck
+    s.rect(13, 1 + oy, 19, 8 + oy, skin)                # face block
+    s.rect(19, 4 + oy, 20, 5 + oy, skin)                # nose
+    s.px(18, 3 + oy, dark)                              # eye
+    s.rect(13, 1 + oy, 14, 7 + oy, hair)                # back of the head
+    h = L['hat']
+    if h == 'hood':
+        s.poly([(11, 9 + oy), (12, 0 + oy), (18, -1 + oy), (19, 2 + oy), (15, 2 + oy), (14, 9 + oy)], hat)
+    elif h == 'cap':
+        s.rect(12, 0 + oy, 19, 2 + oy, hat); s.rect(19, 2 + oy, 22, 2 + oy, hat)
+    elif h == 'beanie':
+        s.ellipse(12, -1 + oy, 19, 4 + oy, hat); s.rect(12, 2 + oy, 19, 3 + oy, _flat(s, _shade(L['hat_c'], 0.7)))
+    elif h == 'beret':
+        s.ellipse(12, -1 + oy, 20, 3 + oy, hat); s.rect(14, 6 + oy, 19, 8 + oy, hair)   # beard
+    elif h == 'bald':
+        s.rect(13, 1 + oy, 14, 3 + oy, skin_d); s.px(15, 1 + oy, dark)
+    if L['extra'] == 'bandana':
+        s.rect(15, 6 + oy, 20, 8 + oy, extra)
+    # front arm and hand (weapon is drawn at the hand by the game)
+    hand = (17 + sw, 24 + oy)
+    s.line([(17, 12 + oy), (17 + sw // 2, 19 + oy), hand], top, width=2)
+    s.rect(hand[0], hand[1], hand[0] + 1, hand[1] + 1, skin)
+    s.shade_gradient('x', 0.1)
+    return s.finish(outline=0.22, grain_scale=0.6), (hand[0], hand[1] + 1)
+
+
+def _shade(hexc, k):
+    r, g, b = (int(hexc[i:i + 2], 16) for i in (1, 3, 5))
+    return '#%02x%02x%02x' % (int(r * k), int(g * k), int(b * k))
+
+
+def robot_frame(frame):
+    s = Sprite(36, 54)
+    walk = frame >= 2
+    ph = frame - 2 if walk else 0
+    plate = _flat(s, '#5a6672'); plate_d = _flat(s, '#424c56'); joint = _flat(s, '#2c3238')
+    visor = _flat(s, '#1a1e22'); eye = _flat(s, '#e8742a' if frame != 1 else '#ffa05a'); rust = _flat(s, '#7a4e30')
+    lift = [(2, 0), (0, 0), (0, 2), (0, 0)][ph] if walk else (0, 0)
+    sway = [1, 0, -1, 0][ph] if walk else 0
+    # legs (back one darker), each lifts in turn
+    for x0, l, mat in ((19, lift[1], plate_d), (9, lift[0], plate)):
+        s.rect(x0, 36 - l, x0 + 6, 49 - l, mat); s.rect(x0 + 1, 41 - l, x0 + 5, 43 - l, joint)
+        s.rect(x0 - 1, 49 - l, x0 + 8, 53 - l, joint)
+    # body
+    s.rect(8, 32, 27, 37, joint)
+    s.poly([(5 + sway, 12), (30 + sway, 12), (28 + sway, 33), (7 + sway, 33)], plate)
+    s.rect(11 + sway, 17, 24 + sway, 27, plate_d)
+    for y in range(18, 27, 2):
+        s.rect(12 + sway, y, 23 + sway, y, joint)
+    s.rect(7 + sway, 29, 12 + sway, 32, rust)
+    # arms swing opposite the legs
+    a = [2, 0, -2, 0][ph] if walk else 0
+    s.rect(0 + sway, 13 + a, 4 + sway, 30 + a, plate_d); s.rect(0 + sway, 30 + a, 4 + sway, 35 + a, joint)
+    s.rect(31 + sway, 13 - a, 35 + sway, 30 - a, plate); s.rect(31 + sway, 30 - a, 35 + sway, 35 - a, joint)
+    # head with visor
+    s.rect(11 + sway, 2, 25 + sway, 11, plate); s.rect(13 + sway, 5, 25 + sway, 8, visor)
+    s.rect(19 + sway, 6, 24 + sway, 7, eye); s.rect(17 + sway, 0, 18 + sway, 2, joint)
+    s.shade_gradient('x', 0.12)
+    return s.finish(outline=0.3, grain_scale=0.6), None
+
+
+def drone_frame(frame):
+    s = Sprite(36, 20)
+    body = _flat(s, '#4a5460'); dark = _flat(s, '#22262c'); rotor = _flat(s, '#8a929a')
+    lens = _flat(s, '#e05a2a'); led = _flat(s, '#ff3a2a' if frame == 0 else '#5a1a14')
+    s.rect(3, 5, 32, 5, dark)
+    w = [6, 3, 5][frame % 3]                     # rotor blur changes width as it spins
+    s.rect(5 - w, 3, 5 + w, 3, rotor); s.rect(30 - w, 3, 30 + w, 3, rotor)
+    s.rect(4, 4, 6, 6, dark); s.rect(29, 4, 31, 6, dark)
+    s.ellipse(9, 5, 27, 16, body); s.rect(12, 14, 24, 16, dark)
+    s.line([(15, 16), (12, 19)], dark); s.line([(21, 16), (24, 19)], dark)
+    s.ellipse(20, 8, 26, 14, dark); s.ellipse(21, 9, 25, 13, lens); s.px(12, 8, led)
+    s.shade_gradient('y', 0.15)
+    return s.finish(outline=0.3, grain_scale=0.6), None
+
+
+def quad_frame(frame, fur, belly, dark_c, w=37, h=24, dog=False):
+    s = Sprite(w, h)
+    f = _flat(s, fur); b = _flat(s, belly); d = _flat(s, dark_c); fd = _flat(s, _shade(fur, 0.78)); eye = _flat(s, '#e0b040' if not dog else '#2a1a10')
+    walk = frame >= 2
+    ph = frame - 2 if walk else 0
+    gy = h - 1
+    sc = w / 37.0
+    X = lambda v: int(round(v * sc))
+    # legs: pairs move opposite (trot)
+    off = [3, 0, -3, 0][ph] if walk else 0
+    legs = [(X(7), -off, fd), (X(25), off, fd), (X(10), off, f), (X(28), -off, f)]
+    for x0, o, mat in legs:
+        s.line([(x0, X(13)), (x0 + o, gy - 1)], mat, width=2)
+        s.rect(x0 + o, gy - 1, x0 + o + 2, gy, d)
+    breath = 1 if frame == 1 else 0
+    s.ellipse(X(5), X(6) + breath, X(30), X(15), f)
+    s.ellipse(X(10), X(10) + breath, X(26), X(15), b)
+    tail = [0, 1, 0, -1][ph] if walk else breath
+    s.poly([(X(6), X(9)), (X(0), X(12) + tail), (X(1), X(15) + tail), (X(7), X(12))], f)
+    s.poly([(X(25), X(7)), (X(31), X(2)), (X(34), X(6)), (X(30), X(12))], f)       # neck / head
+    s.poly([(X(31), X(3)), (X(37) - 1, X(7)), (X(36), X(10)), (X(31), X(9))], b if dog else f)   # snout
+    s.px(X(36) - 1, X(7), d)
+    s.poly([(X(28), 0), (X(31), X(4)), (X(27), X(4))], d if dog else f)             # ear
+    s.px(X(32), X(4), eye)
+    s.shade_gradient('y', 0.15)
+    return s.finish(outline=0.25, grain_scale=0.6), None
+
+
+def enemy_sheets():
+    """Write Assets/en_*.png strips and js/data/enemy_art.js (frame sizes + hands)."""
+    import json
+    meta = {}
+    def strip(name, frames):
+        imgs = [f[0] for f in frames]
+        fw, fh = imgs[0].size
+        sheet = Image.new('RGBA', (fw * len(imgs), fh), (0, 0, 0, 0))
+        for i, im in enumerate(imgs):
+            sheet.paste(im, (i * fw, 0))
+        save(sheet, f'en_{name}.png')
+        meta[name] = {'fw': fw, 'fh': fh, 'n': len(imgs), 'hand': [list(f[1]) if f[1] else None for f in frames]}
+    for name, L in HUMAN_LOOKS.items():
+        strip(name, [human_frame(L, i) for i in range(6)])
+    strip('robot', [robot_frame(i) for i in range(6)])
+    strip('drone', [drone_frame(i) for i in range(3)])
+    strip('wolf', [quad_frame(i, '#6e665e', '#9a9286', '#2a2420') for i in range(6)])
+    strip('dog', [quad_frame(i, '#8a5a32', '#b88a5a', '#2a1a10', 30, 20, dog=True) for i in range(6)])
+    js = ('// enemy_art.js — generated by tools/gen_art.py (enemy_sheets). Frame sizes and\n'
+          '// the front-hand position per frame for each animated enemy sheet.\n'
+          "'use strict';\nconst ENEMY_ART = " + json.dumps(meta) + ';\n')
+    with open(os.path.join(os.path.dirname(OUT), 'js', 'data', 'enemy_art.js'), 'w') as fh:
+        fh.write(js)
+    print('wrote js/data/enemy_art.js')
+    return Image.new('RGBA', (1, 1))
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # Parallax background layers (tile horizontally: width = 736, shapes wrap)
 # and ground strips. Kept low-contrast so the playfield stays readable.
 # ════════════════════════════════════════════════════════════════════════════
@@ -2219,6 +2417,8 @@ if __name__ == '__main__':
         'item_rope.png': it_rope,
     })
     jobs.update({'surf_raincatcher.png': surf_raincatcher})
+    if not only or 'enemies' in only:
+        enemy_sheets()
     jobs.update({'map_world.png': world_map,
                  'item_bike_wheels.png': lambda: it_bike_part('wheels'), 'item_bike_frame.png': lambda: it_bike_part('frame'),
                  'item_bike_chain.png': lambda: it_bike_part('chain'), 'item_bike_handlebars.png': lambda: it_bike_part('handlebars'),

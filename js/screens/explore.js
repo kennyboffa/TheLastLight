@@ -734,8 +734,8 @@ function exploreKeyPress(key, gs) {
   if (key === 'l') { toggleFlashlight(gs); return; }
   if (key === 'escape') {
     if (es.building) notify('Find the exit door to leave the building.', 'info');
-    else if (es.showReturnPrompt) endExploration(gs);
-    else notify('Move to the edge of the area to return home.', 'info');
+    else if (es.showReturnPrompt) leaveAreaPrompt(gs);
+    else notify('Move to the edge of the area to leave it.', 'info');
   }
 }
 
@@ -787,7 +787,7 @@ function interactOutdoor(gs) {
     return;
   }
 
-  if (es.showReturnPrompt) endExploration(gs);
+  if (es.showReturnPrompt) leaveAreaPrompt(gs);
 }
 
 function interactBuilding(gs) {
@@ -1026,7 +1026,7 @@ function exploreClick(mx, my, gs) {
   if (es.showReturnPrompt && !es.building) {
     const _rb = _returnBtnRect(gs);
     if (hitTest(mx, my, _rb.x, _rb.y, _rb.w, _rb.h)) {
-      endExploration(gs);
+      leaveAreaPrompt(gs);
       return;
     }
   }
@@ -1553,7 +1553,7 @@ function drawExploreHUD(ctx, gs, es) {
   // Return Home button — only visible at the area edges, not inside a building
   if (es.showReturnPrompt && !es.building && !gs.inCombat) {
     const rb = _returnBtnRect(gs);
-    drawButton(ctx, rb.x, rb.y, rb.w, rb.h, 'Return Home', hitTest(mx, my, rb.x, rb.y, rb.w, rb.h));
+    drawButton(ctx, rb.x, rb.y, rb.w, rb.h, 'Leave area', hitTest(mx, my, rb.x, rb.y, rb.w, rb.h));
   }
 
   // ── Combat overlay HUD (replaces D-pad when in combat) ───────────────────────
@@ -1649,7 +1649,7 @@ function genericBuildingStyle(loc, zone) {
 function _exploreHints(gs) {
   const es = exploreState;
   if (!es || (gs.screenFade && gs.screenFade.active) || gs.isRaid) return;
-  showHint(gs, 'move', 'A/D or arrows walk. E interacts (search, doors, stairs). C sneaks, L toggles a flashlight, INV opens your bag. Walk to either edge to go home.');
+  showHint(gs, 'move', 'A/D or arrows walk. E interacts (search, doors, stairs). C sneaks, L toggles a flashlight, INV opens your bag. Walk to either edge of the area to leave it: go home or travel on.');
   if (gs.inCombat) {
     showHint(gs, 'combat', 'Combat: A/D move (1 AP), Space attacks (ends turn), I uses an item, Enter ends your turn. Flee needs distance and 2 AP. Your hit chance shows on the Attack button.');
     return;
@@ -2897,11 +2897,37 @@ function handleMapPickup(mapId, gs) {
 
 // ── End exploration ───────────────────────────────────────────────────────────
 
-function endExploration(gs) {
+/** Leaving an area on purpose: go home, go somewhere else, or stay. */
+function leaveAreaPrompt(gs) {
   const es = exploreState;
   if (!es) return;
+  const loc = es.location;
+  const home = typeof travelMinutes === 'function' ? travelMinutes(gs, loc.id) : 60;
+  gs.event = {
+    id: 'leave_area', type: 'event', title: `Leaving ${loc.name}`,
+    text: `It's ${fmtClock(gs.time)}. Home is ${fmtDuration(home)} away${gs.time + home > CFG.DAY_END - 60 ? ', and it will be dark when you get there' : ''}. Where to?`,
+    choices: [
+      { label: `Head home (${fmtDuration(home)})`, action: g => { endExploration(g); return null; } },
+      { label: 'Go somewhere else (open the map)', action: g => { openOnwardMap(g); return null; } },
+      { label: 'Stay and keep exploring here', action: () => null },
+    ],
+  };
+  gs.screen = 'event'; gs._returnTo = 'explore'; eventUI.openLockFrames = 3;
+}
 
-  // Save location state for persistence (random areas never persist)
+/** The world map, measured from where you are, to travel straight on. */
+function openOnwardMap(gs) {
+  const es = exploreState;
+  if (!es) return;
+  saveLocationState(gs, es);
+  mapUI.from = es.location.id;
+  mapUI.selected = null;
+  gs.keys = {};
+  gs.screen = 'exploreSelect';
+}
+
+/** Remember what was searched, taken and killed here (random areas never persist). */
+function saveLocationState(gs, es) {
   const _RANDOM_AREAS = ['forest', 'factory', 'village'];
   if (!_RANDOM_AREAS.includes(es.location.id)) {
     gs.locationStates[es.location.id] = {
@@ -2919,6 +2945,14 @@ function endExploration(gs) {
       })),
     };
   }
+
+}
+
+function endExploration(gs) {
+  const es = exploreState;
+  if (!es) return;
+  saveLocationState(gs, es);
+  if (typeof mapUI !== 'undefined') mapUI.from = null;
 
   gs.parent.isExploring = false;
   gs.parent.sneaking    = false;

@@ -16,18 +16,22 @@ const WORLD_MAP_POS = {
 const MAP_X = 10, MAP_Y = 40, MAP_W = 540, MAP_H = 360;
 const MAP_PANEL_X = MAP_X + MAP_W + 8;
 
-const mapUI = { selected: null, fogKey: '', fogCanvas: null };
+// mapUI.from: set while out in the field (choosing where to go next), else null
+const mapUI = { selected: null, fogKey: '', fogCanvas: null, from: null };
+
+// Latest time you can set out from the shelter
+const LAST_DEPARTURE = 17 * 60;
 
 // ── Travel time ──────────────────────────────────────────────────────────────
 
-function _mapDist(locId) {
-  const a = WORLD_MAP_POS.shelter, b = WORLD_MAP_POS[locId] || a;
+function _mapDist(locId, fromId) {
+  const a = WORLD_MAP_POS[fromId || 'shelter'] || WORLD_MAP_POS.shelter, b = WORLD_MAP_POS[locId] || a;
   return Math.hypot(b[0] - a[0], b[1] - a[1]);
 }
 
-/** Minutes to walk (or cycle) from the shelter to a location. */
-function travelMinutes(gs, locId) {
-  let mins = Math.max(20, Math.round(_mapDist(locId) / 2.2 / 5) * 5);
+/** Minutes to walk (or cycle) to a location, from the shelter or from another location. */
+function travelMinutes(gs, locId, fromId) {
+  let mins = Math.max(20, Math.round(_mapDist(locId, fromId) / 2.2 / 5) * 5);
   if (gs.shelter && gs.shelter.hasBike) mins = Math.max(10, Math.round(mins / 2 / 5) * 5);
   return mins;
 }
@@ -143,13 +147,17 @@ function drawWorldMap(ctx, gs, opts) {
     if (!seen) drawText(ctx, '?', x, y + 3, '#e8e8e8', 7, 'center', true);
     drawText(ctx, loc.name, x + 1, y + 17, '#000', 7, 'center');
     drawText(ctx, loc.name, x, y + 16, seen ? '#e8e0c8' : '#a8a498', 7, 'center');
-    if (!opts.travel) drawText(ctx, fmtDuration(travelMinutes(gs, loc.id)), x, y - 10, '#c8b880', 6, 'center');
+    if (mapUI.from === loc.id && !opts.travel) {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#9ad08a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.stroke();
+      drawText(ctx, 'YOU ARE HERE', x, y - 13, '#9ad08a', 6, 'center', true);
+    } else if (!opts.travel) drawText(ctx, fmtDuration(travelMinutes(gs, loc.id, mapUI.from)), x, y - 10, '#c8b880', 6, 'center');
     if ((gs.mapNew || []).includes(loc.id)) {
       ctx.globalAlpha = 0.6 + 0.4 * pulse;
       drawText(ctx, 'NEW', x + 12, y - 4, '#f0c040', 6, 'left', true);
     }
     ctx.restore();
-    mapUI._markers.push({ id: loc.id, x, y });
+    if (mapUI.from !== loc.id) mapUI._markers.push({ id: loc.id, x, y });
   }
   ctx.restore();
   strokeRect(ctx, MAP_X, MAP_Y, MAP_W, MAP_H, C.border2);
@@ -167,8 +175,18 @@ const _MAP_BACK = () => ({ x: MAP_PANEL_X + 8, y: MAP_Y + MAP_H - 24, w: 60, h: 
 
 function renderExploreSelect(ctx, gs) {
   fillRect(ctx, 0, 0, CFG.W, CFG.H, C.bg);
-  _drawMapHeader(ctx, gs, 'WORLD MAP');
+  const from = mapUI.from && LOCATIONS_DB.find(l => l.id === mapUI.from);
+  _drawMapHeader(ctx, gs, from ? `WHERE NEXT?  (at ${from.name})` : 'WORLD MAP');
   drawWorldMap(ctx, gs);
+  if (from) {
+    // a dashed line from where you stand to the place you picked
+    const sel = mapUI.selected && WORLD_MAP_POS[mapUI.selected];
+    if (sel) {
+      const [ax, ay] = _mapPt(from.id), [bx, by] = _mapPt(mapUI.selected);
+      ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(154,208,138,0.8)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.restore();
+    }
+  }
   const mx = gs.mouse.x, my = gs.mouse.y;
   const px = MAP_PANEL_X, pw = CFG.W - px - 8, py = MAP_Y;
   drawPanel(ctx, px, py, pw, MAP_H, C.panelBg, C.border2);
@@ -180,7 +198,7 @@ function renderExploreSelect(ctx, gs) {
     drawText(ctx, 'Choose a destination', px + 8, y, C.textBright, 9, 'left', true); y += 16;
     y = drawWrapped(ctx, 'Click a place on the map. Places you have not been to are shrouded. Find maps to mark more of the region.',
       px + 8, y, pw - 16, 7, C.textDim, 10) + 10;
-    drawText(ctx, 'Times are one way.', px + 8, y, C.textDim, 7); y += 22;
+    drawText(ctx, from ? `Times are from ${from.name}.` : 'Times are one way.', px + 8, y, C.textDim, 7); y += 22;
     drawText(ctx, 'Legend', px + 8, y, C.text, 8, 'left', true); y += 14;
     [['#4a9a4a', 'Easy'], ['#9a9a3a', 'Moderate'], ['#c07030', 'Dangerous'], ['#c03030', 'Deadly'], ['#6a6a6a', 'Unexplored']].forEach(([c, t]) => {
       ctx.fillStyle = c; ctx.beginPath(); ctx.arc(px + 14, y - 3, 4, 0, Math.PI * 2); ctx.fill();
@@ -188,7 +206,7 @@ function renderExploreSelect(ctx, gs) {
     });
   } else {
     const seen = _visited(gs).includes(loc.id);
-    const mins = travelMinutes(gs, loc.id);
+    const mins = travelMinutes(gs, loc.id, mapUI.from);
     let y = py + 16;
     drawText(ctx, loc.name, px + 8, y, C.textBright, 9, 'left', true); y += 13;
     const stars = '★'.repeat(loc.difficulty) + '☆'.repeat(Math.max(0, 4 - loc.difficulty));
@@ -208,17 +226,34 @@ function renderExploreSelect(ctx, gs) {
     const reason = _travelBlockReason(gs, loc);
     const gy = py + MAP_H - 52;
     if (reason) drawWrapped(ctx, reason, px + 8, gy - 16, pw - 16, 7, C.textWarn, 9);
-    drawButton(ctx, px + 8, gy, pw - 16, 22, 'Prepare & travel →', !reason && hitTest(mx, my, px + 8, gy, pw - 16, 22), false, !!reason);
+    drawButton(ctx, px + 8, gy, pw - 16, 22, from ? 'Travel there →' : 'Prepare & travel →', !reason && hitTest(mx, my, px + 8, gy, pw - 16, 22), false, !!reason);
     mapUI._go = reason ? null : { x: px + 8, y: gy, w: pw - 16, h: 22, loc };
   }
   const b = _MAP_BACK();
   drawButton(ctx, b.x, b.y, b.w, b.h, '< Back', hitTest(mx, my, b.x, b.y, b.w, b.h));
+  mapUI._home = null;
+  if (from) {
+    // going home is always an option from the field
+    const hx = b.x + b.w + 6, hw = pw - b.w - 22;
+    const hm = travelMinutes(gs, from.id);
+    drawButton(ctx, hx, b.y, hw, b.h, `Home (${fmtDuration(hm)})`, hitTest(mx, my, hx, b.y, hw, b.h));
+    mapUI._home = { x: hx, y: b.y, w: hw, h: b.h };
+  }
 }
 
 function _travelBlockReason(gs, loc) {
-  if (gs.parent.tiredness >= 70) return 'Too exhausted to go out. Rest first.';
+  if (gs.parent.tiredness >= 70) return 'Too exhausted to go on. Rest first.';
   if (gs.parent.depression >= 90) return 'Too overwhelmed to face the outside.';
-  if (gs.time + travelMinutes(gs, loc.id) > CFG.DAY_END - 60) return 'Too late to get there before dark.';
+  if (!mapUI.from && gs.time > LAST_DEPARTURE) return 'Too late to set out today (after 17:00).';
+  if (gs.time + travelMinutes(gs, loc.id, mapUI.from) > CFG.DAY_END - 60) return 'Too late to get there before dark.';
+  return null;
+}
+
+/** Why the parent can't leave the shelter right now, or null. */
+function setOutBlockReason(gs) {
+  if (gs.parent.isExploring) return 'Already out.';
+  if (gs.time > LAST_DEPARTURE) return "It's past 17:00. Too late to set out today.";
+  if (gs.parent.tiredness >= 70) return 'Stamina too low to go out. Rest first.';
   return null;
 }
 
@@ -239,11 +274,30 @@ function getLocationTags(loc) {
 
 function exploreSelectClick(mx, my, gs) {
   const b = _MAP_BACK();
-  if (hitTest(mx, my, b.x, b.y, b.w, b.h)) { mapUI.selected = null; gs.screen = 'shelter'; return; }
+  if (hitTest(mx, my, b.x, b.y, b.w, b.h)) {
+    mapUI.selected = null;
+    if (mapUI.from) { mapUI.from = null; gs.screen = 'explore'; }   // back to where you were standing
+    else gs.screen = 'shelter';
+    return;
+  }
+  if (mapUI._home && hitTest(mx, my, mapUI._home.x, mapUI._home.y, mapUI._home.w, mapUI._home.h)) {
+    mapUI.selected = null;
+    gs.screen = 'explore';
+    endExploration(gs);
+    return;
+  }
   if (mapUI._go && hitTest(mx, my, mapUI._go.x, mapUI._go.y, mapUI._go.w, mapUI._go.h)) {
     const loc = mapUI._go.loc;
     if (_travelBlockReason(gs, loc)) return;
     gs.mapNew = (gs.mapNew || []).filter(id => id !== loc.id);
+    if (mapUI.from) {
+      // straight on from the field: no stop at home to repack
+      const fromId = mapUI.from;
+      mapUI.from = null; mapUI.selected = null;
+      gs.inCombat = false; gs.combat = null;
+      beginTravel(gs, loc, 'out', fromId);
+      return;
+    }
     gs.screen = 'packScreen';
     gs._pendingLoc = loc;
     return;
@@ -261,9 +315,9 @@ function exploreSelectClick(mx, my, gs) {
 // ── Travelling (out and back) ────────────────────────────────────────────────
 
 /** Walk to (dir 'out') or home from (dir 'home') a location while time passes. */
-function beginTravel(gs, loc, dir) {
-  const mins = travelMinutes(gs, loc.id);
-  gs.travel = { locId: loc.id, dir, mins, spent: 0, t: 0, dur: clamp(mins / 12.5, 3.2, 9) };   // walk at a readable pace; game time is the same
+function beginTravel(gs, loc, dir, fromId) {
+  const mins = travelMinutes(gs, loc.id, fromId);
+  gs.travel = { locId: loc.id, fromId: fromId || null, dir, mins, spent: 0, t: 0, dur: clamp(mins / 12.5, 3.2, 9) };   // walk at a readable pace; game time is the same
   gs.screen = 'travel';
   gs.keys = {};
   gs.mouse.down = false;
@@ -318,7 +372,7 @@ function renderTravel(ctx, gs) {
 
   // party marker moving along the road
   const k = tr.t / tr.dur, e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-  const [hx, hy] = _mapPt('shelter'), [lx, ly] = _mapPt(tr.locId);
+  const [hx, hy] = _mapPt(tr.fromId || 'shelter'), [lx, ly] = _mapPt(tr.locId);
   const [ax, ay, bx, by] = tr.dir === 'out' ? [hx, hy, lx, ly] : [lx, ly, hx, hy];
   const x = ax + (bx - ax) * e, y = ay + (by - ay) * e;
   ctx.save();
@@ -338,7 +392,10 @@ function renderTravel(ctx, gs) {
   const px = MAP_PANEL_X, pw = CFG.W - px - 8, py = MAP_Y;
   drawPanel(ctx, px, py, pw, MAP_H, C.panelBg, C.border2);
   let ty = py + 16;
-  drawText(ctx, tr.dir === 'out' ? `To ${loc.name}` : `From ${loc.name}`, px + 8, ty, C.textBright, 8, 'left', true); ty += 16;
+  const fromLoc = tr.fromId && LOCATIONS_DB.find(l => l.id === tr.fromId);
+  drawText(ctx, tr.dir === 'out' ? `To ${loc.name}` : `From ${loc.name}`, px + 8, ty, C.textBright, 8, 'left', true); ty += 12;
+  if (fromLoc) { drawText(ctx, `from ${fromLoc.name}`, px + 8, ty, C.textDim, 7); }
+  ty += 4;
   drawText(ctx, gs.shelter.hasBike ? 'Cycling' : 'Walking', px + 8, ty, C.textDim, 7); ty += 22;
   drawText(ctx, fmtClock(gs.time), px + pw / 2, ty + 8, '#e8d8a0', 18, 'center', true); ty += 26;
   drawStatBar(ctx, px + 10, ty, pw - 20, 6, tr.spent, tr.mins, '#b09a5a');

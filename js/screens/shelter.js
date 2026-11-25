@@ -800,7 +800,7 @@ function handleCharTask(taskId, gs) {
     case 'explore':
       if (sel === 'parent') {
         if (gs.parent.task || gs.parent.isSleeping) { notify('Finish current task first.', 'warn'); break; }
-        if (gs.parent.hasExploredToday) { notify('Already explored today. Rest — go again tomorrow.', 'warn'); break; }
+        { const why = setOutBlockReason(gs); if (why) { notify(why, 'warn'); break; } }
         shelterUI.activeMenu   = null;
         shelterUI.selectedChar = null;
         gs.screen = 'exploreSelect';
@@ -893,7 +893,7 @@ function drawShelterControls(ctx, gs, mx, my) {
   for (const btn of CTRL_BUTTONS) {
     const bw = btn.w + 8; // extra width for readability at larger font
     const disabled = (btn.needsCampfire && !gs.shelter.campfire)
-                  || (btn.id === 'explore' && (gs.parent.isExploring || !!gs.parent.task || gs.parent.isSleeping || gs.parent.hasExploredToday))
+                  || (btn.id === 'explore' && (!!gs.parent.task || gs.parent.isSleeping || !!setOutBlockReason(gs)))
                   || (btn.id === 'sleep'   && gs.parent.isSleeping)
                   || (btn.id === 'cook'    && (gs.parent.isSleeping || !!gs.parent.task))
                   || (btn.id === 'play'    && (gs.parent.isSleeping || !!gs.parent.task));
@@ -1764,7 +1764,8 @@ function handleControlBtn(id, gs, mx, my) {
   switch (id) {
     case 'explore':
       if (gs.parent.task || gs.parent.isSleeping) { notify('Finish current task first.', 'warn'); break; }
-      if (gs.parent.hasExploredToday) { notify('Already explored today. Rest — go again tomorrow.', 'warn'); break; }
+      { const why = setOutBlockReason(gs); if (why) { notify(why, 'warn'); break; } }
+      mapUI.from = null;
       gs.screen = 'exploreSelect';
       break;
     case 'craft':

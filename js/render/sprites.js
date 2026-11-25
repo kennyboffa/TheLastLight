@@ -465,10 +465,14 @@ function drawEnemyAnimated(ctx, look, x, groundY, facing, walking, weapon, frame
   if (!meta || !img || !img.complete || !img.naturalWidth) return false;
   const t = Date.now();
   let fi;
+  const idleF = meta.idle || [0, 1], walkF = meta.walk || [2, 3, 4, 5];
   if (frameOverride != null) fi = frameOverride;
   else if (look === 'drone') fi = Math.floor(t / 70) % 3;                       // rotors always spin
-  else if (walking) fi = 2 + Math.floor(t / (look === 'robot' ? 170 : 130)) % 4;
-  else fi = Math.floor((t + x * 37) / 650) % 2;                                 // breathing, out of sync
+  else if (walking) {
+    // people use the player's 16-frame walk; machines and animals have 4 frames
+    const ms = walkF.length > 8 ? 70 : (look === 'robot' ? 170 : 130);
+    fi = walkF[Math.floor(t / ms) % walkF.length];
+  } else fi = idleF[Math.floor((t + x * 37) / 650) % idleF.length];            // breathing, out of sync
   fi = Math.min(fi, meta.n - 1);
   const fw = meta.fw, fh = meta.fh;
   const yOff = look === 'drone' ? -28 + Math.round(Math.sin(t / 300 + x) * 1.5) : 0;   // hovering

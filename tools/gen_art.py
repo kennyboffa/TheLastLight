@@ -2083,31 +2083,238 @@ def quad_frame(frame, fur, belly, dark_c, w=37, h=24, dog=False):
     return s.finish(outline=0.25, grain_scale=0.6), None
 
 
+# ════════════════════════════════════════════════════════════════════════════
+# Enemies built on the hand-drawn character: the player's own idle + 16-frame
+# walk, re-coloured region by region (skin / shirt / trousers / hair / belt /
+# shoes, keeping each pixel's shading) and dressed with each type's gear.
+# Same body, pose and animation as the player; different people.
+# ════════════════════════════════════════════════════════════════════════════
+
+ENEMY_CROP = (6, 7, 34, 56)        # 28x49 frame, feet on the bottom row
+
+PLAYER_HAND_IDLE = (24, 32)
+PLAYER_HAND_WALK = [(25,33),(25,33),(25,33),(27,33),(27,33),(25,34),(26,34),(26,33),
+                    (26,34),(26,33),(25,34),(26,33),(27,34),(25,34),(26,34),(26,33)]
+
+ENEMY_OUTFITS = {
+    'raider':  dict(skin='#e2ae86', shirt='#5c4231', pants='#3c3c3a', hair='#4c4c34', shoes='#1e1a16', belt='#2a1e14',
+                    sleeves=True, head='hood', face='bandana', accent='#8e2c22'),
+    'armed':   dict(skin='#c48a60', shirt='#363e42', pants='#4e5236', hair='#1e2226', shoes='#16181a', belt='#1e1e1c',
+                    sleeves=False, head='cap', body='vest', accent='#8c7c52'),
+    'bandit':  dict(skin='#f0c09a', shirt='#4c3c2e', pants='#3e5070', hair='#6a4a2a', shoes='#2a2018', belt='#2a2018',
+                    sleeves=True, head='beanie', hat='#5e2c2a', body='coat', coat_len=12),
+    'cultist': dict(skin='#e0aa86', shirt='#8e8e84', pants='#8e8e84', hair=None, shoes='#2a2622', belt='#a23c2c',
+                    sleeves=True, head='bald', body='robe', coat_len=23, accent='#a23c2c'),
+    'chief':   dict(skin='#a8704c', shirt='#2c2c30', pants='#262628', hair='#1c1410', shoes='#141414', belt='#141414',
+                    sleeves=True, head='beret', hat='#8e2424', face='beard', body='coat', coat_len=14, beard='#1c1410'),
+}
+
+
+def _hex(c):
+    return np.array([int(c[i:i + 2], 16) for i in (1, 3, 5)], dtype=float)
+
+
+def _tone_map(px_rgb, ref_lum, target):
+    """Recolour keeping the pixel's brightness relative to its region."""
+    lum = px_rgb.mean()
+    k = np.clip(lum / max(1.0, ref_lum), 0.6, 1.45)
+    return np.clip(_hex(target) * k, 0, 255)
+
+
+def _classify(frame):
+    """Per-pixel region labels for one 64x64 player frame."""
+    a = np.array(frame, dtype=float)
+    h, w = a.shape[:2]
+    lab = np.full((h, w), '', dtype=object)
+    op = a[..., 3] > 60
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    skin = op & (r > 190) & (g > 130)
+    grey = op & ~skin & ((np.max(a[..., :3], axis=2) - np.min(a[..., :3], axis=2)) < 16) & (r > 44)
+    rows_skin = np.where(skin.any(axis=1))[0]
+    rows_grey = np.where(grey[:42].any(axis=1))[0]          # shirt only (boot soles can be grey too)
+    face_top = rows_skin.min() if len(rows_skin) else 11
+    torso_top = rows_grey.min() if len(rows_grey) else 16
+    torso_bot = rows_grey.max() if len(rows_grey) else 30
+    for y in range(h):
+        for x in range(w):
+            if not op[y, x]:
+                continue
+            if skin[y, x]:
+                lab[y, x] = 'skin'
+            elif grey[y, x] and y < 42:
+                lab[y, x] = 'shirt'
+            elif y <= face_top + 2:
+                lab[y, x] = 'hair'
+            elif y >= 53:
+                lab[y, x] = 'shoes'
+            elif torso_bot - 1 <= y <= torso_bot + 1:
+                lab[y, x] = 'belt'
+            else:
+                lab[y, x] = 'pants'
+    # arm skin below the neck: the bottom 3 rows of each arm column are the hand
+    arm = (lab == 'skin') & (np.arange(h)[:, None] >= torso_top + 3)
+    hand = np.zeros_like(arm)
+    for x in range(w):
+        ys = np.where(arm[:, x])[0]
+        if len(ys):
+            hand[ys[ys >= ys.max() - 2], x] = True
+    return a, lab, arm & ~hand, (face_top, torso_top, torso_bot)
+
+
+def _rough(rng, base, k_lo=0.88, k_hi=1.1):
+    """A tone from base with the clustered light/dark variation of the hand-drawn art."""
+    k = rng.choice([k_lo, 1.0, 1.0, k_hi])
+    return np.clip(_hex(base) * k, 0, 255)
+
+
+def dress_enemy(frame, outfit, rng):
+    a, lab, sleeve, (face_top, torso_top, torso_bot) = _classify(frame)
+    out = a.copy()
+    refs = {}
+    for name in ('skin', 'shirt', 'pants', 'hair', 'shoes', 'belt'):
+        m = lab == name
+        refs[name] = a[m][:, :3].mean() if m.any() else 100
+    h, w = lab.shape
+    for y in range(h):
+        for x in range(w):
+            L = lab[y, x]
+            if not L:
+                continue
+            px = a[y, x, :3]
+            if L == 'skin':
+                if sleeve[y, x] and outfit['sleeves']:
+                    out[y, x, :3] = _tone_map(px, refs['skin'], outfit['shirt']) * 0.92
+                else:
+                    out[y, x, :3] = _tone_map(px, refs['skin'], outfit['skin'])
+            elif L == 'hair':
+                out[y, x, :3] = _tone_map(px, refs['hair'], outfit['hair'] or outfit['skin'])
+            else:
+                out[y, x, :3] = _tone_map(px, refs[L], outfit[L])
+    # ── body gear ───────────────────────────────────────────────────────────
+    body = outfit.get('body')
+    if body == 'vest':
+        for y in range(torso_top + 1, torso_bot - 1):
+            xs = [x for x in range(w) if lab[y, x] == 'shirt']
+            if len(xs) > 4:
+                for x in xs[1:-1]:
+                    out[y, x, :3] = _rough(rng, outfit['accent'])
+                mid = (xs[0] + xs[-1]) // 2
+                out[y, mid, :3] = _hex(outfit['accent']) * 0.55
+    if body in ('coat', 'robe'):
+        last = torso_bot + outfit['coat_len']
+        for y in range(torso_bot - 1, min(h - 3, last)):
+            xs = [x for x in range(w) if lab[y, x] in ('pants', 'belt', 'shirt')]
+            if not xs:
+                continue
+            x0, x1 = min(xs) - (1 if y > torso_bot + 3 else 0), max(xs) + (1 if y > torso_bot + 3 else 0)
+            for x in range(x0, x1 + 1):
+                out[y, x, :3] = _rough(rng, outfit['shirt'], 0.9, 1.08)
+                out[y, x, 3] = 255
+            out[y, (x0 + x1) // 2, :3] = _hex(outfit['shirt']) * 0.72   # opening / fold
+        if body == 'robe':
+            for y in range(torso_bot - 1, torso_bot + 1):
+                for x in range(w):
+                    if out[y, x, 3] > 60 and lab[y, x] != 'skin':
+                        out[y, x, :3] = _hex(outfit['accent'])         # sash
+    # ── head gear ───────────────────────────────────────────────────────────
+    hair = lab == 'hair'
+    ys, xs = np.where(hair)
+    hx0, hx1 = (xs.min(), xs.max()) if len(xs) else (19, 24)
+    top = ys.min() if len(ys) else face_top - 2
+    head = outfit.get('head')
+    def put(x, y, col, k=None):
+        if 0 <= x < w and 0 <= y < h:
+            out[y, x, :3] = (_rough(rng, col) if k is None else _hex(col) * k); out[y, x, 3] = 255
+    if head == 'hood':
+        for y in range(top - 1, face_top + 6):
+            fx = [x for x in range(w) if lab[y, x] == 'skin'] if 0 <= y < h else []
+            front = (min(fx) + 1) if fx else hx1
+            for x in range(hx0 - 1, front):
+                if y >= face_top + 5 and x > hx0 + 1:
+                    continue
+                put(x, y, outfit['hair'])
+        for x in range(hx0 - 1, hx1 + 1):
+            put(x, top - 1, outfit['hair'], 0.8)
+    elif head == 'cap':
+        for x in range(hx0, hx1 + 4):
+            put(x, top + 1, outfit['hair'], 1.0 if x <= hx1 else 0.85)   # brim forward
+        for x in range(hx0, hx1 + 1):
+            put(x, top, outfit['hair'])
+    elif head == 'beanie':
+        # a knitted cap pulled over the hair: rounded top, folded band
+        for y in range(top - 1, top + 3):
+            inset = 1 if y == top - 1 else 0
+            for x in range(hx0 + inset, hx1 + 1 - inset):
+                put(x, y, outfit['hat'], 0.72 if y == top + 2 else None)
+    elif head == 'beret':
+        # flat beret slanted over one side
+        for y in range(top - 1, top + 1):
+            for x in range(hx0 - 1, hx1 + 2 - (1 if y == top - 1 else 0)):
+                put(x, y, outfit['hat'], 0.8 if y == top else None)
+        put(hx0 - 2, top, outfit['hat'], 0.8)
+    elif head == 'bald':
+        put(hx0 + 2, top + 1, outfit['accent'], 1.0)                    # painted mark
+    face = outfit.get('face')
+    if face in ('bandana', 'beard'):
+        col = outfit['accent'] if face == 'bandana' else outfit['beard']
+        for y in range(face_top + 3, face_top + 6):
+            for x in range(w):
+                if lab[y, x] == 'skin' and not sleeve[y, x] and x > hx0 + (1 if face == 'bandana' else 0):
+                    put(x, y, col)
+    img = Image.fromarray(out.astype(np.uint8), 'RGBA').crop(ENEMY_CROP)
+    return img
+
+
+def _user_texture(img, rng):
+    """Clustered 3-tone variation like the hand-drawn sprites (for the non-human enemies)."""
+    a = np.array(img, dtype=float)
+    h, w = a.shape[:2]
+    small = rng.choice([0.9, 1.0, 1.0, 1.0, 1.1], size=((h + 1) // 2, (w + 1) // 2))
+    k = np.kron(small, np.ones((2, 2)))[:h, :w]
+    k = np.where(rng.random((h, w)) < 0.25, rng.choice([0.92, 1.06], size=(h, w)), k)
+    a[..., :3] = np.clip(a[..., :3] * k[..., None], 0, 255)
+    return Image.fromarray(a.astype(np.uint8), 'RGBA')
+
+
 def enemy_sheets():
-    """Write Assets/en_*.png strips and js/data/enemy_art.js (frame sizes + hands)."""
+    """Write Assets/en_*.png strips and js/data/enemy_art.js (frame lists + hands)."""
     import json
+    base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Assets')
+    walk_sheet = Image.open(os.path.join(base, 'player_sprites.png')).convert('RGBA')
+    idle = Image.open(os.path.join(base, 'player_sprite_idle.png')).convert('RGBA')
+    walk = [walk_sheet.crop(((i % 4) * 64, (i // 4) * 64, (i % 4) * 64 + 64, (i // 4) * 64 + 64)) for i in range(16)]
+    # breathing: the upper body dips one pixel
+    breath = Image.new('RGBA', (64, 64))
+    breath.paste(idle.crop((0, 0, 64, 30)), (0, 1)); breath.paste(idle.crop((0, 30, 64, 64)), (0, 30))
+    cx, cy = ENEMY_CROP[0], ENEMY_CROP[1]
+    hands = [(PLAYER_HAND_IDLE[0] - cx, PLAYER_HAND_IDLE[1] - cy), (PLAYER_HAND_IDLE[0] - cx, PLAYER_HAND_IDLE[1] + 1 - cy)]
+    hands += [(hx - cx, hy - cy) for hx, hy in PLAYER_HAND_WALK]
     meta = {}
-    def strip(name, frames):
-        imgs = [f[0] for f in frames]
+
+    def strip(name, imgs, hand=None, idle_i=(0, 1), walk_i=None):
         fw, fh = imgs[0].size
         sheet = Image.new('RGBA', (fw * len(imgs), fh), (0, 0, 0, 0))
         for i, im in enumerate(imgs):
             sheet.paste(im, (i * fw, 0))
         save(sheet, f'en_{name}.png')
-        meta[name] = {'fw': fw, 'fh': fh, 'n': len(imgs), 'hand': [list(f[1]) if f[1] else None for f in frames]}
-    for name, L in HUMAN_LOOKS.items():
-        strip(name, [human_frame(L, i) for i in range(6)])
-    strip('robot', [robot_frame(i) for i in range(6)])
-    strip('drone', [drone_frame(i) for i in range(3)])
-    strip('wolf', [quad_frame(i, '#6e665e', '#9a9286', '#2a2420') for i in range(6)])
-    strip('dog', [quad_frame(i, '#8a5a32', '#b88a5a', '#2a1a10', 30, 20, dog=True) for i in range(6)])
-    js = ('// enemy_art.js — generated by tools/gen_art.py (enemy_sheets). Frame sizes and\n'
-          '// the front-hand position per frame for each animated enemy sheet.\n'
+        meta[name] = {'fw': fw, 'fh': fh, 'n': len(imgs), 'idle': list(idle_i),
+                      'walk': list(walk_i or range(2, len(imgs))), 'hand': [list(h) for h in hand] if hand else [None] * len(imgs)}
+
+    for name, outfit in ENEMY_OUTFITS.items():
+        rng = np.random.default_rng(abs(hash(name)) % 10000)
+        frames = [dress_enemy(f, outfit, np.random.default_rng(i + 7)) for i, f in enumerate([idle, breath] + walk)]
+        strip(name, frames, hands)
+    rng = np.random.default_rng(5)
+    strip('robot', [_user_texture(robot_frame(i)[0], np.random.default_rng(i)) for i in range(6)])
+    strip('drone', [_user_texture(drone_frame(i)[0], np.random.default_rng(i)) for i in range(3)], idle_i=(0, 1, 2), walk_i=[0, 1, 2])
+    strip('wolf', [_user_texture(quad_frame(i, '#6e665e', '#9a9286', '#2a2420')[0], np.random.default_rng(i)) for i in range(6)])
+    strip('dog', [_user_texture(quad_frame(i, '#8a5a32', '#b88a5a', '#2a1a10', 30, 20, dog=True)[0], np.random.default_rng(i)) for i in range(6)])
+    js = ('// enemy_art.js — generated by tools/gen_art.py (enemy_sheets). Frame sizes,\n'
+          '// which frames are idle / walk, and the front-hand position per frame.\n'
           "'use strict';\nconst ENEMY_ART = " + json.dumps(meta) + ';\n')
     with open(os.path.join(os.path.dirname(OUT), 'js', 'data', 'enemy_art.js'), 'w') as fh:
         fh.write(js)
     print('wrote js/data/enemy_art.js')
-    return Image.new('RGBA', (1, 1))
 
 
 # ════════════════════════════════════════════════════════════════════════════

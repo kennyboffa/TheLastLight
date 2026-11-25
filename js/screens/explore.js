@@ -446,7 +446,8 @@ function updateExplore(gs, dt) {
   const dpadRight = touchControlsOn(gs) && gs.mouse.down && hitTest(gs.mouse.x, gs.mouse.y, _MOBILE_BTNS.right.x, _MOBILE_BTNS.right.y, _MOBILE_BTNS.right.w, _MOBILE_BTNS.right.h);
   const left  = gs.keys['a'] || gs.keys['arrowleft']  || dpadLeft;
   const right = gs.keys['d'] || gs.keys['arrowright'] || dpadRight;
-  const speedMult = (gs.parent.wounded ? 0.55 : 1.0) * (gs.parent.sneaking ? 0.5 : 1) * (gs.timeScale || 1);
+  const speedMult = (gs.parent.wounded ? 0.55 : 1.0) * (gs.parent.sneaking ? 0.5 : 1) * (gs.timeScale || 1)
+    * (1 + ((gs.parent.agility || 5) - 5) * 0.03);                 // agility: lighter on your feet
   if (left)       { es.velX = -CFG.PLAYER_SPEED * speedMult; es.facing = -1; }
   else if (right) { es.velX =  CFG.PLAYER_SPEED * speedMult; es.facing =  1; }
   else es.velX = 0;
@@ -611,8 +612,7 @@ function _tickSearches(gs, containers, moving, dt) {
       continue;
     }
     c.searchProgress += dt;
-    const dur = c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration;
-    if (c.searchProgress >= dur) {
+    if (c.searchProgress >= searchDur(c)) {
       c.searching = false; c.searched = true;
       finishSearch(c, gs);
     }
@@ -686,6 +686,19 @@ function finishSearch(container, gs, byCompanion) {
     }
   }
 
+  // Scavenging: a practised eye turns up a little more of everything
+  if (!byCompanion) {
+    const pct = scavengeBonusPct(gs.parent);
+    const extra = [];
+    for (const item of loot) if (chance(pct)) extra.push({ id: item.id, qty: 1 });
+    loot = loot.concat(extra);
+    // Perception: something tucked away that the last people missed
+    if (container.theme && chance(hiddenFindPct(gs.parent))) {
+      const pool = rollBuildingLoot(container.theme, container.quality || 'light');
+      if (pool.length) { const h = randChoice(pool); loot.push({ id: h.id, qty: 1 }); notify('You spot something tucked out of sight.', 'good'); }
+    }
+  }
+
   // Show what was found and let the player pick; leftovers stay in the container
   container.loot = loot;
   if (loot.length === 0) { if (!byCompanion) notify('Nothing useful found.', 'info'); return; }
@@ -724,6 +737,7 @@ function exploreKeyPress(key, gs) {
       return;
     }
     if (key === 'enter' || key === 'e') { playerEndTurn(gs); return; }
+    if (key === 't' && canTalkDown(c)) { playerTalk(gs); return; }
     return;
   }
 
@@ -869,6 +883,45 @@ function _interactBodies(gs, px) {
   return true;
 }
 
+// A locked container: pry it with a crowbar (sure, but it wears the bar and
+// makes noise) or pick the lock (lockpick skill; three fumbles jam it).
+function _tryUnlock(gs, c) {
+  const p = gs.parent;
+  if (hasCrowbar(p)) {
+    c.locked = false;
+    if (weaponCondition(p, 'crowbar') !== null) { p.weaponWear.crowbar = Math.max(1, p.weaponWear.crowbar - 1); }
+    Audio.thud();
+    notify(`You crack the ${c.type} open with the crowbar. Loud.`, 'warn');
+    _lockNoise(gs, c.wx);
+    return true;
+  }
+  if (c.lockFails >= 3) { notify('The lock is jammed. A crowbar would do it.', 'warn'); return false; }
+  const pct = lockpickPct(p);
+  gs.time += 5;                                       // fiddling takes a few minutes
+  if (chance(pct)) {
+    c.locked = false;
+    Audio.door();
+    giveXP(p, 6, gs);
+    notify(`Click. The lock gives (${pct}%).`, 'good');
+    addLog(`Picked the lock on a ${c.type}.`, 'good');
+    return true;
+  }
+  c.lockFails++;
+  notify(c.lockFails >= 3 ? 'The pick snaps something inside. Jammed for good.' : `The lock won't give (${pct}%). Try again?`, 'warn');
+  return false;
+}
+
+// Prying a lock is loud: anyone close by in this area comes to look
+function _lockNoise(gs, wx) {
+  const es = exploreState;
+  if (!es) return;
+  const list = es.building ? curArea(es).encounters : es.encounters;
+  for (const enc of list || []) {
+    if (enc.triggered || enc.killed) continue;
+    if (Math.abs(enc.wx - wx) < 420) { enc.wx = Math.round((enc.wx + wx) / 2); }
+  }
+}
+
 // Search / re-open / cancel the nearest container
 function _interactContainers(gs, containers, px) {
   const searchingC = containers.find(c => c.searching && Math.abs(px - c.wx) < 30);
@@ -877,6 +930,7 @@ function _interactContainers(gs, containers, px) {
   const leftover = containers.find(c => c.searched && c.loot && c.loot.length && Math.abs(px - c.wx) < 30);
   if (leftover) { openContainerLoot(gs, leftover); return true; }
   const nearC = containers.find(c => !c.searched && !c.searching && Math.abs(px - c.wx) < 30);
+  if (nearC && nearC.locked && !_tryUnlock(gs, nearC)) return true;
   if (nearC) {
     nearC.searching = true; nearC.searchProgress = 0;
     if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
@@ -1065,6 +1119,7 @@ function exploreClick(mx, my, gs) {
   // Outdoor click on container
   const nearC = es.containers.find(c => !c.searched && !c.searching &&
     Math.abs(wx - c.wx) < 24 && my > GROUND_Y - 35 && my < GROUND_Y + 10);
+  if (nearC && nearC.locked && !_tryUnlock(gs, nearC)) return;
   if (nearC) {
     nearC.searching = true; nearC.searchProgress = 0;
     if (gs.parent.trait === 'meticulous') nearC._meticulousAdj = true;
@@ -1446,10 +1501,22 @@ function drawAreaContainer(ctx, c, isNear) {
   if (!isFurn && !c.searched) drawExploreContainer(ctx, c.wx, GROUND_Y, c.type, isNear);
   if (!isFurn && c.searched) drawExploreContainerEmpty(ctx, c.wx, GROUND_Y);
   if (c.searching) {
-    drawSearchBar(ctx, c.wx, top - 4, c.searchProgress / (c._meticulousAdj ? c.searchDuration * 1.5 : c.searchDuration));
+    drawSearchBar(ctx, c.wx, top - 4, c.searchProgress / searchDur(c));
   } else if (isNear) {
-    drawText(ctx, c.searched ? '[E] Take items' : `[E] Search ${c.type}`, c.wx, top - 4, C.textBright, 7, 'center');
+    const lockTxt = c.lockFails >= 3 && !hasCrowbar(GS.parent) ? `Jammed (needs a crowbar)`
+      : hasCrowbar(GS.parent) ? `[E] Pry open ${c.type} (crowbar)` : `[E] Pick lock ${lockpickPct(GS.parent)}%`;
+    drawText(ctx, c.searched ? '[E] Take items' : c.locked ? lockTxt : `[E] Search ${c.type}`, c.wx, top - 4, c.locked ? '#d8c070' : C.textBright, 7, 'center');
+    if (c.locked) _drawPadlock(ctx, c.wx, top - 24);
   }
+}
+
+function _drawPadlock(ctx, x, y) {
+  ctx.save();
+  ctx.fillStyle = '#b89a48'; ctx.fillRect(x - 3, y, 7, 6);
+  ctx.fillStyle = '#5a4a20'; ctx.fillRect(x, y + 2, 1, 2);
+  ctx.strokeStyle = '#b89a48'; ctx.lineWidth = 1;
+  ctx.strokeRect(x - 1.5, y - 3.5, 4, 4);
+  ctx.restore();
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
@@ -1950,8 +2017,8 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
 
   const _busy = c.busyUntil && Date.now() < c.busyUntil;
   if (c.turn !== 'player' || c.phase !== 'action' || _busy) {
-    const msg = (c.turn === 'enemy' || _busy) ? 'Enemy turn...' : (c.phase === 'victory' ? 'VICTORY!' : c.phase === 'fled' ? 'ESCAPED!' : 'DEFEATED');
-    const col = (c.phase === 'victory' || c.phase === 'fled') ? C.textGood : C.textDanger;
+    const msg = (c.turn === 'enemy' || _busy) ? 'Enemy turn...' : (c.phase === 'victory' ? 'VICTORY!' : c.phase === 'fled' ? 'ESCAPED!' : c.phase === 'talked' ? 'THEY BACK OFF' : 'DEFEATED');
+    const col = (c.phase === 'victory' || c.phase === 'fled' || c.phase === 'talked') ? C.textGood : C.textDanger;
     drawText(ctx, msg, CFG.W / 2, _COMBAT_BAR_Y + 14, col, 10, 'center', true);
     return;
   }
@@ -2018,10 +2085,10 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
 
   // Target cycle (multiple enemies)
   if (alive.length > 1) {
-    const tgHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 60, 24);
-    drawButton(ctx, bx, _COMBAT_BAR_Y, 60, 24, `Target ${c.targetIdx + 1}/${alive.length}`, tgHov);
-    gs._combatTarget = { x: bx, y: _COMBAT_BAR_Y, w: 60, h: 24 };
-    bx += 66;
+    const tgHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 72, 24);
+    drawButton(ctx, bx, _COMBAT_BAR_Y, 72, 24, `Target ${c.targetIdx + 1}/${alive.length}`, tgHov);
+    gs._combatTarget = { x: bx, y: _COMBAT_BAR_Y, w: 72, h: 24 };
+    bx += 78;
   } else { gs._combatTarget = null; }
 
   // Item
@@ -2037,6 +2104,16 @@ function _drawExploreCombatHUD(ctx, gs, mx, my) {
   const flHov   = hitTest(mx, my, bx, _COMBAT_BAR_Y, 48, 24);
   drawButton(ctx, bx, _COMBAT_BAR_Y, 48, 24, 'Flee', flHov, false, c.playerAp < 2 || !canFlee);
   gs._combatFlee = { x: bx, y: _COMBAT_BAR_Y, w: 48, h: 24 };
+  bx += 54;
+
+  // Talk (people only): speech check to make them back off
+  if (canTalkDown(c)) {
+    const tkPct = talkDownChance(gs);
+    const tkHov = hitTest(mx, my, bx, _COMBAT_BAR_Y, 62, 24);
+    drawButton(ctx, bx, _COMBAT_BAR_Y, 62, 24, `Talk ${tkPct}%`, tkHov, false, c.playerAp < TALK_AP);
+    drawText(ctx, `${TALK_AP}AP · speech [T]`, bx + 31, _COMBAT_BAR_Y + 33, C.textDim, 6, 'center');
+    gs._combatTalk = { x: bx, y: _COMBAT_BAR_Y, w: 62, h: 24 };
+  } else gs._combatTalk = null;
   // Flee hint
   if (!canFlee) {
     const needed = alive.length ? Math.ceil((FLEE_MIN_DIST - Math.min(...alive.map(e => Math.abs(c.playerWx - e.worldX)))) / TILE) : 0;
@@ -2151,6 +2228,10 @@ function _handleExploreCombatClick(mx, my, gs) {
   // Flee
   if (gs._combatFlee && hitTest(mx, my, gs._combatFlee.x, gs._combatFlee.y, gs._combatFlee.w, gs._combatFlee.h)) {
     playerFlee(gs); return;
+  }
+  // Talk
+  if (gs._combatTalk && hitTest(mx, my, gs._combatTalk.x, gs._combatTalk.y, gs._combatTalk.w, gs._combatTalk.h)) {
+    playerTalk(gs); return;
   }
 }
 

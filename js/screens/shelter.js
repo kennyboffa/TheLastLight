@@ -2385,6 +2385,7 @@ function drawCharSheet(ctx, gs, mx, my) {
   drawText(ctx, `${who.name.toUpperCase()} — CHARACTER SHEET`, px + PW/2, py + 12, selColor, 8, 'center', true);
 
   gs._charSheetBtns = [];
+  let tip = null;                       // what the hovered attribute / skill does
 
   const pendPts = who.pendingSkillPts || 0;
   const halfW = (PW - 20) / 2;
@@ -2398,6 +2399,7 @@ function drawCharSheet(ctx, gs, mx, my) {
     const label = attr.charAt(0).toUpperCase() + attr.slice(1, 3);
     drawText(ctx, label, px + 8, y + 8, C.text, 8);
     drawText(ctx, String(val), px + 8 + halfW - 10, y + 8, val >= 8 ? C.textGood : C.textBright, 8, 'right', true);
+    if (hitTest(mx, my, px + 4, y, halfW, 14)) tip = `${attr.toUpperCase()}: ${ATTR_DESCS[attr]}`;
     y += 14;
   }
 
@@ -2409,6 +2411,7 @@ function drawCharSheet(ctx, gs, mx, my) {
     const val = (who.skills && who.skills[skill]) || 0;
     const label = skill.charAt(0).toUpperCase() + skill.slice(1, 5);
     drawText(ctx, label, skillColX, y + 8, C.text, 7);
+    if (hitTest(mx, my, skillColX - 2, y, 32, 14)) tip = `${skill.toUpperCase()}: ${SKILL_DESCS[skill]}`;
     // Pips
     for (let p = 0; p < 5; p++) {
       const px2 = skillColX + 32 + p * 11;
@@ -2465,4 +2468,13 @@ function drawCharSheet(ctx, gs, mx, my) {
   const backHov = hitTest(mx, my, px + 8, py + PH - 24, 60, 16);
   drawButton(ctx, px + 8, py + PH - 24, 60, 16, '← Back', backHov);
   gs._charSheetClose = { x: px + 8, y: py + PH - 24, w: 60, h: 16 };
+
+  if (tip) {
+    const lines = wrapText(ctx, tip, PW - 20, 7);
+    const th = 8 + lines.length * 10;
+    const ty = clamp(my + 14, 2, CFG.H - th - 2);
+    fillRect(ctx, px + 6, ty, PW - 12, th, '#0c0c16');
+    strokeRect(ctx, px + 6, ty, PW - 12, th, C.border2);
+    lines.forEach((l, i) => drawText(ctx, l, px + 12, ty + 11 + i * 10, C.textBright, 7));
+  }
 }

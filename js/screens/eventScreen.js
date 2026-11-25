@@ -89,7 +89,7 @@ function renderEvent(ctx, gs) {
         fillRect(ctx, panX + 10, textY, panW - 20, btnH, C.btnBg);
         strokeRect(ctx, panX + 10, textY, panW - 20, btnH, hov ? C.border2 : C.border);
         const col = asked ? C.textDim : (hov ? C.textBright : C.text);
-        drawText(ctx, `${n + 1}.  ${o.c.label}${asked ? '  ✓' : ''}`, panX + 20, textY + btnH - 8, col, 9);
+        drawText(ctx, `${n + 1}.  ${typeof o.c.label === 'function' ? o.c.label(gs) : o.c.label}${asked ? '  ✓' : ''}`, panX + 20, textY + btnH - 8, col, 9);
         gs._eventChoiceBounds.push({ x: panX+10, y: textY, w: panW-20, h: btnH, idx: o.i });
         textY += btnH + gap;
       });

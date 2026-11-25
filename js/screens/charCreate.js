@@ -36,20 +36,20 @@ const TRAITS_DB = [
 ];
 const ATTR_DESCS = {
   strength:     'Carry weight, melee damage',
-  agility:      'Speed, flee chance, dodge',
-  perception:   'Detection, accuracy bonus',
-  intelligence: 'Task speed, bonus skill pts',
-  charisma:     'Speech, morale of others',
+  agility:      'Walk speed, who acts first, dodge, flee, lockpicking',
+  perception:   'Aim (guns most), spotting hidden items and enemies, lockpicking',
+  intelligence: 'Faster searching, crafting and building; more XP; extra skill pts (6+)',
+  charisma:     'Talking enemies down, haggling, trade prices; others lose heart slower',
 };
 const SKILL_DESCS = {
-  scavenging:   'Find more / better loot',
-  stealth:      'Avoid AI detection, sneak',
-  exploration:  'Navigate locations safely',
-  bartering:    'Better trade prices',
-  speech:       'Convince survivors, events',
-  lockpick:     'Open locked areas',
-  melee:        'Melee combat accuracy',
-  firearms:     'Ranged accuracy & handling',
+  scavenging:   'More items from every search, and faster searching',
+  stealth:      'Sneaking up for an ambush; not being surprised; fleeing',
+  exploration:  'Shorter travel on the map, less stamina used outside, spotting danger',
+  bartering:    'Traders charge less and pay more',
+  speech:       'Talk human enemies down in a fight [T]; haggle with traders; event options',
+  lockpick:     'Open locked lockers, cabinets and chests (better loot inside)',
+  melee:        'Hit chance with fists and melee weapons',
+  firearms:     'Hit chance with guns; a better opening shot',
 };
 
 const DIFFICULTIES = {

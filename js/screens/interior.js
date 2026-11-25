@@ -176,14 +176,21 @@ function layoutFurniture(area, groups, busy, theme, quality, x0, x1) {
   }
 }
 
+const LOCKABLE = ['locker', 'cabinet', 'chest'];
+
 function _makeContainer(x, type, theme, quality, furnitureKey) {
+  // Some lockers, cabinets and chests are locked: nobody has been through
+  // them, so they hold more (lockpicking, or a crowbar)
+  const locked = LOCKABLE.includes(type) && chance(24);
   return {
-    wx: x, wy: GROUND_Y, type,
+    wx: x, wy: GROUND_Y, type, theme, quality,
     furnitureKey: furnitureKey || null,
     searched: false, searching: false, searchProgress: 0,
     searchDuration: 1.5 + randFloat(0.5, 2.5),
+    locked, lockFails: 0,
     // 25-35% already picked clean by someone else
-    loot: chance(furnitureKey ? 35 : 25) ? [] : rollBuildingLoot(theme, quality),
+    loot: locked ? rollBuildingLoot(theme, quality).concat(rollBuildingLoot(theme, quality))
+        : chance(furnitureKey ? 35 : 25) ? [] : rollBuildingLoot(theme, quality),
   };
 }
 

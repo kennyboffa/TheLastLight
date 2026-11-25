@@ -201,6 +201,14 @@ const EVENTS_DB = [
       { label: 'See what they have (barter)',
         when: () => typeof openTrade === 'function',
         action: gs => { gs.flags.traderMet = true; openWandererTrade(gs); return null; } },
+      { label: gs => `Haggle before you look [Speech ${haggleChance(gs.parent)}%]`,
+        when: gs => typeof openTrade === 'function' && traderState(gs, 'wanderer').haggleDay !== gs.day,
+        reply: gs => {
+          const st = traderState(gs, 'wanderer');
+          st.haggleDay = gs.day; st.haggleOk = chance(haggleChance(gs.parent));
+          if (st.haggleOk) { giveXP(gs.parent, 6, gs); return 'You talk about the road, the weather, the price of everything, until they laugh despite themselves. "Fine. For you, less." (15% off today)'; }
+          return '"Prices are prices," they say, and pull the tarp a little tighter over the cart.';
+        } },
       { label: '"Where are you headed?"',
         reply: '"Wherever the drones aren\'t." A tired shrug. "North was bad last week. The church folk are decent, if you don\'t mind a sermon with your bandages."' },
       { label: '"Seen anyone else on the road?"',
@@ -637,6 +645,19 @@ const EVENTS_DB = [
         action: gs => {
           const enemies = [deepClone(ENEMY_TEMPLATES.raider), deepClone(ENEMY_TEMPLATES.survivor_bandit)];
           gs._returnTo = 'explore';
+          startExploreCombat(gs, enemies);
+          return null;
+        }
+      },
+      { label: gs => `Talk them out of it [Speech ${speechPct(gs.parent, 5)}%]`,
+        action: gs => {
+          if (chance(speechPct(gs.parent, 5))) {
+            giveXP(gs.parent, 12, gs);
+            return '"Look at us," you say, slow and level. "Three people, one pack, and every one of us bleeds the same. You can take it, maybe. One of you won\'t walk home." A long pause. The pipe lowers. "...Go on, then." They let you pass.';
+          }
+          const enemies = [deepClone(ENEMY_TEMPLATES.raider), deepClone(ENEMY_TEMPLATES.survivor_bandit)];
+          gs._returnTo = 'explore';
+          notify('They\'re not listening.', 'danger');
           startExploreCombat(gs, enemies);
           return null;
         }

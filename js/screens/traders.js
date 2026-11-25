@@ -80,8 +80,32 @@ function _rollTraderStock(t) {
   return out;
 }
 
-function buyPrice(id)  { return Math.max(1, Math.round((getItemDef(id)?.value || 1) * TRADE_MARKUP)); }
-function sellPrice(id) { return Math.max(1, Math.round(getItemDef(id)?.value || 1)); }
+// Their markup falls with your bartering and charisma (3x at the start), and
+// a successful haggle (speech) knocks 15% off for the rest of the day.
+function currentMarkup(gs, id) {
+  let m = tradeMarkup(gs.parent);
+  const st = id && gs.traders && gs.traders[id];
+  if (st && st.haggleOk && st.haggleDay === gs.day) m *= 0.85;
+  return Math.max(1.5, Math.round(m * 100) / 100);
+}
+function buyPrice(id)  { return Math.max(1, Math.round((getItemDef(id)?.value || 1) * currentMarkup(GS, tradeUI.traderId))); }
+function sellPrice(id) { return Math.max(1, Math.round((getItemDef(id)?.value || 1) * sellMult(GS.parent))); }
+
+// "Can we talk about your prices?" — once a day per trader
+function _haggleChoice(gs, id, reactions) {
+  const st = traderState(gs, id);
+  const pct = haggleChance(gs.parent);
+  return {
+    label: `Talk the price down. [Speech ${pct}%]`,
+    when: g => st.haggleDay !== g.day,
+    reply: g => {
+      st.haggleDay = g.day;
+      st.haggleOk = chance(pct);
+      if (st.haggleOk) { giveXP(g.parent, 8, g); notify('Prices 15% lower today.', 'good'); return reactions[0]; }
+      return reactions[1];
+    },
+  };
+}
 
 // ── Placing them in the world ────────────────────────────────────────────────
 
@@ -188,6 +212,9 @@ function _aldoTalk(gs, t, st, first) {
   const restockIn = Math.max(0, st.nextRestock - gs.day);
   root.choices = [
     { label: 'Let\'s trade.', action: g => { openTrade(g, 'church'); return null; } },
+    _haggleChoice(gs, 'church', [
+      '"You argue like a man who has buried things." Aldo sighs and crosses out a figure in his ledger. "For today. Don\'t tell the others."',
+      '"Charity is in the next building, and it is closed." He doesn\'t look up. "My prices are my prices."' ]),
     { label: 'Who are you?', reply: '"Aldo. I kept this church before. I keep it now, after a fashion." He smiles thinly. "People still come here looking for something. Mostly it\'s bandages."' },
     { label: 'What do you know about the machines?', next: () => ({
         text: '"They don\'t come inside churches much. Not out of respect. There\'s nothing here they want." He taps the table. "What do you want to know?"',
@@ -222,6 +249,9 @@ function _veraTalk(gs, t, st, first) {
   };
   root.choices = [
     { label: 'Let\'s trade.', action: g => { openTrade(g, 'city'); return null; } },
+    _haggleChoice(gs, 'city', [
+      'Vera studies you for a long moment, then laughs. "Fine. You\'ve got nerve, and nerve is rare. Fifteen off, today only."',
+      '"No." She doesn\'t even blink. "Ask again tomorrow and the answer will still be no."' ]),
     { label: 'Where do you get all this?', reply: '"Police armory, before it got crowded. Convoys, after. Some of it walks in on people who didn\'t walk out." She shrugs. "Don\'t ask what you don\'t want answered."' },
     { label: 'Why are your prices so high?', next: () => ({
         text: '"Because I\'m alive and you\'re shopping." She leans back. "Want the long answer?"',
@@ -288,7 +318,8 @@ function renderTrade(ctx, gs) {
   const mx = gs.mouse.x, my = gs.mouse.y;
   fillRect(ctx, 0, 0, CFG.W, CFG.H, '#08080c');
   drawText(ctx, `TRADING WITH ${t.name.toUpperCase()}`, CFG.W / 2, 18, C.textBright, 11, 'center', true);
-  drawText(ctx, `They sell at ${TRADE_MARKUP}x value and buy at value. Click to add, − to remove.${t.locId ? ` New stock in ${Math.max(0, st.nextRestock - gs.day)} day(s).` : ''}`,
+  const sm = sellMult(gs.parent);
+  drawText(ctx, `They sell at ${currentMarkup(gs, tradeUI.traderId)}x value and buy at ${sm > 1 ? sm.toFixed(2) + 'x ' : ''}value (bartering, charisma). Click to add, − to remove.${t.locId ? ` New stock in ${Math.max(0, st.nextRestock - gs.day)} day(s).` : ''}`,
     CFG.W / 2, 31, C.textDim, 7, 'center');
   const W2 = (CFG.W - 30) / 2, y = 40, h = CFG.H - 110;
   tradeUI._rowsL = _tradeList(ctx, 10, y, W2, h, `${t.name.toUpperCase()}'S GOODS (price)`, st.stock, tradeUI.take, buyPrice, mx, my, tradeUI.scrollL);

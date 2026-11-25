@@ -13,7 +13,10 @@ const _SPRITE_TOTAL_FRAMES  = _SPRITE_COLS * _SPRITE_ROWS; // 16
 // Fraction of the frame height where feet appear (measured from top of frame).
 // Decrease if character floats above floor, increase if it sinks into the floor.
 const _SPRITE_FOOT_FRAC       = 0.72;  // player sprites
-const _CHILD_SPRITE_FOOT_FRAC = 0.91;  // Lily sprites (her frames have feet lower)
+const _CHILD_SPRITE_FOOT_FRAC = 0.91;
+// The figure isn't centred in its 64px frames: the torso sits at x≈20. Mirror
+// around that line (not the frame centre) so turning around happens in place.
+const _PLAYER_BODY_CX = 20;  // Lily sprites (her frames have feet lower)
 
 
 // Extra grain added to the hand-drawn PNGs at load time so they match the
@@ -564,15 +567,17 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose, weapon) {
       const dh   = _sheet.fh;
       const yOff = -Math.round(dh * _SPRITE_FOOT_FRAC);
 
+      const bodyCx = Math.round((_sheet === _runSprite ? _PLAYER_BODY_CX + 1 : _PLAYER_BODY_CX) * dw / 64);
       ctx.save();
-      ctx.translate(Math.round(x), Math.round(y));
+      // body line stays where it was when facing right; flip around it
+      ctx.translate(Math.round(x) + bodyCx - Math.round(dw / 2), Math.round(y));
       if (facing < 0) ctx.scale(-1, 1);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(_sheet.img, sx, sy, dw, dh, -Math.round(dw / 2), yOff, dw, dh);
+      ctx.drawImage(_sheet.img, sx, sy, dw, dh, -bodyCx, yOff, dw, dh);
       // Held weapon only when standing still (hidden while walking/running or facing away),
       // then redraw the hand over the grip
       if (weapon && weapon.id && pose !== 'back' && pose !== 'walk' && pose !== 'run') {
-        const lx = -Math.round(dw / 2) + hand[0], ly = yOff + hand[1];
+        const lx = -bodyCx + hand[0], ly = yOff + hand[1];
         if (_drawWeaponAt(ctx, weapon.id, lx, ly, weapon.t0)) {
           ctx.drawImage(_sheet.img, sx + hand[0] - 1, sy + hand[1] - 2, 3, 3, lx - 1, ly - 2, 3, 3);
         }

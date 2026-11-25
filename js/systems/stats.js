@@ -111,7 +111,8 @@ function tickStats(gs, dt) {
       const tireRate = (p.isExploring || p.isWorking) ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR;
       const rainTire = (p.isExploring && gs.weather && gs.weather.type === 'rain')
         ? CFG.TIRE_ACTIVE_PER_HOUR * 0.6 : 0;
-      p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs * pTireMult, 0, 100);
+      const paceMult = p.isExploring ? exploreStaminaMult(p) : 1;   // exploration: pacing yourself
+      p.tiredness = clamp(p.tiredness + (tireRate + rainTire) * dm * hrs * pTireMult * paceMult, 0, 100);
     } else {
       p.hunger    = clamp(p.hunger    + CFG.HUNGER_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
       p.thirst    = clamp(p.thirst    + CFG.THIRST_PER_HOUR * 0.3 * dm * hrs * pHungerMult, 0, 100);
@@ -183,7 +184,8 @@ function tickStats(gs, dt) {
   // Child depression: rises when alone, falls when with parent
   ch.isAlone = p.isExploring;
   const childDeprRate = ch.isAlone ? CFG.DEPR_CHILD_ALONE_PER_HOUR : CFG.DEPR_CHILD_PARENT_PER_HOUR;
-  ch.depression = clamp(ch.depression + childDeprRate * hrs, 0, 100);
+  // charisma: a steady parent keeps her spirits up
+  ch.depression = clamp(ch.depression + childDeprRate * (childDeprRate > 0 ? moraleMult(p) : 1) * hrs, 0, 100);
 
   // Dog bonus
   if (gs.dog && gs.dog.alive) {
@@ -213,7 +215,7 @@ function tickStats(gs, dt) {
       s.thirst    = clamp(s.thirst    + CFG.THIRST_PER_HOUR * hrs, 0, 100);
       s.tiredness = clamp(s.tiredness + (s.isExploring ? CFG.TIRE_ACTIVE_PER_HOUR : CFG.TIRE_IDLE_PER_HOUR) * hrs, 0, 100);
     }
-    s.depression = clamp(s.depression + 0.5 * hrs, 0, 100);
+    s.depression = clamp(s.depression + 0.5 * moraleMult(gs.parent) * hrs, 0, 100);
     if (s.hunger  >= CFG.HUNGER_DAMAGE) s.health = Math.max(0, s.health - CFG.HEALTH_DRAIN_PER_HOUR * hrs);
     if (s.thirst  >= CFG.THIRST_DAMAGE) s.health = Math.max(0, s.health - CFG.HEALTH_DRAIN_PER_HOUR * 1.5 * hrs);
   }
@@ -642,6 +644,7 @@ function giveXP(who, amount, gs) {
   // Apply XP trait modifiers
   if      (who.trait === 'fast_learner') amount = Math.round(amount * 1.20);
   else if (who.trait === 'slow_learner') amount = Math.round(amount * 0.80);
+  amount = Math.max(1, Math.round(amount * xpMult(who)));          // intelligence: quicker study
   who.xp   = (who.xp   || 0) + amount;
   who.level = (who.level || 1);
   const needed = xpForLevel(who.level);
@@ -661,6 +664,7 @@ function giveXP(who, amount, gs) {
       if      (who.trait === 'fast_learner') pts = 1; // -1 skill pt
       else if (who.trait === 'slow_learner') pts = 3; // +1 skill pt
       else if (who.trait === 'lucky')        pts = 1; // -1 skill pt
+      pts += bonusSkillPts(who);                       // intelligence
       who.pendingSkillPts = (who.pendingSkillPts || 0) + pts;
       notify(`${who.name} reached Level ${who.level}! +1 ${attrKey}, +${pts} skill pts, +5 HP`, 'good');
     } else {

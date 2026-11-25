@@ -86,6 +86,9 @@ function finishRaid(gs, result, c) {
     for (const e of c.enemies) for (const it of (e._loot || [])) { addToInventory(gs.shelter.storage, it.id, it.qty); taken += it.qty; }
     gs.suspicion = clamp(gs.suspicion - 10, 0, CFG.SUSPICION_MAX);
     addLog(`The raid was driven off.${taken ? ` Took ${taken} items from the attackers.` : ''}`, 'good');
+  } else if (result === 'talked') {
+    gs.suspicion = clamp(gs.suspicion - 4, 0, CFG.SUSPICION_MAX);
+    addLog('You talked the raiders into leaving. They took nothing.', 'good');
   } else {
     addLog(hideFromRaid(gs), 'danger');
   }

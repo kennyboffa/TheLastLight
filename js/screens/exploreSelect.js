@@ -33,6 +33,8 @@ function _mapDist(locId, fromId) {
 function travelMinutes(gs, locId, fromId) {
   let mins = Math.max(20, Math.round(_mapDist(locId, fromId) / 2.2 / 5) * 5);
   if (gs.shelter && gs.shelter.hasBike) mins = Math.max(10, Math.round(mins / 2 / 5) * 5);
+  // exploration skill: you know the shortcuts
+  mins = Math.max(10, Math.round(mins * travelMult(gs.parent) / 5) * 5);
   return mins;
 }
 

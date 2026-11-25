@@ -348,6 +348,7 @@ function playerHitChance(gs, target) {
   if (weapDef) hit = weapDef.accuracy * 0.9 + (isRanged ? p.skills.firearms : p.skills.melee) * 4;
   else         hit = 60 + p.skills.melee * 4;
   hit += p.agility;
+  hit += perceptionHitBonus(p, isRanged);
   hit -= (target.agility || 3) * 2;
   if (nightFactor(gs.time) > 0.5 && p.trait !== 'night_owl') hit -= 10;
   if (c && c.ambush) hit += c.ambushBonus || 20;     // they haven't noticed you yet (better sneak, bigger bonus)
@@ -510,6 +511,36 @@ function playerFlee(gs) {
     combatLog(gs, 'Couldn\'t escape!', 'danger');
     _spendPlayerAp(gs, 0);
   }
+}
+
+// Talk them down (people only): speech + charisma against their numbers and
+// their nerve. Works best once they're hurting. Each failed try makes the next
+// one harder.
+function playerTalk(gs) {
+  const c = gs.combat;
+  if (!c || c.phase !== 'action' || c.turn !== 'player') return;
+  if (!canTalkDown(c)) { combatLog(gs, 'There is no talking to that.', 'warn'); return; }
+  if (c.playerAp < TALK_AP) { combatLog(gs, `Need ${TALK_AP} AP to talk.`, 'warn'); return; }
+  const pct = talkDownChance(gs);
+  c.playerAp -= TALK_AP;
+  const alive = c.enemies.filter(e => !e.dead);
+  const lines = [
+    '"Nobody else has to bleed for a can of beans."',
+    '"Walk away and we both see tomorrow."',
+    '"Look at me. Is this really worth dying over?"',
+    '"I have a kid waiting. Don\'t make me do this."',
+  ];
+  combatLog(gs, `${gs.parent.name}: ${randChoice(lines)}`, 'info');
+  if (chance(pct)) {
+    combatLog(gs, `${alive.length > 1 ? 'They' : alive[0].name} back off and leave. (${pct}%)`, 'good');
+    giveXP(gs.parent, 10 + alive.length * 5, gs);
+    c.phase = 'talked';
+    c.pendingAction = 'talked'; c.pendingTimer = 1.2;
+    return;
+  }
+  c.talkTries = (c.talkTries || 0) + 1;
+  combatLog(gs, `${alive[0].name}: "${randChoice(['Nice try.', 'Shut up and drop the bag.', 'Words don\'t fill bellies.', 'Too late for that.'])}" (${pct}%)`, 'danger');
+  _spendPlayerAp(gs, 0);
 }
 
 // ── Enemy turn ────────────────────────────────────────────────────────────────
@@ -817,6 +848,7 @@ function updateCombat(gs, dt) {
   else if (action === 'victory') endCombat(gs, 'victory');
   else if (action === 'defeat')  endCombat(gs, 'defeat');
   else if (action === 'fled')    endCombat(gs, 'fled');
+  else if (action === 'talked')  endCombat(gs, 'talked');
 }
 
 function endCombat(gs, result) {
@@ -851,7 +883,7 @@ function endCombat(gs, result) {
   // A shelter raid ends back in the shelter, not in exploration
   if (gs.isRaid && typeof finishRaid === 'function') { finishRaid(gs, result, c); return; }
 
-  if (result === 'victory' && c._encRef) c._encRef.killed = true;
+  if ((result === 'victory' || result === 'talked') && c._encRef) c._encRef.killed = true;
   // Bodies stay where they fell for the rest of this exploration
   if (result !== 'defeat' && typeof archiveCorpses === 'function') archiveCorpses(gs, c);
 
@@ -885,6 +917,7 @@ function endCombat(gs, result) {
     return;
   }
 
+  if (result === 'talked') addLog(`${gs.parent.name} talked their way out of a fight.`, 'good');
   // Victory — restart explore music
   Audio.startMusic();
   gs.inCombat = false;

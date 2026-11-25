@@ -49,7 +49,7 @@ function buildRoom(gs, roomId) {
   room.buildProgress = 0;
   const p = gs.parent;
   p.task = { type:'build', roomId };
-  p.taskDuration = def.buildTime || 8;
+  p.taskDuration = (def.buildTime || 8) * workTimeMult(p);
   p.taskProgress = 0;
   p.isWorking    = true;
 
@@ -83,7 +83,7 @@ function buildUpgrade(gs, upgradeId) {
 
   const p = gs.parent;
   p.task = { type:'build', upgradeId };
-  p.taskDuration = upg.buildTime || 6;
+  p.taskDuration = (upg.buildTime || 6) * workTimeMult(p);
   p.taskProgress = 0;
   p.isWorking    = true;
 
@@ -162,7 +162,7 @@ function craftItem(gs, recipeId, qty, who) {
   if (recipe.needsTools) useToolCharge(gs);
 
   who.task         = { type: 'craft', recipeId, qty: outQty };
-  who.taskDuration = (recipe.craftTime || 0.5) * batches;
+  who.taskDuration = (recipe.craftTime || 0.5) * batches * workTimeMult(who);   // intelligence
   who.taskProgress = 0;
   who.isWorking    = true;
   return { ok: true };

@@ -88,7 +88,7 @@ function tickStats(gs, dt) {
     if (p._bleedAcc >= 1) {
       const loss = Math.floor(p._bleedAcc);
       p._bleedAcc -= loss;
-      p.health = Math.max(0, p.health - loss);
+      p.health = Math.max(gs.plotArmor ? Math.min(5, p.health) : 0, p.health - loss);   // Plot Armor: never below 5
       if (!p._bleedWarnT || gs.time - p._bleedWarnT >= 120 || gs.time < p._bleedWarnT) {
         p._bleedWarnT = gs.time;
         notify(`${p.name} is still bleeding. Use a bandage.`, 'danger');
@@ -613,6 +613,8 @@ function advanceDay(gs) {
 function triggerGameOver(gs, reason) {
   if (gs.screen === 'gameOver') return;
   gs.gameOverReason = reason;
+  // Iron Man: death is final — this run's saves are erased, there's no going back
+  if (gs.ironMan && typeof eraseProfileSaves === 'function') eraseProfileSaves();
   gs.screen = 'gameOver';
   // Death can come from stats ticking mid-fight or mid-exploration: shut those down
   gs.inCombat = false;

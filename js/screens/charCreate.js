@@ -64,6 +64,8 @@ function initCharCreate() {
   GS.cc = {
     step: 0,
     difficulty: 'normal',
+    ironMan: false,
+    plotArmor: false,
     gender: 'father',
     name: 'Survivor',
     attrPts: 2,
@@ -89,12 +91,11 @@ function renderCharCreate(ctx, gs) {
 
   // Step indicator (5 steps: Trait now before Skills)
   const steps = ['Difficulty', 'Identity', 'Attributes', 'Trait', 'Skills'];
-  let sx = cx - (steps.length * 60) / 2 + 10;
+  const STEP_W = 96;
   for (let i = 0; i < steps.length; i++) {
     const active = i === cc.step;
     const col = active ? C.textBright : (i < cc.step ? C.textGood : C.textDim);
-    drawText(ctx, `${i+1}. ${steps[i]}`, sx, 42, col, 8, 'left', active);
-    sx += 60;
+    drawText(ctx, `${i+1}. ${steps[i]}`, cx + (i - (steps.length - 1) / 2) * STEP_W, 42, col, 8, 'center', active);
   }
   drawDivider(ctx, 40, 47, CFG.W - 80, C.border);
 
@@ -117,36 +118,55 @@ function renderCharCreate(ctx, gs) {
 
 // ── Step 0: Difficulty ────────────────────────────────────────────────────────
 
+// Layout shared by drawing and clicking (difficulty on the left, rule options on the right)
+const CC_DIFF = { w: 150, h: 28, step: 50, y0: 86 };
+const CC_OPTS = [
+  { key: 'ironMan', title: 'Iron Man', color: '#cc4428',
+    text: 'One life. When you die the game is over for good: this profile\'s morning autosave and saved game are erased, so you can\'t retry the day or load an older save. Every choice sticks.' },
+  { key: 'plotArmor', title: 'Plot Armor', color: '#6a9ad0',
+    text: 'A story-first safety net. Companions who drop to 0 HP in a fight faint instead of dying and get back up with 5 HP afterwards. You faint too instead of dying, as long as a companion is still standing, and come round with 5 HP if they win. Bleeding can\'t take anyone below 5 HP. Without Plot Armor, companions who fall in combat are dead and gone, and bleeding can kill you.' },
+];
+function _ccDiffX(cx) { return cx - 190; }
+function _ccOptBox(cx, i) { return { x: cx - 20, y: 80 + i * 132, w: 330, h: 124 }; }
+
 function renderStepDifficulty(ctx, gs, cx) {
   const cc = gs.cc;
   const mx = gs.mouse.x, my = gs.mouse.y;
-  let y = 68;
+  const dx = _ccDiffX(cx), dcx = dx + CC_DIFF.w / 2;
+  drawText(ctx, 'Choose difficulty:', dcx, 68, C.textDim, 9, 'center');
 
-  drawText(ctx, 'Choose difficulty:', cx, y, C.textDim, 9, 'center');
-  y += 18;
-
-  const keys = ['easy','normal','hard'];
-  const btnW = 150, btnH = 28;
-  for (const key of keys) {
+  let y = CC_DIFF.y0;
+  for (const key of ['easy', 'normal', 'hard']) {
     const def = DIFFICULTIES[key];
-    const bx = cx - btnW / 2;
     const sel = cc.difficulty === key;
-    const hov = hitTest(mx, my, bx, y, btnW, btnH);
-    fillRect(ctx, bx, y, btnW, btnH, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
-    strokeRect(ctx, bx, y, btnW, btnH, sel ? def.color : (hov ? C.border2 : C.border));
-    drawText(ctx, def.label, cx, y + btnH / 2 + 3, sel ? def.color : C.textBright, 11, 'center', true);
-    drawText(ctx, def.desc, cx, y + btnH + 8, C.textDim, 7, 'center');
-    y += btnH + 22;
+    const hov = hitTest(mx, my, dx, y, CC_DIFF.w, CC_DIFF.h);
+    fillRect(ctx, dx, y, CC_DIFF.w, CC_DIFF.h, sel ? '#0e1a0e' : (hov ? C.btnHover : C.btnBg));
+    strokeRect(ctx, dx, y, CC_DIFF.w, CC_DIFF.h, sel ? def.color : (hov ? C.border2 : C.border));
+    drawText(ctx, def.label, dcx, y + CC_DIFF.h / 2 + 3, sel ? def.color : C.textBright, 11, 'center', true);
+    drawWrapped(ctx, def.desc, dx - 20, y + CC_DIFF.h + 8, CC_DIFF.w + 40, 6, C.textDim, 8);
+    y += CC_DIFF.step + 12;
   }
 
-  // Show selected difficulty summary
+  // Rule options
+  drawText(ctx, 'Options:', _ccOptBox(cx, 0).x + 165, 68, C.textDim, 9, 'center');
+  CC_OPTS.forEach((o, i) => {
+    const b = _ccOptBox(cx, i);
+    const on = !!cc[o.key];
+    const hov = hitTest(mx, my, b.x, b.y, b.w, b.h);
+    fillRect(ctx, b.x, b.y, b.w, b.h, on ? '#10141c' : (hov ? '#12121a' : C.panelBg));
+    strokeRect(ctx, b.x, b.y, b.w, b.h, on ? o.color : (hov ? C.border2 : C.border));
+    // checkbox
+    strokeRect(ctx, b.x + 10, b.y + 9, 12, 12, on ? o.color : C.border2);
+    if (on) fillRect(ctx, b.x + 13, b.y + 12, 6, 6, o.color);
+    drawText(ctx, `${o.title}  ${on ? 'ON' : 'OFF'}`, b.x + 30, b.y + 19, on ? o.color : C.textBright, 10, 'left', true);
+    drawWrapped(ctx, o.text, b.x + 10, b.y + 34, b.w - 20, 7, C.text, 10);
+  });
+
+  // Summary
   const selDef = DIFFICULTIES[cc.difficulty];
-  y += 8;
-  drawDivider(ctx, 80, y, CFG.W - 160, C.border);
-  y += 12;
-  drawText(ctx, `Selected: ${selDef.label}`, cx, y, selDef.color, 9, 'center', true);
-  y += 14;
-  drawText(ctx, `Decay rate ×${selDef.decayMult}  ·  Suspicion ×${selDef.suspMult}`, cx, y, C.textDim, 8, 'center');
+  const tags = [selDef.label, cc.ironMan ? 'Iron Man' : null, cc.plotArmor ? 'Plot Armor' : null].filter(Boolean).join('  ·  ');
+  drawText(ctx, tags, cx, CFG.H - 48, selDef.color, 9, 'center', true);
+  drawText(ctx, `Decay rate ×${selDef.decayMult}  ·  Suspicion ×${selDef.suspMult}`, cx, CFG.H - 36, C.textDim, 8, 'center');
 }
 
 // ── Step 1: Gender & Name ─────────────────────────────────────────────────────
@@ -339,15 +359,17 @@ function charCreateClick(mx, my, gs) {
   if (cc.step > 0 && hitTest(mx, my, 40, CFG.H - 32, 80, 20)) cc.step--;
 
   if (cc.step === 0) {
-    // Difficulty selection
-    const keys = ['easy','normal','hard'];
-    const btnW = 150, btnH = 36;
-    let y = 86;
-    for (const key of keys) {
-      const bx = cx - btnW / 2;
-      if (hitTest(mx, my, bx, y, btnW, btnH)) cc.difficulty = key;
-      y += btnH + 10;
+    // Difficulty selection (same layout as drawn)
+    let y = CC_DIFF.y0;
+    for (const key of ['easy', 'normal', 'hard']) {
+      if (hitTest(mx, my, _ccDiffX(cx), y, CC_DIFF.w, CC_DIFF.h)) cc.difficulty = key;
+      y += CC_DIFF.step + 12;
     }
+    // Rule options toggle
+    CC_OPTS.forEach((o, i) => {
+      const bx = _ccOptBox(cx, i);
+      if (hitTest(mx, my, bx.x, bx.y, bx.w, bx.h)) cc[o.key] = !cc[o.key];
+    });
   }
 
   if (cc.step === 1) {
@@ -428,6 +450,8 @@ function finalizeCharacter(gs) {
 
   // Apply difficulty
   gs.difficulty = cc.difficulty || 'normal';
+  gs.ironMan    = !!cc.ironMan;      // one life: saves erased on death
+  gs.plotArmor  = !!cc.plotArmor;    // faint instead of dying (see combat.js)
   gs.worldSeed  = Math.floor(Math.random() * 1e9);   // layout seed for this run
   gs.runId      = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);   // ties autosaves to this playthrough
 
@@ -470,5 +494,5 @@ function finalizeCharacter(gs) {
   if (typeof autoSaveGame === 'function') autoSaveGame(gs);
   Audio.startShelterMusic();
   const diffLabel = DIFFICULTIES[gs.difficulty].label;
-  addLog(`Day 1. ${gs.parent.name} and Lily are hiding below ground. Difficulty: ${diffLabel}.`, 'info');
+  addLog(`Day 1. ${gs.parent.name} and Lily are hiding below ground. Difficulty: ${diffLabel}${gs.ironMan ? ', Iron Man' : ''}${gs.plotArmor ? ', Plot Armor' : ''}.`, 'info');
 }

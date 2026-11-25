@@ -448,9 +448,14 @@ function drawGameOver(ctx, gs) {
   const mx = gs.mouse.x, my = gs.mouse.y;
 
   // Retry from this run's last morning autosave (never one from an older game)
-  const info = (typeof getAutosaveInfo === 'function') && getAutosaveInfo();
+  const info = !gs.ironMan && (typeof getAutosaveInfo === 'function') && getAutosaveInfo();
   const autoInfo = info && gs.runId && info.runId === gs.runId ? info : null;
   let btnY = 170;
+  if (gs.ironMan) {
+    drawText(ctx, 'IRON MAN', cx, 164, '#aa3322', 9, 'center', true);
+    drawText(ctx, 'There is no going back. This story is over.', cx, 178, C.textDim, 8, 'center');
+    btnY = 196;
+  }
   if (autoInfo) {
     const abx = cx - 110, abw = 220, abh = 24;
     const autoBtnHov = hitTest(mx, my, abx, btnY, abw, abh);

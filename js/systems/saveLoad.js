@@ -41,6 +41,9 @@ function deleteProfile(id) {
   if (activeProfileId() === id || !list.some(p => p.id === activeProfileId())) setActiveProfile(list[0].id);
   return true;
 }
+/** Remove the active profile's manual save and autosave (Iron Man deaths). */
+function eraseProfileSaves() { _lsDel(_saveKey()); _lsDel(_autoKey()); }
+
 function _profileKey(base, id) { id = id || activeProfileId(); return id === 'default' ? base : `${base}__${id}`; }
 function _saveKey() { return _profileKey(SAVE_KEY); }
 function _autoKey() { return _profileKey(AUTOSAVE_KEY); }

@@ -126,6 +126,8 @@ const GS = {
 
   // ── Difficulty ────────────────────────────────────────────────────────────
   difficulty: 'normal',   // 'easy' | 'normal' | 'hard'
+  ironMan: false,         // one life — saves erased on death
+  plotArmor: false,       // faint instead of dying (companions, and you while a companion stands)
 
   // ── Flags ─────────────────────────────────────────────────────────────────
   flags: {

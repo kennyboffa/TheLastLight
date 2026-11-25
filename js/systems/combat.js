@@ -37,22 +37,45 @@ function bleedChance(weaponId, attacker) {
   return 12;                                                          // fists, clubs, pipes
 }
 
+// ── Plot Armor ───────────────────────────────────────────────────────────────
+// With Plot Armor on: companions faint instead of dying, you faint instead of
+// dying while your companion still stands, and bleeding stops at 5 HP.
+function plotArmor(gs) { return !!gs.plotArmor; }
+function _companionStanding(c) { return !!(c.companion && !c.compDown && !c.compDead); }
+
+/** You hit 0 HP. Returns true if you only fainted (Plot Armor with a companion standing). */
+function _playerFalls(gs, fromX, impact, cause) {
+  const c = gs.combat;
+  if (plotArmor(gs) && _companionStanding(c)) {
+    c.player.hp = 0;
+    gs.parent.health = 1;            // out cold, not dead (keeps the general death check away)
+    c.playerDown = true;
+    c.playerDeathT0 = Date.now() + (impact || 0); c.playerDeathDir = fromX > c.playerWx ? -1 : 1;
+    combatLog(gs, `${gs.parent.name} collapses! ${c.companion.name} fights on.`, 'danger');
+    return true;
+  }
+  _fx(gs, 'death', 'player', 0, fromX, (impact || 0) + 20);
+  c.phase = 'defeat';
+  combatLog(gs, cause || `${gs.parent.name} has fallen.`, 'danger');
+  c.pendingAction = 'defeat'; c.pendingTimer = 1.6 + (impact || 0) / 1000;
+  return false;
+}
+
 /** Bleeding damage at the start of a round. Returns true if it killed. */
 function _bleedTick(gs, who) {
   const c = gs.combat;
-  const dmg = randInt(1, 3);
+  let dmg = randInt(1, 3);
   if (who === 'player') {
+    if (c.playerDown) return false;
+    if (plotArmor(gs)) {                                   // bleeding can't take you below 5 HP
+      dmg = Math.min(dmg, Math.max(0, c.player.hp - 5));
+      if (dmg <= 0) return false;
+    }
     c.player.hp -= dmg;
     gs.parent.health = Math.max(0, gs.parent.health - dmg);
     _fx(gs, 'bleed', 'player', dmg, c.playerWx, 0);
     combatLog(gs, `${gs.parent.name} is bleeding (-${dmg}).`, 'danger');
-    if (c.player.hp <= 0) {
-      _fx(gs, 'death', 'player', 0, c.playerWx + 1, 20);
-      c.phase = 'defeat';
-      combatLog(gs, `${gs.parent.name} bled out.`, 'danger');
-      c.pendingAction = 'defeat'; c.pendingTimer = 1.6;
-      return true;
-    }
+    if (c.player.hp <= 0) return !_playerFalls(gs, c.playerWx + 1, 0, `${gs.parent.name} bled out.`);
     return false;
   }
   who.hp -= dmg;
@@ -503,6 +526,7 @@ function enemyTurn(gs) {
   if (checkCombatVictory(gs)) return;
   let attackOrder = 0;   // stagger attack animations so each one is visible
   for (const enemy of c.enemies) {
+    if (c.phase !== 'action') return;
     if (enemy.dead) continue;
 
     let ap = enemyMaxAp(enemy);
@@ -517,6 +541,8 @@ function enemyTurn(gs) {
       if (enemy._targetComp === undefined || ap === enemyMaxAp(enemy)) {
         enemy._targetComp = !!comp && (cDist < pDist - TILE / 2 || (cDist <= MELEE_RANGE && chance(30)));
       }
+      if (c.playerDown && !comp) break;                   // nobody left standing to hit
+      if (c.playerDown) enemy._targetComp = true;          // you're on the ground: they go for your companion
       const targetComp = enemy._targetComp && !!comp;
       const targetX = targetComp ? c.compWx : c.playerWx;
       const tiles   = gs.inCombat ? tilesBetween(targetX, enemy.worldX) : 1;
@@ -556,11 +582,8 @@ function enemyTurn(gs) {
             _startPlayerBleeding(gs, `${gs.parent.name} is badly hurt and bleeding.`);
           }
           if (c.player.hp <= 0) {
-            _fx(gs, 'death', 'player', 0, enemy.worldX, impact + 20);
-            c.phase = 'defeat';
-            combatLog(gs, `${gs.parent.name} has fallen.`, 'danger');
-            c.pendingAction = 'defeat'; c.pendingTimer = 1.6 + impact / 1000;
-            return;
+            if (!_playerFalls(gs, enemy.worldX, impact)) return;
+            break;                                         // this enemy's done; others go for the companion
           }
         } else {
           combatLog(gs, `${enemy.name} misses.`, 'normal');
@@ -585,6 +608,12 @@ function enemyTurn(gs) {
   }
 
   c.surprised = false;   // the surprise only lasts their opening round
+  if (c.phase !== 'action') return;
+  // Out cold: your turn passes while your companion fights on
+  if (c.playerDown) {
+    c.turn = 'enemy'; c.pendingAction = 'enemy'; c.pendingTimer = 1.1;
+    return;
+  }
   // Your own bleeding wound costs blood every round
   if (gs.parent.bleeding && c.phase === 'action' && _bleedTick(gs, 'player')) return;
   // Reset player AP for next turn; input waits until the attack animations finish
@@ -602,8 +631,9 @@ function _companionTurn(gs, order) {
   const c = gs.combat, comp = c.companion, p = gs.parent;
   comp.equipped = comp.equipped || { weapon: null, chest: null, legs: null };
   let ap = 4;
-  // First aid comes first
-  if (p.bleeding && !c.compBandaged && countInInventory(p.inventory, 'bandage') > 0) {
+  // First aid comes first (not while you're out cold: they fight for both of you)
+  if (c.playerDown) { /* no time for first aid */ }
+  else if (p.bleeding && !c.compBandaged && countInInventory(p.inventory, 'bandage') > 0) {
     c.compBandaged = true; ap -= 2;
     removeFromInventory(p.inventory, 'bandage', 1);
     p.bleeding = false;
@@ -687,6 +717,23 @@ function _companionTurn(gs, order) {
   return false;
 }
 
+/** A companion was killed (no Plot Armor): gone for good, their gear left where they fell. */
+function _companionDied(gs, c) {
+  const comp = c.companion;
+  gs.survivors = (gs.survivors || []).filter(s => s !== comp && s.id !== comp.id);
+  gs.exploreCompanionId = null;
+  const es = typeof exploreState !== 'undefined' ? exploreState : null;
+  const gear = Object.values(comp.equipped || {}).filter(Boolean);
+  if (es && gear.length) {
+    const list = es.building ? null : es.loot;
+    if (list) for (const id of gear) list.push({ id, qty: 1, wx: c.compWx + randInt(-10, 10), wy: PLAYER_FOOT, taken: false });
+    else if (es.building) { const area = curArea(es); area.containers.push({ wx: c.compWx, type: 'bag', label: comp.name, searched: true, searching: false, searchProgress: 0, searchDuration: 1, loot: gear.map(id => ({ id, qty: 1 })) }); }
+  }
+  gs.parent.depression = clamp(gs.parent.depression + 25, 0, 100);
+  gs.child.depression = clamp(gs.child.depression + 15, 0, 100);
+  addLog(`${comp.name} died out there. You couldn't save them.`, 'danger');
+}
+
 // An enemy attacks the companion instead of the player
 function _enemyHitsCompanion(gs, enemy, impact) {
   const c = gs.combat, comp = c.companion;
@@ -704,10 +751,21 @@ function _enemyHitsCompanion(gs, enemy, impact) {
   _fx(gs, 'hit', pseudo, dealt, enemy.worldX, impact);
   combatLog(gs, `${enemy.name} hits ${comp.name} for ${dealt} dmg.`, 'danger');
   if (comp.health <= 0) {
-    comp.health = 1;                 // knocked out, not killed
+    comp.health = plotArmor(gs) ? 1 : 0;
     c.compDown = true;
-    combatLog(gs, `${comp.name} is knocked down and out of the fight!`, 'danger');
-    notify(`${comp.name} is badly hurt.`, 'danger');
+    if (plotArmor(gs)) {
+      combatLog(gs, `${comp.name} faints and is out of the fight!`, 'danger');
+    } else {
+      c.compDead = true;                                    // without Plot Armor, people die
+      combatLog(gs, `${comp.name} is killed!`, 'danger');
+      notify(`${comp.name} is dead.`, 'danger');
+    }
+    // both of you down: the fight is lost
+    if (c.playerDown) {
+      c.phase = 'defeat';
+      combatLog(gs, 'There is no one left standing.', 'danger');
+      c.pendingAction = 'defeat'; c.pendingTimer = 1.8;
+    }
   }
 }
 
@@ -766,6 +824,20 @@ function endCombat(gs, result) {
   gs.parent.health    = Math.max(0, c.player.hp);
   gs.parent.tiredness = clamp(gs.parent.tiredness + 15, 0, 100);
   Audio.stopCombatMusic();
+
+  if (result !== 'defeat') {
+    // Plot Armor: whoever fainted comes round with 5 HP
+    if (c.playerDown) {
+      gs.parent.health = 5;
+      addLog(`${gs.parent.name} comes to${c.companion ? `, ${c.companion.name} kneeling beside them` : ''}.`, 'info');
+      notify(`You come round with 5 HP.`, 'warn');
+    }
+    if (c.companion && c.compDown && !c.compDead) {
+      c.companion.health = Math.max(5, c.companion.health || 0);
+      addLog(`${c.companion.name} gets back up, shaken (5 HP).`, 'info');
+    }
+    if (c.companion && c.compDead) _companionDied(gs, c);
+  }
 
   if (result === 'defeat') {
     gs.inCombat = false;

@@ -427,6 +427,7 @@ function updateExplore(gs, dt) {
   if (!exploreState) return;
   _tickFlashlight(gs, dt);
   _exploreHints(gs);
+  _companionField(gs, dt);
   if (exploreState.building) { updateBuildingInterior(gs, dt); return; }
 
   const es = exploreState;
@@ -634,9 +635,11 @@ function openContainerLoot(gs, container) {
   gs.screen = 'lootPickup';
 }
 
-function finishSearch(container, gs) {
+// `byCompanion`: searched by your companion — the items stay in the container
+// for you to take (no dialog pops up, no XP for you)
+function finishSearch(container, gs, byCompanion) {
   if (!container.loot || container.loot.length === 0) {
-    notify('Nothing useful found.', 'info');
+    if (!byCompanion) notify('Nothing useful found.', 'info');
     return;
   }
 
@@ -685,7 +688,8 @@ function finishSearch(container, gs) {
 
   // Show what was found and let the player pick; leftovers stay in the container
   container.loot = loot;
-  if (loot.length === 0) { notify('Nothing useful found.', 'info'); return; }
+  if (loot.length === 0) { if (!byCompanion) notify('Nothing useful found.', 'info'); return; }
+  if (byCompanion) return;
   giveXP(gs.parent, loot.length * 2, gs); // +2 XP per item found
   openContainerLoot(gs, container);
 }
@@ -1710,6 +1714,83 @@ function detectionMult(gs, indoors) {
   return m;
 }
 
+// ── Companion in the field ───────────────────────────────────────────────────
+// Follows you, wanders off to search containers near you on their own, calls
+// out enemies they spot and loot they find, and says when they're hurt.
+function _companionSay(st, text) { st.say = { text, t0: Date.now() }; }
+
+function _companionField(gs, dt) {
+  const es = exploreState;
+  const comp = gs.exploreCompanionId && (gs.survivors || []).find(s => s.id === gs.exploreCompanionId);
+  if (!es || !comp || gs.inCombat) return;
+  const inB = !!es.building;
+  const area = inB ? curArea(es) : null;
+  const px = inB ? es.building.px : es.px;
+  const facing = inB ? (es.building.facing || 1) : (es.facing || 1);
+  const key = areaKey(es);
+  let st = es._comp;
+  if (!st || st.key !== key) st = es._comp = { key, x: px - facing * 22, facing, mode: 'follow', t: 0, dur: 1, cool: 2 + Math.random() * 2, target: null, say: st && st.say };
+  const speed = CFG.PLAYER_SPEED * 60 * 0.95;
+  const moveTo = (tx) => {
+    const d = tx - st.x;
+    if (Math.abs(d) < 2) { st.moving = false; return true; }
+    st.facing = d > 0 ? 1 : -1;
+    st.x += Math.sign(d) * Math.min(Math.abs(d), speed * dt);
+    st.moving = true;
+    return false;
+  };
+  const containers = inB ? area.containers : es.containers;
+  if (st.mode === 'follow') {
+    const goal = px - facing * 22;
+    if (Math.abs(goal - st.x) > 6) moveTo(goal); else { st.moving = false; st.facing = facing; }
+    // look for something to search near you (not the one you're at)
+    st.cool -= dt;
+    if (st.cool <= 0) {
+      st.cool = 2.5;
+      const pick = containers
+        .filter(c => !c.searched && !c.searching && !c._compClaim && Math.abs(c.wx - px) < 150 && Math.abs(c.wx - px) > 30)
+        .sort((a, b) => Math.abs(a.wx - st.x) - Math.abs(b.wx - st.x))[0];
+      if (pick) { st.mode = 'go'; st.target = pick; pick._compClaim = true; }
+    }
+  } else if (st.mode === 'go') {
+    const c = st.target;
+    if (!c || c.searched || Math.abs(px - st.x) > 230) { if (c) c._compClaim = false; st.mode = 'follow'; st.target = null; }
+    else if (moveTo(c.wx)) {
+      const scav = (comp.skills && comp.skills.scavenging) || 1;
+      st.mode = 'search'; st.dur = st.t = Math.max(1.2, (c.searchDuration || 3) * (1.25 - scav * 0.06)); st.moving = false;
+      if (typeof Audio.rustle === 'function') Audio.rustle();
+    }
+  } else if (st.mode === 'search') {
+    const c = st.target;
+    if (!c || c.searched || c.searching) { st.mode = 'follow'; st.target = null; if (c) c._compClaim = false; }
+    else if (Math.abs(px - st.x) > 260) { c._compClaim = false; st.mode = 'follow'; st.target = null; _companionSay(st, 'Wait for me!'); }
+    else {
+      st.t -= dt;
+      if (st.t <= 0) {
+        c.searched = true; c._compClaim = false;
+        finishSearch(c, gs, true);
+        const n = (c.loot || []).length;
+        _companionSay(st, n ? `Found something in this ${c.type}.` : `This ${c.type}'s empty.`);
+        st.mode = 'follow'; st.target = null; st.cool = 3;
+      }
+    }
+  }
+  // Calls out danger before it finds you
+  const encs = inB ? (area.encounters || []) : es.encounters;
+  for (const enc of encs) {
+    if (enc.triggered || enc.killed || enc._compWarned) continue;
+    if (Math.abs(enc.wx - px) < encounterDetectPx(gs, enc, inB) * 1.5) {
+      enc._compWarned = true;
+      const mech = /robot|drone/.test(enc.previewSprite || '');
+      _companionSay(st, mech ? 'Machines ahead. Keep it quiet.' : (enc.previewSprite === 'wolf' ? 'Animals. Over there.' : 'Someone\'s ahead. Careful.'));
+    }
+  }
+  // ...and says when they're hurt
+  if (comp.health < (comp.maxHealth || 100) * 0.4 && (!st.hurtT || gs.time - st.hurtT > 120 || gs.time < st.hurtT)) {
+    st.hurtT = gs.time; _companionSay(st, 'I\'m hurt. Got a bandage?');
+  }
+}
+
 // ── Detection & opening shots ────────────────────────────────────────────────
 
 /** How close (px) you can get before this group notices you: their type's
@@ -2339,8 +2420,23 @@ function _drawCompanion(ctx, gs, px, facing, animFrame, moving) {
   if (compIdx < 0) return;
   const comp = gs.survivors[compIdx];
   const c = gs.inCombat && gs.combat ? gs.combat : null;
+  const key = compIdx % 2 === 0 ? 'survivor_1' : 'survivor_2';
+  const wpn = comp.equipped && comp.equipped.weapon;
   if (!c) {
-    drawSurvivor(ctx, px - facing * 22, PLAYER_FOOT, 2, -facing, animFrame, compIdx, moving ? 'side' : 'front');
+    const st = exploreState && exploreState._comp;
+    const cx = st ? st.x : px - facing * 22;
+    const f = st ? st.facing : facing;
+    const bob = st && st.moving ? Math.round(Math.abs(Math.sin(Date.now() / 90))) : 0;
+    if (!drawCharSprite(ctx, key, cx, PLAYER_FOOT - bob, 2, f, 48, wpn ? { id: wpn, t0: 0 } : null)) {
+      drawSurvivor(ctx, cx, PLAYER_FOOT, 2, f, animFrame, compIdx, st && st.moving ? 'side' : 'front');
+    }
+    if (st && st.mode === 'search') drawSearchBar(ctx, cx, PLAYER_FOOT - 52, 1 - st.t / st.dur);
+    if (st && st.say && Date.now() - st.say.t0 < 3200) {
+      const w = Math.min(150, st.say.text.length * 4.6 + 10);
+      fillRect(ctx, cx - w / 2, PLAYER_FOOT - 72, w, 12, '#0c0e12', 0.85);
+      strokeRect(ctx, cx - w / 2, PLAYER_FOOT - 72, w, 12, '#4a5a4a');
+      drawText(ctx, st.say.text, cx, PLAYER_FOOT - 63, '#c8d8b8', 6, 'center');
+    }
     return;
   }
   const alive = c.enemies.filter(e => !e.dead);
@@ -2357,7 +2453,9 @@ function _drawCompanion(ctx, gs, px, facing, animFrame, moving) {
     return;
   }
   const x = c.compWx + _hitOffset(c.compHitT0, -f);
-  drawSurvivor(ctx, x, PLAYER_FOOT, 2, f, 0, compIdx, 'front');
+  if (!drawCharSprite(ctx, key, x, PLAYER_FOOT, 2, f, 48, wpn ? { id: wpn, t0: c.compAtkT0 } : null)) {
+    drawSurvivor(ctx, x, PLAYER_FOOT, 2, f, 0, compIdx, 'front');
+  }
   ctx.restore();
   drawStatBar(ctx, c.compWx - 18, PLAYER_FOOT - 50, 36, 4, comp.health, comp.maxHealth || 100,
               comp.health / (comp.maxHealth || 100) > 0.4 ? '#3a7a5a' : '#cc2020');

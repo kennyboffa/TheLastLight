@@ -69,11 +69,21 @@ function saveGame(gs) {
   }
 }
 
+/** Clear the current game back to a fresh state (keeping preferences), so a
+ *  loaded save never inherits anything from the run that was just played. */
+function _resetForLoad(gs) {
+  if (typeof GS_INITIAL === 'undefined') return;
+  const keep = { settings: gs.settings, userScale: gs.userScale, mouse: gs.mouse, keys: {} };
+  for (const k of Object.keys(gs)) if (!(k in keep)) delete gs[k];
+  Object.assign(gs, JSON.parse(JSON.stringify(GS_INITIAL)), keep);
+}
+
 function loadGame(gs) {
   try {
     const raw = localStorage.getItem(_saveKey());
     if (!raw) { notify('No save found.', 'warn'); return false; }
     const data = JSON.parse(raw);
+    _resetForLoad(gs);
     // Restore all saved keys onto GS
     for (const key of Object.keys(data)) {
       if (key.startsWith('_save') || key === '_savedAt') continue;
@@ -169,6 +179,7 @@ function loadAutosave(gs) {
     const raw = localStorage.getItem(_autoKey());
     if (!raw) { notify('No autosave found.', 'warn'); return false; }
     const data = JSON.parse(raw);
+    _resetForLoad(gs);
     for (const key of Object.keys(data)) {
       if (key.startsWith('_save') || key === '_savedAt' || key === '_isAuto') continue;
       if (SKIP_FIELDS.includes(key)) continue;

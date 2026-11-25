@@ -479,8 +479,7 @@ function advanceDay(gs) {
   gs.time = CFG.DAY_START;
   gs.timeScale = 1; // reset game speed to normal at start of each new day
 
-  // Autosave at the start of every new day
-  if (typeof autoSaveGame === 'function') autoSaveGame(gs);
+  // (the morning autosave is taken after the whole new-day update — see drawDayTransition)
   // High suspicion may bring a raid later today
   if (typeof rollDailyRaid === 'function') rollDailyRaid(gs);
 

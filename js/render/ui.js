@@ -402,6 +402,9 @@ function drawDayTransition(ctx, gs) {
       df.phase = 'text';
       df.timer = 0;
       advanceDay(gs);
+      // Autosave the finished morning: overnight hunger, healing and wake-ups included,
+      // so retrying after a death really starts from this morning
+      if (typeof autoSaveGame === 'function') autoSaveGame(gs);
     }
   } else if (df.phase === 'text') {
     drawFade(ctx, 1);

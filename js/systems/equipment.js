@@ -44,14 +44,18 @@ function normalizeEquipment(p) {
 }
 
 /** Equip item `id` taken from `fromInv`; whatever was in the slot goes to the bag. */
-function equipItem(gs, id, fromInv) {
-  const p = gs.parent, def = getItemDef(id), key = equipSlotFor(def);
+// Companions can hold a weapon and wear clothes (no light or backpack)
+const COMPANION_SLOTS = ['weapon', 'chest', 'legs'];
+
+function equipItem(gs, id, fromInv, who) {
+  const p = who || gs.parent, def = getItemDef(id), key = equipSlotFor(def);
   if (!key) return false;
+  if (p !== gs.parent && !COMPANION_SLOTS.includes(key)) { notify(`${p.name} can't use that.`, 'warn'); return false; }
   normalizeEquipment(p);
   if (countInInventory(fromInv, id) <= 0) return false;
   removeFromInventory(fromInv, id, 1);
   const old = getEquipped(p, key);
-  if (old) addToInventory(p.inventory, old, 1);
+  if (old) addToInventory(gs.parent.inventory, old, 1);      // whatever they had goes in your bag
   _setEquipped(p, key, id);
   if (key === 'light') p.lightOn = false;
   if (typeof Audio !== 'undefined' && Audio.rustle) Audio.rustle();
@@ -60,12 +64,12 @@ function equipItem(gs, id, fromInv) {
 }
 
 /** Take off whatever is in `key` and put it in the bag. */
-function unequipSlot(gs, key) {
-  const p = gs.parent, id = getEquipped(p, key);
+function unequipSlot(gs, key, who) {
+  const p = who || gs.parent, id = getEquipped(p, key);
   if (!id) return false;
   _setEquipped(p, key, null);
   if (key === 'light') p.lightOn = false;
-  addToInventory(p.inventory, id, 1);
+  addToInventory(gs.parent.inventory, id, 1);
   notify(`Unequipped ${getItemDef(id).name}.`);
   return true;
 }
@@ -99,11 +103,12 @@ function hasVest(p) {
 
 const DOLL_BOX = 30;
 
-function drawEquipDoll(ctx, gs, x, y, w, h, mx, my) {
-  const p = gs.parent;
+function drawEquipDoll(ctx, gs, x, y, w, h, mx, my, who, title) {
+  const p = who || gs.parent;
+  const isComp = p !== gs.parent;
   normalizeEquipment(p);
   drawPanel(ctx, x, y, w, h, '#0c0f14', C.border2);
-  drawText(ctx, 'EQUIPMENT', x + w / 2, y + 10, C.textDim, 7, 'center', true);
+  if (title !== false) drawText(ctx, title || 'EQUIPMENT', x + w / 2, y + 10, C.textDim, 7, 'center', true);
 
   // Character, three times the in-game size, holding the equipped weapon.
   // (The idle frame's body sits 12px left of the frame centre and its feet
@@ -114,9 +119,17 @@ function drawEquipDoll(ctx, gs, x, y, w, h, mx, my) {
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath(); ctx.ellipse(cx, footY, 8 * K, 2 * K, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.translate(cx + 12 * K, footY - 10 * K);
-  ctx.scale(K, K);
-  drawParent(ctx, 0, 0, 2, 1, 0, p.gender, 'front', p.equipped.weapon ? { id: p.equipped.weapon, t0: 0 } : null);
+  if (isComp) {
+    // a survivor, drawn from their sprite at the same scale, holding their weapon
+    ctx.translate(cx, footY);
+    ctx.scale(K, K);
+    const idx = (gs.survivors || []).indexOf(p);
+    drawCharSprite(ctx, idx % 2 === 0 ? 'survivor_1' : 'survivor_2', 0, 0, 2, 1, 48, p.equipped.weapon ? { id: p.equipped.weapon, t0: 0 } : null);
+  } else {
+    ctx.translate(cx + 12 * K, footY - 10 * K);
+    ctx.scale(K, K);
+    drawParent(ctx, 0, 0, 2, 1, 0, p.gender, 'front', p.equipped.weapon ? { id: p.equipped.weapon, t0: 0 } : null);
+  }
   ctx.restore();
 
   // Slots: left column = back / hands / light, right column = chest / legs
@@ -128,6 +141,7 @@ function drawEquipDoll(ctx, gs, x, y, w, h, mx, my) {
   };
   const boxes = [];
   for (const sl of EQUIP_SLOTS) {
+    if (isComp && !COMPANION_SLOTS.includes(sl.key)) continue;
     const [bx, by] = pos[sl.key];
     const id = getEquipped(p, sl.key);
     const def = id ? getItemDef(id) : null;

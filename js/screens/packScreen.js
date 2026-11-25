@@ -1,7 +1,17 @@
 // packScreen.js — Pre-exploration inventory packing and equipment screen
 'use strict';
 
-let packUI = { invScroll: 0, storScroll: 0, selected: null, selectedSide: null, confirmExplore: false };
+let packUI = { invScroll: 0, storScroll: 0, selected: null, selectedSide: null, confirmExplore: false, dollWho: 'parent' };
+
+/** Survivors fit to come along: at home, not on a mission, not badly hurt or exhausted. */
+function availableCompanions(gs) {
+  return (gs.survivors || []).filter(s => !s.onMission && !s.isExploring && !s.task
+    && s.health > (s.maxHealth || 100) * 0.3 && (s.tiredness || 0) < 75);
+}
+function _packCompanion(gs) {
+  const c = gs.exploreCompanionId && (gs.survivors || []).find(s => s.id === gs.exploreCompanionId);
+  return c && availableCompanions(gs).includes(c) ? c : null;
+}
 
 function _packLayout() {
   const actionBarH = 28;
@@ -28,7 +38,30 @@ function renderPackScreen(ctx, gs) {
   const L = _packLayout();
   const actionBarH = L.actionBarH, panelY = L.panelY, panelH = L.panelH;
   const invW = L.invW, storW = L.storW, invX = L.invX, storX = L.storX;
-  gs._packDollBoxes = drawEquipDoll(ctx, gs, L.dollX, panelY, L.dollW, panelH, mx, my);
+  // Companion: who comes along (cycles through the survivors fit to go)
+  const comp = _packCompanion(gs);
+  if (!comp) packUI.dollWho = 'parent';
+  const avail = availableCompanions(gs);
+  const cbx = CFG.W - 196, cby = 6;
+  if (avail.length) {
+    drawButton(ctx, cbx, cby, 186, 16, `Companion: ${comp ? comp.name : 'none'}  ▸`, hitTest(mx, my, cbx, cby, 186, 16), !!comp);
+    gs._packCompBtn = { x: cbx, y: cby, w: 186, h: 16 };
+  } else {
+    drawText(ctx, 'No one free to come along', CFG.W - 12, 18, C.textDim, 7, 'right');
+    gs._packCompBtn = null;
+  }
+  // Doll tabs: you / your companion; equipping goes to whoever is shown
+  const who = packUI.dollWho === 'comp' && comp ? comp : gs.parent;
+  gs._packDollBoxes = drawEquipDoll(ctx, gs, L.dollX, panelY, L.dollW, panelH, mx, my, who, false);
+  gs._packTabs = [];
+  const tabs = comp ? [['parent', gs.parent.name], ['comp', comp.name]] : [['parent', 'EQUIPMENT']];
+  const tw = Math.floor((L.dollW - 8) / tabs.length);
+  tabs.forEach(([id, label], i) => {
+    const tx = L.dollX + 4 + i * tw, ty = panelY + 3;
+    if (comp) drawButton(ctx, tx, ty, tw - 2, 14, label.slice(0, 12), hitTest(mx, my, tx, ty, tw - 2, 14), (packUI.dollWho === 'comp') === (id === 'comp'));
+    else drawText(ctx, label, L.dollX + L.dollW / 2, panelY + 11, C.textDim, 7, 'center', true);
+    gs._packTabs.push({ id, x: tx, y: ty, w: tw - 2, h: 14 });
+  });
 
   const wt = calcWeight(gs.parent.inventory).toFixed(1);
   const maxWt = parentMaxCarry().toFixed(1);
@@ -132,6 +165,20 @@ function packScreenClick(mx, my, gs) {
     return; // click outside dialog — keep it open
   }
 
+  // Companion picker: none → each free survivor → none
+  if (gs._packCompBtn && hitTest(mx, my, gs._packCompBtn.x, gs._packCompBtn.y, gs._packCompBtn.w, gs._packCompBtn.h)) {
+    const avail = availableCompanions(gs);
+    const cur = _packCompanion(gs);
+    const i = cur ? avail.indexOf(cur) : -1;
+    const next = avail[i + 1] || null;
+    gs.exploreCompanionId = next ? next.id : null;
+    packUI.dollWho = next ? 'comp' : 'parent';
+    if (next) { next.equipped = next.equipped || { weapon: null, chest: null, legs: null }; notify(`${next.name} will come with you.`, 'good'); }
+    return;
+  }
+  for (const t of gs._packTabs || []) {
+    if (hitTest(mx, my, t.x, t.y, t.w, t.h)) { packUI.dollWho = t.id; packUI.selected = null; return; }
+  }
   // Cancel
   if (hitTest(mx, my, 10, btnY, 80, 22)) {
     packUI.selected = null; packUI.selectedSide = null; packUI.confirmExplore = false;
@@ -149,7 +196,8 @@ function packScreenClick(mx, my, gs) {
       const slot = b.slot;
       const def  = getItemDef(slot.id);
       if (!def) { packUI.selected = null; return; }
-      equipItem(gs, slot.id, b.side === 'stor' ? gs.shelter.storage : gs.parent.inventory);
+      const target = packUI.dollWho === 'comp' ? _packCompanion(gs) : null;
+      equipItem(gs, slot.id, b.side === 'stor' ? gs.shelter.storage : gs.parent.inventory, target || undefined);
       packUI.selected = null; packUI.selectedSide = null;
       return;
     }
@@ -182,7 +230,11 @@ function packScreenClick(mx, my, gs) {
   // Equipment slot — take it off into the bag
   if (gs._packDollBoxes) {
     const box = gs._packDollBoxes.find(b => hitTest(mx, my, b.x, b.y, b.w, b.h));
-    if (box) { if (box.id) unequipSlot(gs, box.key); packUI.selected = null; packUI.selectedSide = null; return; }
+    if (box) {
+      const target = packUI.dollWho === 'comp' ? _packCompanion(gs) : null;
+      if (box.id) unequipSlot(gs, box.key, target || undefined);
+      packUI.selected = null; packUI.selectedSide = null; return;
+    }
   }
 
   // Click in bag — select item

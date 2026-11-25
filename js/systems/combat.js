@@ -579,51 +579,9 @@ function enemyTurn(gs) {
     }
   }
 
-  // Companion's turn: patch the player up once when they're hurt, otherwise
-  // close in on the nearest enemy and attack
+  // Companion's turn (their own AP, weapon and judgement)
   if (gs.exploreCompanionId && c.companion && !c.compDown) {
-    const comp  = c.companion;
-    const alive = c.enemies.filter(e => !e.dead);
-    const delay = 300 * attackOrder++;
-    if (alive.length && c.player.hp / c.player.maxHp < 0.4 && !c.compHealed) {
-      c.compHealed = true;
-      const heal = 6;
-      c.player.hp = Math.min(c.player.maxHp, c.player.hp + heal);
-      gs.parent.health = Math.min(gs.parent.maxHealth, gs.parent.health + heal);
-      combatLog(gs, `${comp.name} patches you up (+${heal} HP).`, 'good');
-    } else if (alive.length) {
-      const tgt = alive.reduce((a, e) => Math.abs(e.worldX - c.compWx) < Math.abs(a.worldX - c.compWx) ? e : a);
-      let d = Math.abs(tgt.worldX - c.compWx);
-      // up to two tiles toward the target, then attack if adjacent
-      for (let step = 0; step < 2 && tilesBetween(tgt.worldX, c.compWx) > 1; step++) {
-        const nx = c.compWx + (tgt.worldX > c.compWx ? 1 : -1) * TILE;
-        if (_tileTaken(c, nx, 'comp')) break;
-        c.compWx = nx;
-      }
-      d = Math.abs(tgt.worldX - c.compWx);
-      if (d <= MELEE_RANGE) {
-        c.compAtkT0 = Date.now() + delay;
-        const compHit = clamp(55 + (comp.skills?.melee || 1) * 4 - (tgt.agility || 3) * 2, 15, 85);
-        if (chance(compHit)) {
-          const dmg = Math.max(1, randInt(3, 8) - Math.floor((tgt.armor || 0) / 2));
-          tgt.hp -= dmg;
-          _fx(gs, 'hit', tgt, dmg, c.compWx, delay + 200);
-          combatLog(gs, `${comp.name} hits ${tgt.name} for ${dmg} dmg.`, 'good');
-          if (tgt.hp <= 0) {
-            tgt.dead = true;
-            _fx(gs, 'death', tgt, 0, c.compWx, delay + 220);
-            combatLog(gs, `${tgt.name} destroyed.`, 'good');
-            collectLoot(gs, tgt);
-          }
-        } else {
-          combatLog(gs, `${comp.name} misses.`, 'normal');
-          _fx(gs, 'miss', tgt, 0, c.compWx, delay + 200);
-        }
-        if (checkCombatVictory(gs)) return;
-      } else {
-        combatLog(gs, `${comp.name} moves in.`, 'normal');
-      }
-    }
+    if (_companionTurn(gs, attackOrder)) return;      // the fight is over
   }
 
   c.surprised = false;   // the surprise only lasts their opening round
@@ -638,6 +596,96 @@ function enemyTurn(gs) {
 // ── Loot & end ────────────────────────────────────────────────────────────────
 
 // Drops stay on the body; search it afterwards (E) to take them
+/** The companion acts on their own: first aid if you need it, then fight with
+ *  whatever they're holding, using AP like you do. Returns true if the fight ended. */
+function _companionTurn(gs, order) {
+  const c = gs.combat, comp = c.companion, p = gs.parent;
+  comp.equipped = comp.equipped || { weapon: null, chest: null, legs: null };
+  let ap = 4;
+  // First aid comes first
+  if (p.bleeding && !c.compBandaged && countInInventory(p.inventory, 'bandage') > 0) {
+    c.compBandaged = true; ap -= 2;
+    removeFromInventory(p.inventory, 'bandage', 1);
+    p.bleeding = false;
+    combatLog(gs, `${comp.name} binds your wound. The bleeding stops.`, 'good');
+  } else if (c.player.hp / c.player.maxHp < 0.4 && !c.compHealed) {
+    c.compHealed = true; ap -= 2;
+    const heal = 6;
+    c.player.hp = Math.min(c.player.maxHp, c.player.hp + heal);
+    p.health = Math.min(p.maxHealth, p.health + heal);
+    combatLog(gs, `${comp.name} patches you up (+${heal} HP).`, 'good');
+  }
+  const wid = comp.equipped.weapon, wd = wid ? getItemDef(wid) : null;
+  const isGun = !!(wd && wd.weaponType === 'firearm');
+  const ws = weaponCombatStats(wid);
+  const skill = isGun ? ((comp.skills && comp.skills.firearms) || 1) : ((comp.skills && comp.skills.melee) || 1);
+  let delay = 300 * order;
+  for (let guard = 0; ap > 0 && guard < 8; guard++) {
+    const alive = c.enemies.filter(e => !e.dead);
+    if (!alive.length) break;
+    const tgt = alive.reduce((a, e) => Math.abs(e.worldX - c.compWx) < Math.abs(a.worldX - c.compWx) ? e : a);
+    const tiles = tilesBetween(tgt.worldX, c.compWx);
+    const hasAmmo = !isGun || (p.ammo[wd.ammoType] || 0) > 0;
+    const reach = isGun && hasAmmo ? ws.range : 1;
+    const cost = isGun && !hasAmmo ? 2 : ws.ap;
+    const dir = tgt.worldX > c.compWx ? 1 : -1;
+    // a shooter with someone in their face steps back first, if there's room
+    if (isGun && hasAmmo && tiles <= 1 && ap >= 1 + cost && !_tileTaken(c, c.compWx - dir * TILE, 'comp')) {
+      c.compWx -= dir * TILE; ap -= 1;
+      combatLog(gs, `${comp.name} backs off to get a clear shot.`, 'normal');
+      continue;
+    }
+    if (tiles <= reach && ap >= cost) {
+      ap -= cost;
+      c.compAtkT0 = Date.now() + delay;
+      let hit = (wd ? wd.accuracy * 0.9 : 60) + skill * 4 + (comp.agility || 5) - (tgt.agility || 3) * 2;
+      if (isGun && hasAmmo && tiles > Math.ceil(ws.range / 2)) hit -= (tiles - Math.ceil(ws.range / 2)) * 6;
+      hit = clamp(hit, 10, 90);
+      let lo, hi;
+      if (wd && (!isGun || hasAmmo)) {
+        const str = isGun ? 0 : Math.max(0, Math.floor(((comp.strength || 5) - 4) / 2));
+        lo = wd.damage[0] + str; hi = wd.damage[1] + str;
+      } else { lo = 1 + Math.floor((comp.strength || 5) / 3); hi = 2 + Math.floor((comp.strength || 5) / 2); }
+      if (isGun && hasAmmo) {
+        p.ammo[wd.ammoType] -= 1;
+        gs.suspicion = clamp(gs.suspicion + 1, 0, CFG.SUSPICION_MAX);
+        if (typeof gunNoise === 'function') gunNoise(gs);
+      }
+      const verb = isGun && hasAmmo ? 'shoots' : 'hits';
+      if (chance(hit)) {
+        const dmg = Math.max(1, randInt(lo, hi) - Math.floor((tgt.armor || 0) / 2));
+        tgt.hp -= dmg;
+        _fx(gs, 'hit', tgt, dmg, c.compWx, delay + (isGun ? 60 : 200));
+        combatLog(gs, `${comp.name} ${verb} ${tgt.name} for ${dmg} dmg.`, 'good');
+        if (tgt.hp > 0 && !tgt.bleeding && tgt.type !== 'machine' && chance(bleedChance(wid))) {
+          tgt.bleeding = true; combatLog(gs, `${tgt.name} is bleeding!`, 'good');
+        }
+        if (tgt.hp <= 0) {
+          tgt.dead = true;
+          _fx(gs, 'death', tgt, 0, c.compWx, delay + 220);
+          combatLog(gs, `${comp.name} takes down ${tgt.name}.`, 'good');
+          collectLoot(gs, tgt);
+          giveXP(gs.parent, Math.round(((({ machine: 20, human: 15, animal: 10 })[tgt.type]) || 12) * 0.5), gs);
+        }
+      } else {
+        combatLog(gs, `${comp.name} misses ${tgt.name}.`, 'normal');
+        _fx(gs, 'miss', tgt, 0, c.compWx, delay + 200);
+      }
+      delay += 300;
+      if (checkCombatVictory(gs)) return true;
+      continue;
+    }
+    if (tiles > reach && ap >= 1) {
+      const nx = c.compWx + dir * TILE;
+      if (_tileTaken(c, nx, 'comp')) break;
+      c.compWx = nx; ap -= 1;
+      continue;
+    }
+    break;
+  }
+  return false;
+}
+
 // An enemy attacks the companion instead of the player
 function _enemyHitsCompanion(gs, enemy, impact) {
   const c = gs.combat, comp = c.companion;
@@ -648,7 +696,8 @@ function _enemyHitsCompanion(gs, enemy, impact) {
     _fx(gs, 'miss', pseudo, 0, enemy.worldX, impact);
     return;
   }
-  const dealt = Math.max(1, randInt(enemy.damage[0], enemy.damage[1]));
+  // their clothes and armour protect them like yours protect you
+  const { dealt } = applyArmor(comp, randInt(enemy.damage[0], enemy.damage[1]), !!enemy.isRanged);
   comp.health = Math.max(0, (comp.health || 0) - dealt);
   c.compHitT0 = Date.now() + impact;
   _fx(gs, 'hit', pseudo, dealt, enemy.worldX, impact);

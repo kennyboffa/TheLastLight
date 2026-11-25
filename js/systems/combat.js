@@ -676,8 +676,9 @@ function _companionTurn(gs, order) {
       continue;
     }
     if (tiles > reach && ap >= 1) {
+      // they can squeeze past you, but not through an enemy
       const nx = c.compWx + dir * TILE;
-      if (_tileTaken(c, nx, 'comp')) break;
+      if (c.enemies.some(e => !e.dead && Math.abs(e.worldX - nx) < TILE / 2)) break;
       c.compWx = nx; ap -= 1;
       continue;
     }

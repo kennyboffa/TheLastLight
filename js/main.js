@@ -9,7 +9,7 @@ let RENDER_SCALE = 1;          // backing pixels per game pixel (set in resizeCa
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.69';
+const GAME_VERSION = 'v0.70';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;

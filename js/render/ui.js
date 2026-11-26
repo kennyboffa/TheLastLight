@@ -58,23 +58,36 @@ function drawStatsPanel(ctx, gs) {
   y += 4;
   gs._childStatBounds = { x, y: chRowStart, w, h: y - chRowStart };
 
-  // Survivors (hidden during combat — player fights alone)
-  if (gs.survivors.length > 0 && gs.screen !== 'combat') {
-    gs._survivorStatBounds = [];
+  // Survivors and the dog share the space above the supplies panel. Full stat
+  // rows when they fit; compact one-line rows when it gets crowded; and a
+  // "+N more" line if even that runs out of room.
+  const bottomY = h - 90;
+  const survs = (gs.survivors.length > 0 && gs.screen !== 'combat') ? gs.survivors : [];
+  const hasDog = !!(gs.dog && gs.dog.alive);
+  const FULL_H = 68, AWAY_H = 26, SMALL_H = 19, DOG_FULL = 34, DOG_SMALL = 21;
+  const fullNeed = survs.reduce((t, s) => t + (s.onMission ? AWAY_H : FULL_H), 0) + (survs.length ? 5 : 0) + (hasDog ? DOG_FULL : 0);
+  const compact = y + fullNeed > bottomY;
+  gs._survivorStatBounds = [];
+  if (survs.length) {
     drawDivider(ctx, x + 6, y, w - 12, C.border2);
     y += 5;
-    for (const s of gs.survivors) {
+    const room = bottomY - y - (hasDog ? (compact ? DOG_SMALL : DOG_FULL) : 0);
+    const per = compact ? SMALL_H : null;
+    const fit = compact ? Math.max(0, Math.floor((room - 10) / per)) : survs.length;
+    const shown = survs.length <= Math.floor(room / (per || FULL_H)) || !compact ? survs : survs.slice(0, fit);
+    for (const s of shown) {
       const rowStartY = y;
+      const isSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === s.id;
       if (s.onMission) {
-        // Stats hidden while away — just show name and status
-        drawText(ctx, s.name, x + 8, y + 9, '#505060', 10);
-        y += 12;
-        drawText(ctx, 'ON MISSION', x + w / 2, y + 5, '#3a5a78', 9, 'center');
-        y += 14;
-        gs._survivorStatBounds.push({ id: s.id, x, y: rowStartY, w, h: y - rowStartY });
-        continue;
+        drawText(ctx, s.name, x + 8, y + 9, '#505060', compact ? 8 : 10);
+        if (compact) { drawText(ctx, 'ON MISSION', x + w - 8, y + 9, '#3a5a78', 7, 'right'); y += SMALL_H - 7; }
+        else { y += 12; drawText(ctx, 'ON MISSION', x + w / 2, y + 5, '#3a5a78', 9, 'center'); y += 14; }
+      } else if (compact) {
+        if (isSel) fillRect(ctx, x + 4, y, w - 8, SMALL_H - 2, '#1a2a1a');
+        drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 8, isSel ? '#aaffaa' : C.textDim, 8);
+        _miniBars(ctx, s, x + 8, y + 11, w - 16);
+        y += SMALL_H;
       } else {
-        const isSel = typeof shelterUI !== 'undefined' && shelterUI.selectedChar === s.id;
         if (isSel) fillRect(ctx, x + 4, y, w - 8, 8, '#1a2a1a');
         drawText(ctx, `${s.name}  Lv.${s.level || 1}`, x + 8, y + 9, isSel ? '#aaffaa' : C.textDim, 10);
         y += 10;
@@ -83,22 +96,35 @@ function drawStatsPanel(ctx, gs) {
       }
       gs._survivorStatBounds.push({ id: s.id, x, y: rowStartY, w, h: y - rowStartY });
     }
+    if (shown.length < survs.length) {
+      drawText(ctx, `+${survs.length - shown.length} more (click a survivor in the shelter)`, x + 8, y + 7, C.textDim, 7);
+      y += 10;
+    }
   }
 
   // Dog
-  if (gs.dog && gs.dog.alive) {
+  if (hasDog) {
     drawDivider(ctx, x + 6, y, w - 12, C.border2);
     y += 5;
-    drawText(ctx, gs.dog.name + ' (Dog)', x + 8, y + 8, '#9a7040', 8);
-    y += 11;
-    drawStatBar(ctx, x+8, y, w-16, 6, gs.dog.health,     100, '#aa6622', null, 'HP');
-    y += 8;
-    drawStatBar(ctx, x+8, y, w-16, 6, 100-gs.dog.hunger, 100, C.hunger,  null, 'Fed');
-    y += 10;
+    const dhp = gs.dog.health != null ? gs.dog.health : 100, fed = 100 - (gs.dog.hunger || 0);
+    if (compact) {
+      drawText(ctx, gs.dog.name + ' (Dog)', x + 8, y + 7, '#9a7040', 8);
+      const bw = (w - 16 - 6) / 2;
+      drawStatBar(ctx, x + 8, y + 10, bw, 5, dhp, 100, '#aa6622', null, 'HP');
+      drawStatBar(ctx, x + 14 + bw, y + 10, bw, 5, fed, 100, C.hunger, null, 'Fed');
+      y += DOG_SMALL - 5;
+    } else {
+      drawText(ctx, gs.dog.name + ' (Dog)', x + 8, y + 8, '#9a7040', 8);
+      y += 11;
+      drawStatBar(ctx, x+8, y, w-16, 6, dhp, 100, '#aa6622', null, 'HP');
+      y += 8;
+      drawStatBar(ctx, x+8, y, w-16, 6, fed, 100, C.hunger,  null, 'Fed');
+      y += 10;
+    }
   }
 
   // ── SUPPLIES mini-panel ───────────────────────────────────────────────────
-  const suppliesY = h - 112;
+  const suppliesY = h - 84;
   drawDivider(ctx, x + 6, suppliesY - 4, w - 12, C.border2);
   drawText(ctx, 'SUPPLIES', x + 8, suppliesY + 9, C.textDim, 9, 'left', true);
 
@@ -117,13 +143,26 @@ function drawStatsPanel(ctx, gs) {
   drawText(ctx, `Water: ${totalWater}`, x + w / 2, suppliesY + 22, waterColor, 9, 'left');
 
   // ── Suspicion meter ────────────────────────────────────────────────────────
-  const suspY = h - 80;
+  const suspY = h - 52;
   drawDivider(ctx, x + 6, suspY - 6, w - 12, C.border2);
   drawText(ctx, 'AI SUSPICION', x + 8, suspY + 10, gs.suspicion > 70 ? C.textDanger : C.textDim, 10, 'left', true);
   const suspColor = gs.suspicion < 40 ? '#2a6a2a' : gs.suspicion < 70 ? '#8a6a10' : '#aa2020';
   drawStatBar(ctx, x+8, suspY + 12, w - 16, 10, gs.suspicion, 100, suspColor, null);
   const suspLabel = gs.suspicion < 30 ? 'LOW' : gs.suspicion < 60 ? 'MODERATE' : gs.suspicion < 85 ? 'HIGH' : 'CRITICAL';
   drawText(ctx, suspLabel, x + w/2, suspY + 12 + 8, C.textDim, 8, 'center');
+}
+
+/** One line of four tiny bars (HP, Food, Water, Mood) for a crowded panel. */
+function _miniBars(ctx, p, x, y, w) {
+  const bw = (w - 9) / 4;
+  const hpPct = p.health / (p.maxHealth || 100);
+  const bars = [
+    [p.health, p.maxHealth || 100, hpPct > 0.6 ? C.hp : hpPct > 0.3 ? '#cc6020' : '#dd1010'],
+    [100 - (p.hunger || 0), 100, C.hunger],
+    [100 - (p.thirst || 0), 100, C.thirst],
+    [100 - (p.depression || 0), 100, (p.depression || 0) > 70 ? '#9944dd' : C.depression],
+  ];
+  bars.forEach(([v, m, col], i) => drawStatBar(ctx, x + i * (bw + 3), y, bw, 5, v, m, col, null));
 }
 
 function drawPersonStats(ctx, person, x, y, w, compact) {

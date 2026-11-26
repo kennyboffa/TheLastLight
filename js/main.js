@@ -5,10 +5,11 @@
 
 const canvas = document.getElementById('canvas');
 const ctx    = canvas.getContext('2d');
+let RENDER_SCALE = 1;          // backing pixels per game pixel (set in resizeCanvas)
 
 let SCALE = 1;
 
-const GAME_VERSION = 'v0.65';
+const GAME_VERSION = 'v0.66';
 
 // View pan state — used when Display Scale > 1 to let user reach clipped edges
 let _viewPanX = 0, _viewPanY = 0;
@@ -48,8 +49,12 @@ function resizeCanvas() {
   // post-transform bounds so this stays correct when CSS transform is applied.
   SCALE = fitScale * userMult;
 
-  canvas.width  = CFG.W;
-  canvas.height = CFG.H;
+  // Draw at the real on-screen resolution (whole multiples keep pixel art
+  // even); the game still thinks in 736x414 units, so text gets sharp, not bigger.
+  const dpr = window.devicePixelRatio || 1;
+  RENDER_SCALE = Math.max(1, Math.min(4, Math.round(fitScale * userMult * dpr)));
+  canvas.width  = CFG.W * RENDER_SCALE;
+  canvas.height = CFG.H * RENDER_SCALE;
 
   canvas.style.width  = Math.round(CFG.W * fitScale) + 'px';
   canvas.style.height = Math.round(CFG.H * fitScale) + 'px';
@@ -365,6 +370,7 @@ function gameLoop(timestamp) {
   lastTime = timestamp;
   frameCount++;
 
+  ctx.setTransform(RENDER_SCALE, 0, 0, RENDER_SCALE, 0, 0);
   ctx.clearRect(0, 0, CFG.W, CFG.H);
   ctx.imageSmoothingEnabled = false;
 
@@ -380,11 +386,11 @@ function gameLoop(timestamp) {
     ctx.fillStyle = '#0e0e18';
     ctx.fillRect(0, 0, CFG.W, CFG.H);
     ctx.fillStyle = '#cc3333';
-    ctx.font = 'bold 12px monospace';
+    ctx.font = uiFont(12, true);
     ctx.textAlign = 'left';
     ctx.fillText('ERROR: ' + e.message, 20, 40);
     ctx.fillStyle = '#666';
-    ctx.font = '9px monospace';
+    ctx.font = uiFont(9);
     const lines = (e.stack || '').split('\n').slice(0, 8);
     lines.forEach((l, i) => ctx.fillText(l, 20, 60 + i * 12));
     ctx.textAlign = 'left';
@@ -569,7 +575,7 @@ function render(ctx) {
         if (!_vhsStrip) { _vhsStrip = document.createElement('canvas'); _vhsStrip.width = CFG.W; _vhsStrip.height = 14; }
         const sc = _vhsStrip.getContext('2d');
         sc.clearRect(0, 0, CFG.W, _bh);
-        sc.drawImage(canvas, 0, _by, CFG.W, _bh, 0, 0, CFG.W, _bh);
+        sc.drawImage(canvas, 0, _by * RENDER_SCALE, CFG.W * RENDER_SCALE, _bh * RENDER_SCALE, 0, 0, CFG.W, _bh);
         ctx.drawImage(_vhsStrip, 0, 0, CFG.W, _bh, _shift, _by, CFG.W, _bh);
       }
       // faint tint over the skewed strip
@@ -629,7 +635,7 @@ function render(ctx) {
   ctx.save();
   ctx.globalAlpha = 0.35;
   ctx.fillStyle = '#a0a090';
-  ctx.font = '8px monospace';
+  ctx.font = uiFont(8);
   ctx.textAlign = 'left';
   ctx.fillText(GAME_VERSION, 4, CFG.H - 4);
   ctx.restore();

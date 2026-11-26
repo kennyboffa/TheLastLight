@@ -142,7 +142,7 @@ function renderTitle(ctx, gs) {
   ctx.stroke();
 
   // "T H E" — small dim label above the main word
-  ctx.font = 'bold 10px monospace';
+  ctx.font = uiFont(10, true);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = '#786040';
@@ -150,7 +150,7 @@ function renderTitle(ctx, gs) {
 
   // "LAST  LIGHT" — large title with layered glow
   // Outer glow passes (very low alpha)
-  ctx.font = 'bold 36px monospace';
+  ctx.font = uiFont(36, true);
   ctx.globalAlpha = t.textAlpha * 0.12;
   ctx.fillStyle = '#e8c040';
   for (let dx = -4; dx <= 4; dx += 2) {

@@ -2299,7 +2299,7 @@ function _drawCombatBanner(ctx, timeLeft, c) {
   ctx.fillRect(0, cy + 24, CFG.W, 2);
   ctx.translate(CFG.W / 2, cy);
   ctx.scale(stretch, 1);
-  ctx.font = 'bold 30px monospace';
+  ctx.font = uiFont(30, true);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#1a0806';
@@ -2307,7 +2307,7 @@ function _drawCombatBanner(ctx, timeLeft, c) {
   ctx.fillStyle = '#d4483a';
   ctx.fillText('C O M B A T', 0, -3);
   if (c && c.openerText) {
-    ctx.font = 'bold 9px monospace';
+    ctx.font = uiFont(9, true);
     ctx.fillStyle = c.ambush || c.firstTurn === 'player' ? '#9ad08a' : '#e0a060';
     ctx.fillText(c.openerText.split('').join(' '), 0, 17);
   }

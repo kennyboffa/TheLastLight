@@ -220,7 +220,7 @@ function renderExploreSelect(ctx, gs) {
     drawText(ctx, `Travel: ${fmtDuration(mins)}${gs.shelter.hasBike ? ' (bike)' : ''}`, px + 8, y, '#d8c890', 8); y += 12;
     drawText(ctx, `Arrive about ${fmtClock(gs.time + mins)}`, px + 8, y, C.textDim, 7); y += 14;
     y = drawWrapped(ctx, seen ? loc.desc : 'You only know it from a map. ' + loc.desc, px + 8, y, pw - 16, 7, C.textDim, 10) + 8;
-    ctx.font = '7px monospace';
+    ctx.font = uiFont(7);
     let tx = px + 8;
     for (const tag of getLocationTags(loc)) {
       const tw = ctx.measureText(tag).width + 6;

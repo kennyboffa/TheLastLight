@@ -206,7 +206,7 @@ function renderStep0(ctx, gs, cx) {
   const displayName = cc.name || (cc.nameInputActive ? '' : 'Click to change name');
   drawText(ctx, displayName, nameX + nameW/2, y + nameH - 5, C.textBright, 10, 'center');
   if (cc.nameInputActive && Math.floor(Date.now() / 500) % 2 === 0) {
-    ctx.font = '10px monospace';
+    ctx.font = uiFont(10);
     const nameW2 = ctx.measureText(cc.name).width;
     fillRect(ctx, nameX + nameW/2 + nameW2/2 + 2, y + 3, 6, 12, C.textDim);
   }

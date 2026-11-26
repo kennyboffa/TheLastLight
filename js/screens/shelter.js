@@ -271,6 +271,8 @@ function renderShelter(ctx, gs) {
 
       if (room.unlocked) {
         drawRoomFurniture(ctx, roomId, r, room.level || 1, gs);
+        if (roomId === 'main') drawToiletBucket(ctx, gs, r);
+        drawRoomFilth(ctx, gs, roomId, r);
       } else {
         drawText(ctx, '[ BUILD ]', r.x + r.w/2, r.y + r.h/2 + 10, '#2a2a35', 7, 'center');
       }
@@ -302,6 +304,9 @@ function renderShelter(ctx, gs) {
 
   // Characters in rooms
   drawShelterCharacters(ctx, gs);
+
+  // What needs doing: tags over rooms, the bucket, the garden
+  gs._shelterTags = drawShelterTags(ctx, gs);
 
   ctx.restore();  // end zoom/scroll transform
 
@@ -356,6 +361,7 @@ function updateCharWander(gs) {
       who.shelterTargetX = defaultX;
       who.wanderTimer    = randInt(60, 300);
     }
+    if (moveCleaner(gs, who)) return;          // walking to / sweeping another room
     if (who.isSleeping || who.task) return;  // busy chars stay put
     who.wanderTimer--;
     if (who.wanderTimer <= 0) {
@@ -463,6 +469,8 @@ function drawShelterCharacters(ctx, gs) {
     } else if (p.isWorking) {
       pPose = 'back';
     }
+    const pcp = !p.isSleeping && cleanerDrawPos(p);
+    if (pcp) { drawPX = pcp.x; drawPY = pcp.y; pPose = 'walk'; }
     const sel = shelterUI.selectedChar === 'parent';
     if (sel) {
       ctx.save(); ctx.globalAlpha = 0.18;
@@ -474,13 +482,14 @@ function drawShelterCharacters(ctx, gs) {
           (c2, x, y) => drawParent(c2, x, y, 2, 1, 0, p.gender, 'front'), drawPX + 3, drawPY))) {
       drawParent(ctx, drawPX, drawPY, 2, p.facing, p.isSleeping ? 0 : p.animFrame, p.gender, pPose);
     }
+    if (pcp && pcp.broom) drawBroom(ctx, drawPX, drawPY, p.facing || 1);
     if (p.isSleeping) _drawZzz(ctx, drawPX - 14, drawPY - 12);
     if (p.isWorking && p.task) {
       const prog = p.taskProgress / p.taskDuration;
-      drawStatBar(ctx, pStandX - 12, groundY - 32, 32, 4, prog * 100, 100, C.textGood);
-      const taskLabelMap = { craft:'Crafting', build:'Building', cook:'Cooking', play:'Playing', hunt:'Hunting', eat:'Eating', drink:'Drinking' };
-      fillRect(ctx, pStandX - 18, groundY - 44, 36, 10, '#00000099');
-      drawText(ctx, taskLabelMap[p.task.type] || 'Working', pStandX, groundY - 36, C.textDim, 6, 'center');
+      drawStatBar(ctx, drawPX - 12, drawPY - 32, 32, 4, prog * 100, 100, C.textGood);
+      const taskLabelMap = { craft:'Crafting', build:'Building', cook:'Cooking', play:'Playing', hunt:'Hunting', eat:'Eating', drink:'Drinking', clean:'Cleaning' };
+      fillRect(ctx, drawPX - 18, drawPY - 44, 36, 10, '#00000099');
+      drawText(ctx, taskLabelMap[p.task.type] || 'Working', drawPX, drawPY - 36, C.textDim, 6, 'center');
     }
     drawFeetName(ctx, p.name, drawPX, p.isSleeping ? drawPY + 2 : drawPY + 6, sel ? '#aaaaff' : '#c8c8d8');
     gs._charHitBounds.push({ id: 'parent', x: drawPX - 10, y: drawPY - 24, w: 22, h: 28 });
@@ -499,6 +508,8 @@ function drawShelterCharacters(ctx, gs) {
     drawCY = groundY;
     chPose = 'front';
   }
+  const ccp = !ch.isSleeping && cleanerDrawPos(ch);
+  if (ccp) { drawCX = ccp.x; drawCY = ccp.y; chPose = 'walk'; }
   const csel = shelterUI.selectedChar === 'child';
   if (csel) {
     ctx.save(); ctx.globalAlpha = 0.18;
@@ -510,6 +521,7 @@ function drawShelterCharacters(ctx, gs) {
         (c2, x, y) => drawChild(c2, x, y, 2, 1, 0, 'front'), drawCX + 3, drawCY))) {
     drawChild(ctx, drawCX, drawCY, 2, ch.facing, ch.animFrame, chPose);
   }
+  if (ccp && ccp.broom) drawBroom(ctx, drawCX, drawCY, ch.facing || 1);
   if (ch.isSleeping) _drawZzz(ctx, drawCX - 10, drawCY - 10);
   drawFeetName(ctx, ch.name, drawCX, ch.isSleeping ? drawCY + 2 : drawCY + 6, csel ? '#ffaaff' : '#c8c8d8');
   gs._charHitBounds.push({ id: 'child', x: drawCX - 8, y: drawCY - 20, w: 18, h: 24 });
@@ -531,6 +543,8 @@ function drawShelterCharacters(ctx, gs) {
     } else if (s.task) {
       sPose = 'back';
     }
+    const scp = !s.isSleeping && cleanerDrawPos(s);
+    if (scp) { drawSX = scp.x; drawSY = scp.y; sPose = 'walk'; }
     const ssel = shelterUI.selectedChar === s.id;
     if (s.onMission) {
       drawText(ctx, s.name, sStandX, groundY - 24, '#444450', 6, 'center');
@@ -547,10 +561,11 @@ function drawShelterCharacters(ctx, gs) {
           (c2, x, y) => drawSurvivor(c2, x, y, 2, 1, 0, i, 'front'), drawSX + 3, drawSY))) {
       drawSurvivor(ctx, drawSX, drawSY, 2, s.facing, s.animFrame, i, sPose);
     }
+    if (scp && scp.broom) drawBroom(ctx, drawSX, drawSY, s.facing || 1);
     if (s.isSleeping) _drawZzz(ctx, drawSX - 12, drawSY - 12);
     if (s.task && s.taskDuration > 0) {
       const prog = s.taskProgress / s.taskDuration;
-      drawStatBar(ctx, sStandX - 12, groundY - 30, 28, 3, prog * 100, 100, C.textGood);
+      drawStatBar(ctx, drawSX - 12, drawSY - 30, 28, 3, prog * 100, 100, C.textGood);
     }
     drawFeetName(ctx, s.name, drawSX, s.isSleeping ? drawSY + 2 : drawSY + 6, ssel ? '#aaffaa' : '#c8c8d8');
     gs._charHitBounds.push({ id: s.id, x: drawSX - 9, y: drawSY - 22, w: 20, h: 26 });
@@ -656,6 +671,7 @@ function drawCharPanel(ctx, gs, mx, my) {
   }
 
   const taskLabel = who.isSleeping ? 'Sleeping...'
+    : who.task && who.task.type === 'clean' ? `Cleaning the ${ROOM_DEFS[who.task.room].name.toLowerCase()}...`
     : who.task ? (who.task.type[0].toUpperCase() + who.task.type.slice(1) + '...')
     : 'Idle';
   drawText(ctx, `Task: ${taskLabel}`, px+8, y+9, who.task || who.isSleeping ? C.textGood : C.textDim, 9);
@@ -687,8 +703,20 @@ function drawCharPanel(ctx, gs, mx, my) {
   if (who.isSleeping && (who.tiredness || 0) < 50) {
     addBtn('Stop Sleeping',   'wake',    false);
   }
-  addBtn('Eat from Storage',  'eat',     !noTask || !hasFood);
-  addBtn('Drink from Storage','drink',   !noTask || !hasWater);
+  // eat and drink share a row
+  {
+    const hw = (BW - 4) / 2;
+    const half = (label, id, disabled, x) => {
+      const hov = !disabled && hitTest(mx, my, x, y, hw, BH);
+      drawButton(ctx, x, y, hw, BH, label, hov, false, disabled);
+      gs._charPanelBtns.push({ id, x, y, w: hw, h: BH, disabled });
+    };
+    half('Eat', 'eat', !noTask || !hasFood, px + 8);
+    half('Drink', 'drink', !noTask || !hasWater, px + 12 + hw);
+    y += BH + 4;
+  }
+  const dirtyRoom = nextRoomToClean(gs);
+  addBtn(dirtyRoom ? 'Clean the Shelter' : 'Clean (all tidy)', 'clean', !noTask || !dirtyRoom);
   if (sel === 'parent') {
     addBtn('Play with Lily',  'play',    !noTask);
     addBtn('Explore...',      'explore', !noTask || who.isExploring);
@@ -784,6 +812,13 @@ function handleCharTask(taskId, gs) {
         notify(`${who.name} drank ${def.name}.`, 'good');
         shelterUI.activeMenu = null;
       }
+      break;
+    }
+
+    case 'clean': {
+      const r = startCleaning(gs, who, nextRoomToClean(gs));
+      notify(r.msg, r.ok ? 'good' : 'warn');
+      if (r.ok) shelterUI.activeMenu = null;
       break;
     }
 
@@ -1016,6 +1051,14 @@ function drawRoomMenu(ctx, gs, mx, my) {
 
   const closeX = px+8, closeY = py + H2 - 24;
   drawButton(ctx, closeX, closeY, 50, 16, 'Close', hitTest(mx, my, closeX, closeY, 50, 16));
+  if (room.unlocked) {
+    const lvl = roomDirtLevel(gs, roomId);
+    const busy = _cleaners(gs).some(w => w.task.room === roomId);
+    const lbl = busy ? 'Being cleaned...' : lvl === 2 ? 'Clean (filthy!)' : lvl ? 'Clean (dirty)' : 'Clean room';
+    const cX = px + 64, cW = W2 - 72;
+    drawButton(ctx, cX, closeY, cW, 16, lbl, hitTest(mx, my, cX, closeY, cW, 16), false, busy);
+    gs._roomCleanBtn = busy ? null : { x: cX, y: closeY, w: cW, h: 16, room: roomId };
+  } else gs._roomCleanBtn = null;
 }
 
 function drawCraftingMenu(ctx, gs, mx, my) {
@@ -1034,7 +1077,7 @@ function drawCraftingMenu(ctx, gs, mx, my) {
     let cy = py + 28;
     drawText(ctx, `Craft: ${itemName}`, px + W2/2, cy + 8, C.textBright, 9, 'center', true); cy += 18;
     if (recipe) {
-      const timeH = (recipe.craftTime || 0.5) * Math.ceil(shelterUI.craftQty / (recipe.qty || 1));
+      const timeH = (recipe.craftTime || 0.5) * Math.ceil(shelterUI.craftQty / (recipe.qty || 1)) * craftSpeedMult(gs, gs.parent);
       drawText(ctx, `Time: ~${Math.round(timeH * 60)} min`, px + W2/2, cy + 8, C.textDim, 8, 'center');
     }
     cy += 16;
@@ -1144,7 +1187,7 @@ function drawCraftingMenu(ctx, gs, mx, my) {
         let line = '', ld = dy + 20;
         for (const w of words) {
           const test = line ? line + ' ' + w : w;
-          ctx.font = '7px monospace';
+          ctx.font = uiFont(7);
           if (ctx.measureText(test).width > W2 - 16 && line) {
             drawText(ctx, line, px + 8, ld, C.textDim, 7); ld += 10; line = w;
           } else { line = test; }
@@ -1367,6 +1410,15 @@ const HELP_SECTIONS = [
     'Jobs pay in goods and earn trust. Trust means',
     'lower prices and, at 40+, their better stock.',
     'Miss the deadline and trust drops.',
+  ]},
+  { heading: 'CHORES', lines: [
+    'Rooms get dirty after 2 days, filthy after 4.',
+    'Dirt lowers everyone\'s mood; filth and a full',
+    'toilet bucket can make people sick.',
+    'Clean: ~30 min a room. The cleaner walks there,',
+    'then moves on to the next room that needs it.',
+    'Cleaning the main room empties the bucket.',
+    'Tags over rooms show what needs doing: click one.',
   ]},
   { heading: 'GARDEN', lines: [
     'Build the Rubble Garden (Craft > upgrades).',
@@ -1593,7 +1645,7 @@ function drawLoadMenu(ctx, gs, mx, my) {
 function drawSettingsMenu(ctx, gs, mx, my) {
   if (!gs.settings) gs.settings = {};
   const W2 = 250, H2 = 350;
-  const px = Math.floor((MAIN_W - W2) / 2), py = 70;
+  const px = Math.floor((MAIN_W - W2) / 2), py = 24;
   drawModal(ctx, px, py, W2, H2, 'SETTINGS');
 
   let y = py + 28;
@@ -1642,29 +1694,28 @@ function drawSettingsMenu(ctx, gs, mx, my) {
   drawDivider(ctx, px + 10, y, W2 - 20, C.border);
   y += 8;
 
-  // Master mute toggle
+  // Audio on/off and auto feed, side by side
   const sfxOn  = Audio.isEnabled();
-  const sfxCol = sfxOn ? C.textGood : C.textDim;
-  drawText(ctx, `Audio: ${sfxOn ? 'ON' : 'OFF'}`, px + W2/2, y + 10, sfxCol, 10, 'center', true);
-  const muteX = px + W2/2 - 34, muteY = y + 16;
-  drawButton(ctx, muteX, muteY, 68, 20, sfxOn ? 'Mute All' : 'Unmute',
-    hitTest(mx, my, muteX, muteY, 68, 20));
-  y += 40;
-
-  // Auto Feed toggle
+  const h1 = px + W2 / 4, h3 = px + W2 * 3 / 4;
+  drawText(ctx, `Audio: ${sfxOn ? 'ON' : 'OFF'}`, h1, y + 10, sfxOn ? C.textGood : C.textDim, 9, 'center', true);
+  const muteX = h1 - 40, muteY = y + 14;
+  drawButton(ctx, muteX, muteY, 80, 18, sfxOn ? 'Mute All' : 'Unmute', hitTest(mx, my, muteX, muteY, 80, 18));
   const autoFeedOn = gs.settings.autoFeed !== false;
-  const afCol = autoFeedOn ? C.textGood : C.textDim;
-  drawText(ctx, `Auto Feed: ${autoFeedOn ? 'ON' : 'OFF'}`, px + W2/2, y + 10, afCol, 10, 'center', true);
-  const afX = px + W2/2 - 40, afY = y + 14;
-  drawButton(ctx, afX, afY, 80, 18, autoFeedOn ? 'Disable' : 'Enable',
-    hitTest(mx, my, afX, afY, 80, 18));
-  y += 34;
+  drawText(ctx, `Auto Feed: ${autoFeedOn ? 'ON' : 'OFF'}`, h3, y + 10, autoFeedOn ? C.textGood : C.textDim, 9, 'center', true);
+  const afX = h3 - 40, afY = y + 14;
+  drawButton(ctx, afX, afY, 80, 18, autoFeedOn ? 'Disable' : 'Enable', hitTest(mx, my, afX, afY, 80, 18));
+  y += 38;
 
-  // Retro VHS effect toggle (scanlines + tape band); off helps slower devices
+  // two toggles side by side: retro VHS look, and large text
   const vhsOn = gs.settings.vhs !== false;
-  drawText(ctx, `Retro VHS: ${vhsOn ? 'ON' : 'OFF'}`, px + W2/2, y + 10, vhsOn ? C.textGood : C.textDim, 10, 'center', true);
-  const vhX = px + W2/2 - 40, vhY = y + 14;
+  const q1 = px + W2 / 4, q3 = px + W2 * 3 / 4;
+  drawText(ctx, `Retro VHS: ${vhsOn ? 'ON' : 'OFF'}`, q1, y + 10, vhsOn ? C.textGood : C.textDim, 9, 'center', true);
+  const vhX = q1 - 40, vhY = y + 14;
   drawButton(ctx, vhX, vhY, 80, 18, vhsOn ? 'Disable' : 'Enable', hitTest(mx, my, vhX, vhY, 80, 18));
+  const ltOn = typeof _largeText !== 'undefined' && _largeText;
+  drawText(ctx, `Large text: ${ltOn ? 'ON' : 'OFF'}`, q3, y + 10, ltOn ? C.textGood : C.textDim, 9, 'center', true);
+  const ltX = q3 - 40, ltY = y + 14;
+  drawButton(ctx, ltX, ltY, 80, 18, ltOn ? 'Disable' : 'Enable', hitTest(mx, my, ltX, ltY, 80, 18));
   y += 34;
 
   const closeX = px + W2 - 66, closeY = py + H2 - 26;
@@ -1682,9 +1733,10 @@ function drawSettingsMenu(ctx, gs, mx, my) {
     sfxPlus:    { x: sBtns.plusX,  y: sBtns.plusY,  w: 26, h: 20 },
     clickMinus: { x: cBtns.minusX, y: cBtns.minusY, w: 26, h: 20 },
     clickPlus:  { x: cBtns.plusX,  y: cBtns.plusY,  w: 26, h: 20 },
-    sfx:        { x: muteX,   y: muteY,  w: 68, h: 20 },
+    sfx:        { x: muteX,   y: muteY,  w: 80, h: 18 },
     autoFeed:   { x: afX,     y: afY,    w: 80, h: 18 },
     vhs:        { x: vhX,     y: vhY,    w: 80, h: 18 },
+    largeText:  { x: ltX,     y: ltY,    w: 80, h: 18 },
     close:      { x: closeX,  y: closeY, w: 58, h: 20 },
   };
 }
@@ -1726,6 +1778,12 @@ function shelterClick(mx, my, gs) {
       handleControlBtn(btn.id, gs, mx, my);
       return;
     }
+  }
+
+  // Pop-up tags (world space): click to get the job done
+  if (mx < MAIN_W && my < barY) {
+    const tg = (gs._shelterTags || []).find(b => hitTest(wx, wy, b.x, b.y, b.w, b.h));
+    if (tg) { tg.act(); return; }
   }
 
   // The rubble garden on the surface (world space)
@@ -1876,6 +1934,15 @@ function handleMenuClick(mx, my, gs) {
     const W2 = 210, H2 = 200;
     const px = clamp(M.menuX, 2, MAIN_W - W2 - 2);
     const py = clamp(M.menuY, 2, CFG.H - H2 - 2);
+
+    // Clean this room
+    const cb = gs._roomCleanBtn;
+    if (cb && hitTest(mx, my, cb.x, cb.y, cb.w, cb.h)) {
+      const who = pickCleaner(gs);
+      if (!who) notify('Nobody is free to clean right now.', 'warn');
+      else { const r = startCleaning(gs, who, cb.room); notify(r.msg, r.ok ? 'good' : 'warn'); if (r.ok) M.activeMenu = null; }
+      return;
+    }
 
     // Build button (positioned near bottom of modal)
     if (!room.unlocked) {
@@ -2147,6 +2214,9 @@ function handleMenuClick(mx, my, gs) {
       gs.settings.vhs = gs.settings.vhs === false;
       return;
     }
+    if (btns.largeText && hitTest(mx, my, btns.largeText.x, btns.largeText.y, btns.largeText.w, btns.largeText.h)) {
+      setLargeText(!_largeText); return;
+    }
     if (btns.autoFeed && hitTest(mx, my, btns.autoFeed.x, btns.autoFeed.y, btns.autoFeed.w, btns.autoFeed.h)) {
       if (!gs.settings) gs.settings = {};
       gs.settings.autoFeed = (gs.settings.autoFeed === false) ? true : false;
@@ -2172,7 +2242,7 @@ function handleMenuClick(mx, my, gs) {
     }
     // Click outside closes
     const W2 = 250, H2 = 350;
-    const px = Math.floor((MAIN_W - W2) / 2), py = 70;
+    const px = Math.floor((MAIN_W - W2) / 2), py = 24;
     if (!hitTest(mx, my, px, py, W2, H2)) M.activeMenu = null;
     return;
   }

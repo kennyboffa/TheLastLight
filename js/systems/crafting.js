@@ -121,6 +121,12 @@ function upgradeRoom(gs, roomId) {
   return { ok: true };
 }
 
+/** Crafting time multiplier: intelligence, and the level-2 workshop's better tools (15% faster). */
+function craftSpeedMult(gs, who) {
+  const ws = getRoom('workshop');
+  return workTimeMult(who || gs.parent) * (ws && ws.unlocked && (ws.level || 1) >= 2 ? 0.85 : 1);
+}
+
 // Craft an item from RECIPES_DB (timed task — output given on completion)
 // who: the character doing the work (defaults to parent). Child (Lily) is not allowed.
 function craftItem(gs, recipeId, qty, who) {
@@ -162,7 +168,7 @@ function craftItem(gs, recipeId, qty, who) {
   if (recipe.needsTools) useToolCharge(gs);
 
   who.task         = { type: 'craft', recipeId, qty: outQty };
-  who.taskDuration = (recipe.craftTime || 0.5) * batches * workTimeMult(who);   // intelligence
+  who.taskDuration = (recipe.craftTime || 0.5) * batches * craftSpeedMult(gs, who);
   who.taskProgress = 0;
   who.isWorking    = true;
   return { ok: true };

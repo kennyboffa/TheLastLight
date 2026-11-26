@@ -229,6 +229,7 @@ function tickStats(gs, dt) {
   gs.suspicion = clamp(gs.suspicion + suspRise - suspReduce - roomBonus, 0, CFG.SUSPICION_MAX);
   if (gs.shelter.hasGenerator) gs.suspicion = clamp(gs.suspicion + 0.2 * hrs, 0, CFG.SUSPICION_MAX);
   if (gs.weather && gs.weather.type === 'rain' && typeof gardenRain === 'function') gardenRain(gs);
+  if (typeof choresTick === 'function') choresTick(gs, hrs);
 
   // Story: suspicion crosses 50 for the first time
   if (!gs.flags.storySuspicion && prevSusp < CFG.SUSPICION_MAX * 0.5 && gs.suspicion >= CFG.SUSPICION_MAX * 0.5) {
@@ -253,31 +254,37 @@ function tickStats(gs, dt) {
 
 function tickTasks(gs, hrs) {
   // Parent task
+  // (cleaning only counts once the cleaner has walked to the room)
+  const ticks = w => typeof taskTicks !== 'function' || taskTicks(w);
+  const after = w => { if (typeof afterTask === 'function') afterTask(gs, w); };
   const p = gs.parent;
-  if (p.task) {
+  if (p.task && ticks(p)) {
     p.taskProgress += hrs;
     if (p.taskProgress >= p.taskDuration) {
       finishTask(gs, p, p.task);
       p.task = null; p.taskProgress = 0; p.taskDuration = 0; p.isWorking = false;
+      after(p);
     }
   }
   // Child task
   const ch2 = gs.child;
-  if (ch2.task) {
+  if (ch2.task && ticks(ch2)) {
     ch2.taskProgress = (ch2.taskProgress || 0) + hrs;
     if (ch2.taskProgress >= ch2.taskDuration) {
       finishTask(gs, ch2, ch2.task);
       ch2.task = null; ch2.taskProgress = 0; ch2.taskDuration = 0;
+      after(ch2);
     }
   }
 
   // Survivor tasks
   for (const s of gs.survivors) {
-    if (s.task) {
+    if (s.task && ticks(s)) {
       s.taskProgress += hrs;
       if (s.taskProgress >= s.taskDuration) {
         finishTask(gs, s, s.task);
         s.task = null; s.taskProgress = 0; s.taskDuration = 0;
+        after(s);
       }
     }
   }
@@ -355,6 +362,9 @@ function finishTask(gs, who, task) {
     case 'cook':
       finishCooking(gs, task);
       giveXP(who, 10, gs);
+      break;
+    case 'clean':
+      finishCleaning(gs, who, task);
       break;
     case 'hunt':
       finishHunt(gs, task);
@@ -483,6 +493,7 @@ function advanceDay(gs) {
   gs.timeScale = 1; // reset game speed to normal at start of each new day
   if (typeof jobsDayTick === 'function') jobsDayTick(gs);
   if (typeof gardenDayTick === 'function') gardenDayTick(gs);
+  if (typeof choresDayTick === 'function') choresDayTick(gs);
 
   // (the morning autosave is taken after the whole new-day update — see drawDayTransition)
   // High suspicion may bring a raid later today

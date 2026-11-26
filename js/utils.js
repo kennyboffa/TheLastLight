@@ -58,10 +58,22 @@ function drawPanel(ctx, x, y, w, h, bg, border) {
   strokeRect(ctx, x, y, w, h, border || C.border);
 }
 
+// One clear UI font for the whole game. The canvas draws at the screen's real
+// resolution (see resizeCanvas), so text comes out as crisp letters instead of
+// a 736px image blown up; "Large text" in Settings adds a pixel to small text.
+const UI_FONT_FAMILY = 'Consolas, "DejaVu Sans Mono", "Liberation Mono", Menlo, "Lucida Console", monospace';
+function largeTextOn() {
+  try { return localStorage.getItem('tll_largeText') === '1'; } catch (e) { return false; }
+}
+let _largeText = largeTextOn();
+function setLargeText(on) { _largeText = !!on; try { localStorage.setItem('tll_largeText', on ? '1' : '0'); } catch (e) {} }
+function uiFontSize(size) { size = size || 10; return _largeText && size <= 11 ? size + 1 : size; }
+function uiFont(size, bold) { return `${bold ? 'bold ' : ''}${uiFontSize(size)}px ${UI_FONT_FAMILY}`; }
+
 /** Simple text */
 function drawText(ctx, str, x, y, color, size, align, bold) {
   ctx.fillStyle = color || C.text;
-  ctx.font = `${bold ? 'bold ' : ''}${size || 10}px monospace`;
+  ctx.font = uiFont(size, bold);
   ctx.textAlign = align || 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(str, Math.round(x), Math.round(y));
@@ -70,7 +82,7 @@ function drawText(ctx, str, x, y, color, size, align, bold) {
 
 /** Text with drop-shadow / outline */
 function drawTextShadow(ctx, str, x, y, color, outColor, size, align) {
-  ctx.font = `${size || 10}px monospace`;
+  ctx.font = uiFont(size);
   ctx.textAlign = align || 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = outColor || '#000';
@@ -100,7 +112,7 @@ function drawStatBar(ctx, x, y, w, h, value, maxVal, fillColor, label, showNum) 
 
 /** Wrap text into lines, returns array of strings */
 function wrapText(ctx, str, maxW, size) {
-  ctx.font = `${size || 10}px monospace`;
+  ctx.font = uiFont(size);
   const words = str.split(' ');
   const lines = [];
   let cur = '';
@@ -117,7 +129,7 @@ function wrapText(ctx, str, maxW, size) {
 function drawWrapped(ctx, str, x, y, maxW, size, color, lh) {
   const lines = wrapText(ctx, str, maxW, size);
   ctx.fillStyle = color || C.text;
-  ctx.font = `${size || 10}px monospace`;
+  ctx.font = uiFont(size);
   ctx.textBaseline = 'alphabetic';
   const lineH = lh || (size || 10) + 3;
   for (const line of lines) { ctx.fillText(line, Math.round(x), Math.round(y)); y += lineH; }
@@ -159,7 +171,7 @@ function drawButton(ctx, x, y, w, h, label, hovered, active, disabled) {
   const txtColor = disabled ? C.textDim : hovered ? C.textBright : C.btnText;
   fillRect(ctx, x, y, w, h, bg);
   strokeRect(ctx, x, y, w, h, border);
-  ctx.font = '11px monospace';
+  ctx.font = uiFont(11);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = txtColor;

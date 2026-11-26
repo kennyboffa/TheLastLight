@@ -124,7 +124,9 @@ function renderLighting(ctx, gs, o) {
     hole(L.x, L.y, L.r * fl, L.kind === 'red' ? 0.2 : 0.3, L.kind === 'red' ? 0.55 : 0.95);
   }
   fc.globalCompositeOperation = 'source-over';
+  ctx.imageSmoothingEnabled = true;           // soft light falloff at any resolution
   ctx.drawImage(fogCanvas, 0, 0);
+  ctx.imageSmoothingEnabled = false;
 
   // ── colour ─────────────────────────────────────────────────────────────
   const amb = Math.max(nf, indoor ? 0.6 : 0);          // how much the lights show

@@ -88,7 +88,7 @@ function renderIntro(ctx, gs) {
 
     // Blinking cursor
     if (!i.done && line && line !== '' && i.charIdx <= line.length) {
-      ctx.font = '9px monospace';
+      ctx.font = uiFont(9);
       const cx2 = TEXT_X + ctx.measureText(visible).width + 1;
       if (Math.floor(Date.now() / 500) % 2 === 0) {
         fillRect(ctx, cx2, ly - 8, 5, 10, '#6a6a5a');

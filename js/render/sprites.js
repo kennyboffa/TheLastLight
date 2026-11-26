@@ -569,8 +569,8 @@ function drawParent(ctx, x, y, s, facing, animFrame, gender, pose, weapon) {
 
       const bodyCx = Math.round((_sheet === _runSprite ? _PLAYER_BODY_CX + 1 : _PLAYER_BODY_CX) * dw / 64);
       ctx.save();
-      // body line stays where it was when facing right; flip around it
-      ctx.translate(Math.round(x) + bodyCx - Math.round(dw / 2), Math.round(y));
+      // the body stands exactly at x, whichever way it faces
+      ctx.translate(Math.round(x), Math.round(y));
       if (facing < 0) ctx.scale(-1, 1);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(_sheet.img, sx, sy, dw, dh, -bodyCx, yOff, dw, dh);

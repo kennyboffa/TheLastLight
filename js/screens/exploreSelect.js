@@ -154,6 +154,10 @@ function drawWorldMap(ctx, gs, opts) {
       ctx.strokeStyle = '#9ad08a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.stroke();
       drawText(ctx, 'YOU ARE HERE', x, y - 13, '#9ad08a', 6, 'center', true);
     } else if (!opts.travel) drawText(ctx, fmtDuration(travelMinutes(gs, loc.id, mapUI.from)), x, y - 10, '#c8b880', 6, 'center');
+    if (typeof activeJobs === 'function' && activeJobs(gs).some(j => j.loc === loc.id)) {
+      ctx.globalAlpha = 0.7 + 0.3 * pulse;
+      drawText(ctx, 'JOB', x - 12, y - 4, '#e8b040', 6, 'right', true);
+    }
     if ((gs.mapNew || []).includes(loc.id)) {
       ctx.globalAlpha = 0.6 + 0.4 * pulse;
       drawText(ctx, 'NEW', x + 12, y - 4, '#f0c040', 6, 'left', true);

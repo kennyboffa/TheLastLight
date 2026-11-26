@@ -272,6 +272,8 @@ function startExploration(gs, loc, arrived) {
       for (let i = 0; i < wreckCount; i++) {
         foliage.push({ type: 'car_wreck', wx: zone.x + 60 + randInt(0, zone.w - 120) });
       }
+      // a burning barrel: somebody's warmth (and light, after dark)
+      if (chance(45)) foliage.push({ type: 'fire_barrel', wx: zone.x + 50 + randInt(0, zone.w - 100) });
       const debrisCount = randInt(1, 4);
       for (let i = 0; i < debrisCount; i++) {
         foliage.push({ type: 'debris', wx: zone.x + 20 + randInt(0, zone.w - 40) });
@@ -354,6 +356,7 @@ function startExploration(gs, loc, arrived) {
 
   // Traders live in their own buildings
   if (typeof placeTraders === 'function') placeTraders(gs, loc, buildings);
+  if (typeof jobsOnArrive === 'function') jobsOnArrive(gs, exploreState);
 
   // Inject area maps into specific buildings if not yet found
   if (!gs.foundMaps) gs.foundMaps = { area_map_1: false, area_map_2: false };
@@ -459,7 +462,10 @@ function updateExplore(gs, dt) {
   es.scrollX = clamp(lerp(es.scrollX, targetScroll, 0.15), 0, CFG.WORLD_W - viewW(es));
 
   es.animTimer++;
-  if (Math.abs(es.velX) > 0.1 && es.animTimer % (gs.parent.sneaking ? 26 : 17) === 0) Audio.step(gs.parent.sneaking);
+  if (Math.abs(es.velX) > 0.1 && es.animTimer % (gs.parent.sneaking ? 26 : 17) === 0) {
+    Audio.step(gs.parent.sneaking);
+    if (!gs.parent.sneaking && !isStorm(gs)) makeNoise(gs, es.px, 75, 0.04);   // footsteps carry (not under thunder)
+  }
   if (Math.abs(es.velX) > 0.1 && es.animTimer % 12 === 0) es.animFrame++;
   else if (Math.abs(es.velX) < 0.1) es.animFrame = 0;
   p.animFrame = es.animFrame;
@@ -469,28 +475,8 @@ function updateExplore(gs, dt) {
   // Searching: moving away aborts it
   _tickSearches(gs, es.containers, Math.abs(es.velX) > 0.1, dt);
 
-  // Enemy encounters — each type notices you from its own distance (4-8 tiles)
-  for (const enc of es.encounters) {
-    if (!enc.triggered && !enc.killed && Math.abs(es.px - enc.wx) < encounterDetectPx(gs, enc, false)) {
-      enc.triggered = true;
-      // Re-use survivors from a previous fled combat (same HP); else roll fresh
-      let enemies;
-      if (enc._savedEnemies) {
-        enemies = enc._savedEnemies;
-        enc._savedEnemies = null;
-      } else {
-        enemies = enc.ids ? enc.ids.map(id => deepClone(ENEMY_TEMPLATES[id])).filter(Boolean)
-                          : buildEncounter(enc.difficulty, enc.zone, enc.locCanHunt, gs.day);
-      }
-      if (enemies.length > 0) {
-        gs.mouse.down = false;
-        startCombat(gs, enemies, es.px, enc.wx);
-        gs.combat._encRef = enc;
-        gs.inCombat = true;
-        return;
-      }
-    }
-  }
+  // Enemies patrol, watch, listen — and start the fight once they've seen enough
+  if (updateStealth(gs, es.encounters, es.px, false, dt, Math.abs(es.velX) > 0.1, CFG.WORLD_W)) return;
 
   // Random events: at most 2 a day while out, and at least 2 hours apart
   const evLog = gs.exploreEventLog && gs.exploreEventLog.day === gs.day ? gs.exploreEventLog : (gs.exploreEventLog = { day: gs.day, count: 0, last: -9999 });
@@ -574,7 +560,10 @@ function updateBuildingInterior(gs, dt) {
   bi.scrollX = areaScroll(area, lerp(bi.scrollX, targetScroll, 0.15));
 
   bi.animTimer = (bi.animTimer || 0) + 1;
-  if (Math.abs(bi.velX) > 0.1 && bi.animTimer % (gs.parent.sneaking ? 26 : 17) === 0) Audio.step(gs.parent.sneaking);
+  if (Math.abs(bi.velX) > 0.1 && bi.animTimer % (gs.parent.sneaking ? 26 : 17) === 0) {
+    Audio.step(gs.parent.sneaking);
+    if (!gs.parent.sneaking) makeNoise(gs, bi.px, 95, 0.05);     // echoes indoors
+  }
   if (Math.abs(bi.velX) > 0.1 && bi.animTimer % 12 === 0) bi.animFrame = ((bi.animFrame || 0) + 1);
   else if (Math.abs(bi.velX) < 0.1) bi.animFrame = 0;
   p.animFrame = bi.animFrame || 0;
@@ -584,7 +573,7 @@ function updateBuildingInterior(gs, dt) {
   _tickSearches(gs, area.containers, Math.abs(bi.velX) > 0.1, dt);
 
   // Enemies inside
-  if (checkIndoorEncounters(gs, area, bi.px)) return;
+  if (updateStealth(gs, area.encounters, bi.px, true, dt, Math.abs(bi.velX) > 0.1, area.width)) return;
 
   // Tiredness warning / collapse (same thresholds as outdoor)
   if (p.tiredness >= 80 && !es._tiredWarned) {
@@ -742,6 +731,7 @@ function exploreKeyPress(key, gs) {
   }
 
   if (key === 'e') {
+    if (doTakedown(gs)) return;
     if (es.building) interactBuilding(gs);
     else             interactOutdoor(gs);
     return;
@@ -913,13 +903,7 @@ function _tryUnlock(gs, c) {
 
 // Prying a lock is loud: anyone close by in this area comes to look
 function _lockNoise(gs, wx) {
-  const es = exploreState;
-  if (!es) return;
-  const list = es.building ? curArea(es).encounters : es.encounters;
-  for (const enc of list || []) {
-    if (enc.triggered || enc.killed) continue;
-    if (Math.abs(enc.wx - wx) < 420) { enc.wx = Math.round((enc.wx + wx) / 2); }
-  }
+  makeNoise(gs, wx, 420, 0.45);
 }
 
 // Search / re-open / cancel the nearest container
@@ -1198,6 +1182,7 @@ function renderOutdoor(ctx, gs, es) {
         case 'dead_tree':  drawExploreDeadTree(ctx, f.wx, GROUND_Y);   break;
         case 'car_wreck':  drawExploreCarWreck(ctx, f.wx, GROUND_Y);   break;
         case 'debris':     drawExploreDebrisPile(ctx, f.wx, GROUND_Y); break;
+        case 'fire_barrel': drawFireBarrel(ctx, f.wx, GROUND_Y);       break;
       }
     }
   }
@@ -1293,7 +1278,20 @@ function renderOutdoor(ctx, gs, es) {
   ctx.restore(); // end view zoom
 
   // Fog — centred on player's scaled screen position (drawn at 1× after zoom restore)
-  renderFog(ctx, (es.px - es.scrollX) * vz, PLAYER_FOOT * vz + oy - 12, gs, false);
+  {
+    const S = (wx, wy) => ({ x: (wx - es.scrollX) * vz, y: wy * vz + oy });
+    const lights = [];
+    for (const f of es.foliage || []) {
+      if (f.type !== 'fire_barrel' || f.wx < es.scrollX - 150 || f.wx > es.scrollX + viewW(es) + 150) continue;
+      lights.push({ ...S(f.wx, GROUND_Y - 26), r: 130 * vz, kind: 'fire' });
+    }
+    for (const enc of es.encounters) {
+      if (enc.triggered || enc.killed || !enc._st || enc._st.kind !== 'machine') continue;
+      lights.push({ ...S(enc.wx + enc._st.dir * 6, GROUND_Y - 44), r: 55 * vz, kind: 'red' });
+    }
+    const cx = gs.inCombat && gs.combat ? gs.combat.playerWx : es.px;
+    renderLighting(ctx, gs, { px: (cx - es.scrollX) * vz, py: PLAYER_FOOT * vz + oy - 12, facing: es.facing, indoor: false, vz, lights });
+  }
 
   // Weather overlay (1×, over everything)
   drawExploreWeather(ctx, gs);
@@ -1314,6 +1312,7 @@ function drawExploreActors(ctx, gs, es, o) {
   }
 
   if (gs.inCombat && gs.combat) {
+    for (const enc of o.encounters) if (enc._st && enc._st.bang) drawAlertPop(ctx, enc, GROUND_Y, _now);
     for (const en of gs.combat.enemies) {
       // Glide between tiles (walk cycle plays while moving)
       const _pn = performance.now();
@@ -1341,9 +1340,14 @@ function drawExploreActors(ctx, gs, es, o) {
       }
     }
   } else {
+    const _tdT = takedownTarget(gs);
     for (let i = 0; i < o.encounters.length; i++) {
       const enc = o.encounters[i];
       if (enc.triggered || enc.killed) continue;
+      if (drawStealthEncounter(ctx, gs, enc, GROUND_Y, _now)) {
+        if (_tdT && _tdT.enc === enc) drawText(ctx, '[E] Takedown', enc.wx, GROUND_Y - 86, '#e8d080', 7, 'center', true);
+        continue;
+      }
       // Patrol oscillation (visual only — detection still uses enc.wx)
       const patrolWx = enc.wx + Math.sin(_now / 1400 + i * 2.1) * o.patrolAmp;
       const pv = Math.cos(_now / 1400 + i * 2.1);            // patrol velocity: walks, pauses at the turn
@@ -1485,7 +1489,16 @@ function renderBuildingInterior(ctx, gs, es) {
 
   ctx.restore(); // end world translate
   ctx.restore(); // end view zoom
-  renderFog(ctx, (bi.px - bi.scrollX) * vz, PLAYER_FOOT * vz + oy - 12, gs, true);
+  {
+    const lights = [];
+    // a lamp burns wherever someone lives (traders)
+    for (const n of area.npcs || []) lights.push({ x: (n.x - 20 - bi.scrollX) * vz, y: (GROUND_Y - 40) * vz + oy, r: 150 * vz, kind: 'lamp' });
+    for (const enc of area.encounters || []) {
+      if (enc.triggered || enc.killed || !enc._st || enc._st.kind !== 'machine') continue;
+      lights.push({ x: (enc.wx + enc._st.dir * 6 - bi.scrollX) * vz, y: (GROUND_Y - 44) * vz + oy, r: 50 * vz, kind: 'red' });
+    }
+    renderLighting(ctx, gs, { px: (bi.px - bi.scrollX) * vz, py: PLAYER_FOOT * vz + oy - 12, facing: bi.facing, indoor: true, vz, lights });
+  }
 }
 
 // One container: sprite (unless it's a piece of furniture), prompt, progress
@@ -1597,6 +1610,16 @@ function drawExploreHUD(ctx, gs, es) {
       drawPanel(ctx, CFG.W / 2 - 94, CFG.H - 52, 188, 18, C.panelBg, C.border);
       drawText(ctx, '[E] Return to shelter', CFG.W / 2, CFG.H - 39, C.textDim, 9, 'center');
     }
+  }
+
+  // Jobs you've taken on
+  if (!gs.inCombat && typeof activeJobs === 'function') {
+    const _jl = activeJobs(gs).slice(0, 2);
+    if (_jl.length) { ctx.save(); ctx.globalAlpha = 0.72; fillRect(ctx, 6, 158, 262, 4 + _jl.length * 11, '#08080c'); ctx.restore(); }
+    _jl.forEach((j, i) => {
+      const ok = jobReady(gs, j), left = jobDaysLeft(gs, j);
+      drawText(ctx, `${ok ? '✓' : '◆'} ${jobText(j)}${ok ? ' — return' : ` · ${left}d`}`, 12, 166 + i * 11, ok ? '#9ad08a' : left <= 1 ? C.textWarn : '#d8c070', 7, 'left');
+    });
   }
 
   // Carry weight (hidden during combat — the action bar sits there)
@@ -3030,8 +3053,10 @@ function drawExploreWeather(ctx, gs) {
   const fc = frameCount;
 
   if (w === 'rain') {
-    drawRain(ctx, 0, CFG.W, 0, FOOT_SCREEN_Y, 1);
-    drawText(ctx, 'Raining: you tire faster', 12, CFG.H - 50, '#9ab0c8', 7, 'left');
+    const storm = isStorm(gs);
+    drawRain(ctx, 0, CFG.W, 0, FOOT_SCREEN_Y, storm ? 1.6 : 1);
+    drawLightning(ctx, gs, FOOT_SCREEN_Y * 0.55);
+    drawText(ctx, storm ? 'Storm: you tire faster, thunder covers your steps' : 'Raining: you tire faster', 12, CFG.H - 50, '#9ab0c8', 7, 'left');
   }
   void fc;
 

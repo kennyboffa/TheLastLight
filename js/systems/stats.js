@@ -228,6 +228,7 @@ function tickStats(gs, dt) {
   const prevSusp = gs.suspicion;
   gs.suspicion = clamp(gs.suspicion + suspRise - suspReduce - roomBonus, 0, CFG.SUSPICION_MAX);
   if (gs.shelter.hasGenerator) gs.suspicion = clamp(gs.suspicion + 0.2 * hrs, 0, CFG.SUSPICION_MAX);
+  if (gs.weather && gs.weather.type === 'rain' && typeof gardenRain === 'function') gardenRain(gs);
 
   // Story: suspicion crosses 50 for the first time
   if (!gs.flags.storySuspicion && prevSusp < CFG.SUSPICION_MAX * 0.5 && gs.suspicion >= CFG.SUSPICION_MAX * 0.5) {
@@ -480,6 +481,8 @@ function advanceDay(gs) {
   gs.day++;
   gs.time = CFG.DAY_START;
   gs.timeScale = 1; // reset game speed to normal at start of each new day
+  if (typeof jobsDayTick === 'function') jobsDayTick(gs);
+  if (typeof gardenDayTick === 'function') gardenDayTick(gs);
 
   // (the morning autosave is taken after the whole new-day update — see drawDayTransition)
   // High suspicion may bring a raid later today

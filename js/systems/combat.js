@@ -884,6 +884,7 @@ function endCombat(gs, result) {
   if (gs.isRaid && typeof finishRaid === 'function') { finishRaid(gs, result, c); return; }
 
   if ((result === 'victory' || result === 'talked') && c._encRef) c._encRef.killed = true;
+  if (result === 'victory' && typeof jobsOnVictory === 'function') jobsOnVictory(gs, c);
   // Bodies stay where they fell for the rest of this exploration
   if (result !== 'defeat' && typeof archiveCorpses === 'function') archiveCorpses(gs, c);
 
@@ -901,6 +902,7 @@ function endCombat(gs, result) {
         enc._savedEnemies = survivors;
         enc.wx = Math.round(survivors.reduce((s, e) => s + e.worldX, 0) / survivors.length);
         enc.triggered = false; // make them re-appear on the map
+        if (enc._st) Object.assign(enc._st, { aware: 0.45, state: 'look', lookT: 3, home: enc.wx, invX: null });
       } else {
         enc.killed = true; // all dead while fleeing — they're gone
       }

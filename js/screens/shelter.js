@@ -240,6 +240,7 @@ function renderShelter(ctx, gs) {
   drawSurface(ctx, gs.day * 30, gs.time);
   drawHatch(ctx, MAIN_W / 2, CFG.SURFACE_H - 2);
   if (typeof drawRaincatcherSurface === 'function') drawRaincatcherSurface(ctx, gs);
+  if (typeof drawGardenSurface === 'function') drawGardenSurface(ctx, gs);
 
   // Distant background drone
   drawDistantDrone(ctx, gs);
@@ -922,6 +923,7 @@ function drawShelterMenu(ctx, gs, mx, my) {
   else if (M.activeMenu === 'journal')   drawJournalPanel(ctx, gs, mx, my);
   else if (M.activeMenu === 'settings')  drawSettingsMenu(ctx, gs, mx, my);
   else if (M.activeMenu === 'loadMenu')  drawLoadMenu(ctx, gs, mx, my);
+  else if (M.activeMenu === 'garden')    drawGardenMenu(ctx, gs, mx, my);
 }
 
 function drawRoomMenu(ctx, gs, mx, my) {
@@ -1316,6 +1318,7 @@ function drawCookingMenu(ctx, gs, mx, my) {
     { srcId:'raw_meat',   outId:'cooked_meat',  label:'Cook Meat (raw → cooked)' },
     { srcId:'canned_soup',outId:'heated_soup',  label:'Heat Soup (canned → hot)' },
     { srcId:'canned_beans',outId:'heated_beans',label:'Heat Beans (canned → hot)' },
+    { srcId:'potato',     outId:'baked_potato', label:'Bake Potatoes (garden → baked)' },
   ];
 
   for (const item of cookable) {
@@ -1348,6 +1351,29 @@ const HELP_SECTIONS = [
     'Maps found in buildings unlock new areas.',
     'Rain makes you tire much faster outside.',
     'Companion survivors auto-fight in combat.',
+  ]},
+  { heading: 'STEALTH', lines: [
+    'Enemies patrol and see the way they face (cone).',
+    '"?" = they noticed something. Full bar = fight.',
+    'Sneak [C] behind one and press [E]: takedown.',
+    'A blade kills ordinary foes outright.',
+    'Walking, prying locks and guns make noise.',
+    'Dark nights and storms hide you; a lit',
+    'flashlight outside gives you away.',
+  ]},
+  { heading: 'JOBS & TRUST', lines: [
+    'Ask Aldo or Vera "Got any work?".',
+    'Fetch supplies, clear raiders, find a package.',
+    'Jobs pay in goods and earn trust. Trust means',
+    'lower prices and, at 40+, their better stock.',
+    'Miss the deadline and trust drops.',
+  ]},
+  { heading: 'GARDEN', lines: [
+    'Build the Rubble Garden (Craft > upgrades).',
+    'Click it on the surface: plant, water, harvest.',
+    'Seeds: homes, rooftops, markets, Aldo.',
+    'Rain waters it. Two dry days kill a crop.',
+    'Plants show from the air: a little suspicion.',
   ]},
   { heading: 'ATTRIBUTES', lines: [
     'Strength:     Melee damage & carry capacity.',
@@ -1702,6 +1728,13 @@ function shelterClick(mx, my, gs) {
     }
   }
 
+  // The rubble garden on the surface (world space)
+  if (gs.shelter.hasGarden && mx < MAIN_W && my < barY && typeof GARDEN_HIT !== 'undefined'
+      && hitTest(wx, wy, GARDEN_HIT.x, GARDEN_HIT.y, GARDEN_HIT.w, GARDEN_HIT.h)) {
+    M.activeMenu = 'garden';
+    return;
+  }
+
   // Parent / child stat panel click (right-side bar — screen space)
   for (const [id, key] of [['parent', '_parentStatBounds'], ['child', '_childStatBounds']]) {
     const b = gs[key];
@@ -1971,6 +2004,7 @@ function handleMenuClick(mx, my, gs) {
   }
 
   if (M.activeMenu === 'storage') { storageMenuClick(gs, mx, my); return; }
+  if (M.activeMenu === 'garden')  { gardenMenuClick(gs, mx, my); return; }
 
   if (M.activeMenu === 'char') {
     // Close button
@@ -2005,6 +2039,7 @@ function handleMenuClick(mx, my, gs) {
       { srcId:'raw_meat',   outId:'cooked_meat' },
       { srcId:'canned_soup',outId:'heated_soup' },
       { srcId:'canned_beans',outId:'heated_beans' },
+      { srcId:'potato',     outId:'baked_potato' },
     ];
     let y = py + 24;
     for (const item of cookable) {

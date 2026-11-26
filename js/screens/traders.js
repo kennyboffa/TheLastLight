@@ -61,7 +61,7 @@ function traderState(gs, id) {
   }
   const st = gs.traders[id];
   if (st.alive && (!st.stock || gs.day >= st.nextRestock)) {
-    st.stock = _rollTraderStock(TRADERS[id]);
+    st.stock = _rollTraderStock(TRADERS[id]).concat(typeof premiumStock === 'function' ? premiumStock(gs, id) : []);
     st.nextRestock = gs.day + TRADER_RESTOCK_DAYS;
     st.hp = TRADERS[id].enemy.maxHp;           // patched up between visits
   }
@@ -86,6 +86,7 @@ function currentMarkup(gs, id) {
   let m = tradeMarkup(gs.parent);
   const st = id && gs.traders && gs.traders[id];
   if (st && st.haggleOk && st.haggleDay === gs.day) m *= 0.85;
+  if (typeof trustPriceMult === 'function') m *= trustPriceMult(gs, id);       // they trust you
   return Math.max(1.5, Math.round(m * 100) / 100);
 }
 function buyPrice(id)  { return Math.max(1, Math.round((getItemDef(id)?.value || 1) * currentMarkup(GS, tradeUI.traderId))); }
@@ -133,11 +134,23 @@ function drawAreaNpcs(ctx, gs, area, px, groundY) {
     if (!st.alive) continue;
     if (gs.inCombat && gs.combat && gs.combat._traderId === n.traderId) continue;   // drawn as the enemy
     const facing = px >= n.x ? 1 : -1;
+    _drawLantern(ctx, n.x - 20, groundY);
     drawCharSprite(ctx, t.sprite, n.x, groundY, 2, facing, 48, { id: t.weapon, t0: 0 });
     drawText(ctx, t.name, n.x, groundY - 56, st.hostile ? '#cc5544' : '#d8c890', 7, 'center', true);
     drawText(ctx, st.hostile ? 'hostile' : 'trader', n.x, groundY - 49, C.textDim, 6, 'center');
     if (!gs.inCombat && Math.abs(px - n.x) < 34) drawText(ctx, '[E] Talk', n.x, groundY - 66, C.textBright, 7, 'center');
   }
+}
+
+/** A storm lantern on a crate: the lamp that lights a trader's corner. */
+function _drawLantern(ctx, x, gy) {
+  x = Math.round(x);
+  fillRect(ctx, x - 9, gy - 14, 18, 14, '#3a2e22'); fillRect(ctx, x - 9, gy - 14, 18, 2, '#4a3a2a');
+  fillRect(ctx, x - 1, gy - 15, 3, 1, '#222');
+  fillRect(ctx, x - 3, gy - 24, 7, 9, '#2a2a26');
+  const fl = 0.85 + 0.15 * Math.sin(performance.now() / 90);
+  ctx.globalAlpha = fl; fillRect(ctx, x - 2, gy - 23, 5, 7, '#ffcc66'); fillRect(ctx, x - 1, gy - 21, 3, 4, '#fff2c0'); ctx.globalAlpha = 1;
+  fillRect(ctx, x - 3, gy - 26, 7, 2, '#1e1e1a'); fillRect(ctx, x - 1, gy - 29, 3, 3, '#1e1e1a');
 }
 
 /** E near a trader: open the conversation. Returns true if it did. */
@@ -212,6 +225,7 @@ function _aldoTalk(gs, t, st, first) {
   const restockIn = Math.max(0, st.nextRestock - gs.day);
   root.choices = [
     { label: 'Let\'s trade.', action: g => { openTrade(g, 'church'); return null; } },
+    ...jobChoices(gs, 'church', root),
     _haggleChoice(gs, 'church', [
       '"You argue like a man who has buried things." Aldo sighs and crosses out a figure in his ledger. "For today. Don\'t tell the others."',
       '"Charity is in the next building, and it is closed." He doesn\'t look up. "My prices are my prices."' ]),
@@ -249,6 +263,7 @@ function _veraTalk(gs, t, st, first) {
   };
   root.choices = [
     { label: 'Let\'s trade.', action: g => { openTrade(g, 'city'); return null; } },
+    ...jobChoices(gs, 'city', root),
     _haggleChoice(gs, 'city', [
       'Vera studies you for a long moment, then laughs. "Fine. You\'ve got nerve, and nerve is rare. Fifteen off, today only."',
       '"No." She doesn\'t even blink. "Ask again tomorrow and the answer will still be no."' ]),

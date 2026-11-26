@@ -459,7 +459,8 @@ function drawShelterCharacters(ctx, gs) {
   let _bedSlot = 0;
 
   // ── Parent ──────────────────────────────────────────────────────────────────
-  if (!p.isExploring) {
+  // (not here while out exploring, or missing after collapsing out there)
+  if (!p.isExploring && !gs.parentMissing) {
     const pStandX = Math.round(p.shelterX !== undefined ? p.shelterX : 28);
     const pMoving = Math.abs((p.shelterTargetX || 0) - (p.shelterX || 0)) > 0.5;
     let drawPX = pStandX, drawPY = groundY, pPose = pMoving ? 'walk' : 'front';
@@ -1797,6 +1798,7 @@ function shelterClick(mx, my, gs) {
   for (const [id, key] of [['parent', '_parentStatBounds'], ['child', '_childStatBounds']]) {
     const b = gs[key];
     if (b && hitTest(mx, my, b.x, b.y, b.w, b.h)) {
+      if (id === 'parent' && gs.parentMissing) { notify(`${gs.parent.name} is missing. All you can do is wait.`, 'warn'); return; }
       M.selectedChar = id;
       M.activeMenu   = 'char';
       M.charPanelX   = clamp(MAIN_W - 188, 2, MAIN_W - 188);

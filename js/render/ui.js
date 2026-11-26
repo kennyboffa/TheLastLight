@@ -36,7 +36,7 @@ function drawStatsPanel(ctx, gs) {
     const hrs = Math.ceil((gs.parentMissingMinutes || 0) / 60);
     drawText(ctx, 'MISSING', x + w / 2, y + 9, '#cc3030', 10, 'center', true);
     y += 12;
-    drawText(ctx, `~${hrs}h until return`, x + w / 2, y + 8, '#663030', 8, 'center');
+    drawText(ctx, `Collapsed out there. ~${hrs}h until we know`, x + w / 2, y + 8, '#884040', 7, 'center');
     y += 12;
   } else {
     y = drawPersonStats(ctx, gs.parent, x + 8, y, w - 16);

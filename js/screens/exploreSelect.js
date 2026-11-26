@@ -258,6 +258,7 @@ function _travelBlockReason(gs, loc) {
 /** Why the parent can't leave the shelter right now, or null. */
 function setOutBlockReason(gs) {
   if (gs.parent.isExploring) return 'Already out.';
+  if (gs.parentMissing) return `${gs.parent.name} is missing.`;
   if (gs.time > LAST_DEPARTURE) return "It's past 17:00. Too late to set out today.";
   if (gs.parent.tiredness >= 70) return 'Stamina too low to go out. Rest first.';
   return null;

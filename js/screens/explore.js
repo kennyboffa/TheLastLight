@@ -511,16 +511,7 @@ function updateExplore(gs, dt) {
     notify(`${p.name} is exhausted. Head home soon.`, 'warn');
     addLog(`${p.name} is running on empty — should return home.`, 'warn');
   }
-  if (p.tiredness >= 100) {
-    // Collapsed — goes missing for 6–16 game hours before returning
-    const missingMins = randInt(360, 960);
-    gs.parentMissing        = true;
-    gs.parentMissingMinutes = missingMins;
-    notify(`${p.name} collapsed from exhaustion!`, 'danger');
-    addLog(`${p.name} collapsed in the field and went missing.`, 'danger');
-    endExploration(gs);
-    return;
-  }
+  if (p.tiredness >= 100) { parentCollapses(gs, 'in the field'); return; }
 
   // Creepy ambient FX — triggers randomly, roughly every 2-5 minutes
   es._creepyTimer = (es._creepyTimer || 0) + 1;
@@ -582,14 +573,7 @@ function updateBuildingInterior(gs, dt) {
     notify(`${p.name} is exhausted. Head home soon.`, 'warn');
     addLog(`${p.name} is running on empty — should return home.`, 'warn');
   }
-  if (p.tiredness >= 100) {
-    const missingMins = randInt(360, 960);
-    gs.parentMissing        = true;
-    gs.parentMissingMinutes = missingMins;
-    notify(`${p.name} collapsed from exhaustion!`, 'danger');
-    addLog(`${p.name} collapsed inside a building and went missing.`, 'danger');
-    endExploration(gs);
-  }
+  if (p.tiredness >= 100) parentCollapses(gs, 'inside a building');
 }
 
 // Search progress for a list of containers; moving cancels a search in progress

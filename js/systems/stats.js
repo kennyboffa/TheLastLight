@@ -26,6 +26,28 @@ function diffSuspMult(gs) {
   return 1.0;
 }
 
+/** Out on their feet: the parent collapses where they are and goes missing. */
+function parentCollapses(gs, where) {
+  const p = gs.parent;
+  gs.parentMissing        = true;
+  gs.parentMissingMinutes = randInt(360, 960);      // 6–16 game hours of not knowing
+  p.isSleeping = false; p.task = null; p.isWorking = false;
+  notify(`${p.name} collapsed from exhaustion!`, 'danger');
+  addLog(`${p.name} collapsed ${where} and went missing.`, 'danger');
+  if (typeof endExploration === 'function') endExploration(gs);
+}
+
+/** When the wait is over: a slim chance they crawl home, otherwise they're gone. */
+function missingParentChance(gs) {
+  const p = gs.parent;
+  if (gs.plotArmor) return 100;                      // story first: they always make it back
+  const hp = (p.health || 0) / (p.maxHealth || 1);
+  const pct = 12 + ((p.skills && p.skills.exploration) || 1) * 3 + hp * 15
+            - (p.bleeding ? 10 : 0) - (p.wounded ? 5 : 0);
+  return Math.round(clamp(pct, 8, 40));
+}
+function missingParentSurvives(gs) { return chance(missingParentChance(gs)); }
+
 // Called every game frame with deltaTime in real seconds
 function tickStats(gs, dt) {
   if (gs.paused || gs.screen !== 'shelter' && gs.screen !== 'explore') return;
@@ -66,6 +88,12 @@ function tickStats(gs, dt) {
     if (gs.parentMissingMinutes <= 0) {
       gs.parentMissing = false;
       const p2 = gs.parent;
+      if (!missingParentSurvives(gs)) {
+        p2.health = 0;
+        addLog(`${p2.name} never came home.`, 'danger');
+        triggerGameOver(gs, `${p2.name} collapsed out there and never came home. ${gs.child.name} waited by the hatch.`);
+        return;
+      }
       p2.tiredness = clamp(85 + randInt(0, 15), 0, 100);
       p2.hunger    = clamp(p2.hunger + randInt(20, 35), 0, 100);
       p2.thirst    = clamp(p2.thirst + randInt(25, 40), 0, 100);
@@ -185,7 +213,7 @@ function tickStats(gs, dt) {
   } else { ch._infNotifyTimer = 0; }
 
   // Child depression: rises when alone, falls when with parent
-  ch.isAlone = p.isExploring;
+  ch.isAlone = p.isExploring || !!gs.parentMissing;
   const childDeprRate = ch.isAlone ? CFG.DEPR_CHILD_ALONE_PER_HOUR : CFG.DEPR_CHILD_PARENT_PER_HOUR;
   // charisma: a steady parent keeps her spirits up
   ch.depression = clamp(ch.depression + childDeprRate * (childDeprRate > 0 ? moraleMult(p) : 1) * hrs, 0, 100);
@@ -736,7 +764,7 @@ function tickCharacterAI(gs) {
   }
 
   // Parent (only when in shelter)
-  if (!gs.parent.isExploring) autoNeeds(gs.parent);
+  if (!gs.parent.isExploring && !gs.parentMissing) autoNeeds(gs.parent);   // not while missing out there
 
   // Lily — only sleep (eating/drinking handled by autoFeedLogic)
   const ch = gs.child;

@@ -2346,21 +2346,41 @@ def crouch_frame(frame, lean=2, k=0.58, hip=None, face_top=None):
 
 
 def rummage_frame(base, mapper, torso, i):
-    """Crouched, one arm reaching down into a container and moving about."""
-    im = base.copy()
+    """Crouched, the front arm reaching down into something low and moving about.
+    The original front arm is taken out (no doubled arm), and the new one is
+    the same length as the real arm: shoulder -> elbow -> hand at knee height."""
+    a = np.array(base).copy()
+    _, lab, _, (face_top, t_top, t_bot) = _classify(base)
+    h, w = lab.shape
+    skin = [tuple(a[y, x, :3]) for y in range(h) for x in range(w) if lab[y, x] == 'skin']
+    lum = sorted(skin, key=lambda c: sum(c))
+    light, dark = lum[len(lum) * 3 // 4], lum[len(lum) // 4]
+    # remove the front arm: skin on the forward half of the torso, below the shoulders
+    for y in range(t_top + 5, min(h, t_bot + 5)):
+        cols = [x for x in range(w) if a[y, x, 3] > 60]
+        if not cols:
+            continue
+        mid = (min(cols) + max(cols)) / 2
+        for x in range(w):
+            if lab[y, x] == 'skin' and x > mid:
+                back = a[y, x - 1]
+                if back[3] > 60 and lab[y, x - 1] != 'skin':
+                    a[y, x] = back                       # torso shows where the arm was
+                else:
+                    a[y, x, 3] = 0
+    im = Image.fromarray(a, 'RGBA')
     d = ImageDraw.Draw(im)
-    a = np.array(base)
-    t_top, hip = torso
-    # front edge of the torso at chest height
-    xs = [x for x in range(64) if a[t_top + 3, x, 3] > 60]
-    sx = (max(xs) if xs else 26) - 1
-    sy = t_top + 3
-    dx, dy = [(0, 0), (1, -1), (2, 0), (1, 1)][i % 4]
-    hx, hy = sx + 5 + dx, 52 + dy
-    mx, my = (sx + hx) // 2 + 1, (sy + hy) // 2
-    d.line([(sx, sy), (mx, my)], fill=(80, 80, 80, 255), width=2)          # sleeve
-    d.line([(mx, my), (hx, hy)], fill=(255, 196, 141, 255), width=2)       # forearm
-    d.point([(hx + 1, hy), (hx + 1, hy + 1)], fill=(236, 170, 120, 255))
+    # shoulder at the front of the chest
+    row = t_top + 5
+    xs = [x for x in range(w) if a[row, x, 3] > 60]
+    sx, sy = (max(xs) if xs else 24) - 1, row
+    dx, dy = [(0, 0), (1, 0), (1, 1), (0, 1)][i % 4]
+    ex, ey = sx + 2, sy + 6                              # elbow
+    hx, hy = sx + 4 + dx, sy + 11 + dy                   # hand, down in front of the knees
+    d.line([(sx, sy), (ex, ey)], fill=light + (255,), width=2)
+    d.line([(ex, ey), (hx, hy)], fill=light + (255,), width=2)
+    d.point([(ex + 1, ey + 1), (hx + 1, hy)], fill=dark + (255,))
+    d.rectangle([hx, hy + 1, hx + 1, hy + 2], fill=dark + (255,))   # hand in the box
     return im
 
 
@@ -2445,7 +2465,9 @@ def enemy_sheets():
     def cmap(c, hxy):
         x, y = c[1](*hxy); return (int(x - cx), int(y - cy))
     ch = [cmap(cr[0], PLAYER_HAND_IDLE), cmap(cr[1], PLAYER_HAND_IDLE)] + [cmap(cr[i + 2], PLAYER_HAND_WALK[i]) for i in range(16)]
-    strip('pl_crouch', crouch + rum, ch + [None] * 4)
+    strip('pl_crouch', crouch + rum, ch + [None] * 4, walk_i=list(range(2, 18)))
+    # the player's own idle, breathing (same as everyone else)
+    strip('pl_idle', [idle.crop(ENEMY_CROP), breath.crop(ENEMY_CROP)], hands[:2], idle_i=(0, 1), walk_i=[0])
     meta['pl_crouch']['rummage'] = [18, 19, 20, 21]
     # Lily: breathing idle and a smoother step
     strip('lily', lily_frames(base), None, idle_i=(0, 1), walk_i=list(range(2, 10)))

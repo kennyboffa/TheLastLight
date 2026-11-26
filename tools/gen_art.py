@@ -2105,6 +2105,11 @@ ENEMY_OUTFITS = {
                     sleeves=True, head='beanie', hat='#5e2c2a', body='coat', coat_len=12),
     'cultist': dict(skin='#e0aa86', shirt='#8e8e84', pants='#8e8e84', hair=None, shoes='#2a2622', belt='#a23c2c',
                     sleeves=True, head='bald', body='robe', coat_len=23, accent='#a23c2c'),
+    # the player-made survivors, re-built on the animated body (look kept)
+    'survivor_1': dict(skin='#f3ba84', shirt='#680000', pants='#46442e', hair='#202020', shoes='#1f1207', belt='#2a1e14',
+                       sleeves=True, head='spiky', pattern='plaid', legs='camo'),
+    'survivor_2': dict(skin='#ffb977', shirt='#70ad4b', pants='#50789c', hair='#f9e65d', shoes='#1f1207', belt='#3a2a1a',
+                       sleeves=False, head='ponytail', hair_hi='#ffb168'),
     'chief':   dict(skin='#a8704c', shirt='#2c2c30', pants='#262628', hair='#1c1410', shoes='#141414', belt='#141414',
                     sleeves=True, head='beret', hat='#8e2424', face='beard', body='coat', coat_len=14, beard='#1c1410'),
 }
@@ -2190,6 +2195,21 @@ def dress_enemy(frame, outfit, rng):
                 out[y, x, :3] = _tone_map(px, refs['hair'], outfit['hair'] or outfit['skin'])
             else:
                 out[y, x, :3] = _tone_map(px, refs[L], outfit[L])
+    # ── cloth patterns ──────────────────────────────────────────────────────
+    if outfit.get('pattern') == 'plaid':
+        for y in range(h):
+            for x in range(w):
+                if lab[y, x] == 'shirt' or (lab[y, x] == 'skin' and sleeve[y, x] and outfit['sleeves']):
+                    if x % 3 == 0 and y % 3 == 0: out[y, x, :3] = out[y, x, :3] * 0.55
+                    elif x % 3 == 0 or y % 3 == 0: out[y, x, :3] = out[y, x, :3] * 0.75
+    if outfit.get('legs') == 'camo':
+        blot = rng.random(((h + 1) // 2, (w + 1) // 2))
+        for y in range(h):
+            for x in range(w):
+                if lab[y, x] == 'pants':
+                    v = blot[y // 2, x // 2]
+                    if v < 0.28: out[y, x, :3] = out[y, x, :3] * 0.7
+                    elif v > 0.8: out[y, x, :3] = np.clip(out[y, x, :3] * 1.18 + np.array([6, 8, 0]), 0, 255)
     # ── body gear ───────────────────────────────────────────────────────────
     body = outfit.get('body')
     if body == 'vest':
@@ -2252,6 +2272,18 @@ def dress_enemy(frame, outfit, rng):
             for x in range(hx0 - 1, hx1 + 2 - (1 if y == top - 1 else 0)):
                 put(x, y, outfit['hat'], 0.8 if y == top else None)
         put(hx0 - 2, top, outfit['hat'], 0.8)
+    elif head == 'spiky':
+        # short black hair standing up in tufts
+        for x in range(hx0, hx1 + 1):
+            if (x - hx0) % 2 == 0: put(x, top - 1, outfit['hair'])
+            if (x - hx0) % 4 == 1: put(x, top - 2, outfit['hair'], 0.8)
+    elif head == 'ponytail':
+        # blonde hair, fuller on top, a tail swinging down the back
+        for x in range(hx0, hx1 + 1):
+            put(x, top - 1, outfit['hair'])
+        for i, (dx, dy) in enumerate([(-1, 1), (-2, 2), (-2, 3), (-3, 4), (-3, 5), (-3, 6), (-2, 7)]):
+            put(hx0 + dx, top + dy, outfit['hair'] if i % 3 else outfit.get('hair_hi', outfit['hair']))
+            put(hx0 + dx + 1, top + dy, outfit['hair'], 0.85)
     elif head == 'bald':
         put(hx0 + 2, top + 1, outfit['accent'], 1.0)                    # painted mark
     face = outfit.get('face')
@@ -2276,6 +2308,107 @@ def _user_texture(img, rng):
     return Image.fromarray(a.astype(np.uint8), 'RGBA')
 
 
+
+# ── Crouching (sneaking / searching low) built from the player's own frames ──
+
+def crouch_frame(frame, lean=2, k=0.58, hip=None, face_top=None):
+    """Squash the legs into bent knees, lower and lean the upper body forward.
+    Returns (image, mapper) where mapper maps an (x, y) of the source frame."""
+    a = np.array(frame)
+    _, lab, _, (ft, torso_top, torso_bot) = _classify(frame)
+    hip = hip or torso_bot + 1          # one hip line for every frame keeps the crouch steady
+    face_top = face_top or ft
+    feet = 55
+    L = feet - hip
+    L2 = max(6, round(L * k))
+    drop = L - L2
+    out = np.zeros_like(a)
+    # legs: bottom-anchored, sampled down, knees pushed forward
+    for r in range(L2 + 1):
+        sy = hip + round(r * L / L2)
+        dy = hip + drop + r
+        knee = round(3 * np.sin(np.pi * r / L2))
+        row = a[sy]
+        for x in range(64):
+            if row[x, 3] > 0 and 0 <= x + knee < 64:
+                out[dy, x + knee] = row[x]
+    # upper body: lowered, leaning forward more towards the head
+    for y in range(0, hip):
+        dx = round(lean * (hip - y) / max(1, hip - face_top))
+        for x in range(64):
+            if a[y, x, 3] > 0 and 0 <= x + dx < 64 and y + drop < 64:
+                out[y + drop, x + dx] = a[y, x]
+    def mapper(x, y):
+        if y < hip:
+            return (x + round(lean * (hip - y) / max(1, hip - face_top)), y + drop)
+        return (x, hip + drop + round((y - hip) * L2 / L))
+    return Image.fromarray(out, 'RGBA'), mapper, (torso_top + drop, hip + drop)
+
+
+def rummage_frame(base, mapper, torso, i):
+    """Crouched, one arm reaching down into a container and moving about."""
+    im = base.copy()
+    d = ImageDraw.Draw(im)
+    a = np.array(base)
+    t_top, hip = torso
+    # front edge of the torso at chest height
+    xs = [x for x in range(64) if a[t_top + 3, x, 3] > 60]
+    sx = (max(xs) if xs else 26) - 1
+    sy = t_top + 3
+    dx, dy = [(0, 0), (1, -1), (2, 0), (1, 1)][i % 4]
+    hx, hy = sx + 5 + dx, 52 + dy
+    mx, my = (sx + hx) // 2 + 1, (sy + hy) // 2
+    d.line([(sx, sy), (mx, my)], fill=(80, 80, 80, 255), width=2)          # sleeve
+    d.line([(mx, my), (hx, hy)], fill=(255, 196, 141, 255), width=2)       # forearm
+    d.point([(hx + 1, hy), (hx + 1, hy + 1)], fill=(236, 170, 120, 255))
+    return im
+
+
+def lily_frames(base):
+    idle = Image.open(os.path.join(base, 'lily_idle.png')).convert('RGBA')
+    sheet = Image.open(os.path.join(base, 'lily_walking.png')).convert('RGBA')
+    walk = [sheet.crop(((i % 2) * 64, (i // 2) * 64, (i % 2) * 64 + 64, (i // 2) * 64 + 64)) for i in range(4)]
+    def bob(im, n):
+        out = Image.new('RGBA', (64, 64))
+        out.paste(im.crop((0, 0, 64, 50)), (0, n)); out.paste(im.crop((0, 50, 64, 64)), (0, 50))
+        return out
+    breath = bob(idle, 1)
+    # 8-step walk: each drawn step held two ticks, dipping on the planted foot
+    frames = [idle, breath] + [walk[0], bob(walk[0], 1), walk[1], walk[1], walk[2], bob(walk[2], 1), walk[3], walk[3]]
+    crop = (22, 26, 42, 64)
+    return [f.crop(crop) for f in frames]
+
+
+def pet_frames(base):
+    """The player's dog: breathing, a wagging tail, and a 4-step trot."""
+    src = np.array(Image.open(os.path.join(base, 'dog.png')).convert('RGBA'))
+    H, W = src.shape[:2]
+    legs = [(5, 6), (8, 9), (18, 19), (21, 22)]
+    def make(breath=0, tail=0, swing=None):
+        out = np.zeros((H + 2, W + 2, 4), dtype=src.dtype)   # 1px margin all round
+        for y in range(H):
+            for x in range(W):
+                if src[y, x, 3] == 0:
+                    continue
+                ny, nx = y + 1, x + 1
+                if x <= 4 and y <= 7:                      # tail
+                    ny += tail if y <= 4 else (tail // 2)
+                elif y >= 15 and swing is not None:        # legs swing
+                    for li, (l0, l1) in enumerate(legs):
+                        if l0 <= x <= l1:
+                            k = swing[li] * (y - 14) / 4
+                            nx += round(k)
+                elif y < 14:
+                    ny += breath
+                if 0 <= ny < H + 2 and 0 <= nx < W + 2:
+                    out[ny, nx] = src[y, x]
+        return Image.fromarray(out, 'RGBA')
+    frames = [make(0, 0), make(1, -1), make(0, 1), make(1, -1)]
+    trot = [(2, -2, -2, 2), (1, -1, -1, 1), (-2, 2, 2, -2), (-1, 1, 1, -1)]
+    frames += [make(i % 2, [-1, 0, 1, 0][i], swing=trot[i]) for i in range(4)]
+    return frames
+
+
 def enemy_sheets():
     """Write Assets/en_*.png strips and js/data/enemy_art.js (frame lists + hands)."""
     import json
@@ -2298,12 +2431,26 @@ def enemy_sheets():
             sheet.paste(im, (i * fw, 0))
         save(sheet, f'en_{name}.png')
         meta[name] = {'fw': fw, 'fh': fh, 'n': len(imgs), 'idle': list(idle_i),
-                      'walk': list(walk_i or range(2, len(imgs))), 'hand': [list(h) for h in hand] if hand else [None] * len(imgs)}
+                      'walk': list(walk_i or range(2, len(imgs))), 'hand': [list(h) if h else None for h in hand] if hand else [None] * len(imgs)}
 
     for name, outfit in ENEMY_OUTFITS.items():
         rng = np.random.default_rng(abs(hash(name)) % 10000)
         frames = [dress_enemy(f, outfit, np.random.default_rng(i + 7)) for i, f in enumerate([idle, breath] + walk)]
         strip(name, frames, hands)
+    # the player crouching: sneak idle (2), sneak walk (16), rummaging in something low (4)
+    _, _, _, (ift, _, itb) = _classify(idle)
+    cr = [crouch_frame(f, hip=itb + 1, face_top=ift) for f in [idle, breath] + walk]
+    crouch = [c[0].crop(ENEMY_CROP) for c in cr]
+    rum = [rummage_frame(cr[0][0], cr[0][1], cr[0][2], i).crop(ENEMY_CROP) for i in range(4)]
+    def cmap(c, hxy):
+        x, y = c[1](*hxy); return (int(x - cx), int(y - cy))
+    ch = [cmap(cr[0], PLAYER_HAND_IDLE), cmap(cr[1], PLAYER_HAND_IDLE)] + [cmap(cr[i + 2], PLAYER_HAND_WALK[i]) for i in range(16)]
+    strip('pl_crouch', crouch + rum, ch + [None] * 4)
+    meta['pl_crouch']['rummage'] = [18, 19, 20, 21]
+    # Lily: breathing idle and a smoother step
+    strip('lily', lily_frames(base), None, idle_i=(0, 1), walk_i=list(range(2, 10)))
+    # the dog: breathing + wagging, and a trot
+    strip('pet', pet_frames(base), None, idle_i=(0, 1, 2, 3), walk_i=[4, 5, 6, 7])
     rng = np.random.default_rng(5)
     strip('robot', [_user_texture(robot_frame(i)[0], np.random.default_rng(i)) for i in range(6)])
     strip('drone', [_user_texture(drone_frame(i)[0], np.random.default_rng(i)) for i in range(3)], idle_i=(0, 1, 2), walk_i=[0, 1, 2])

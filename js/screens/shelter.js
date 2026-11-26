@@ -516,7 +516,7 @@ function drawShelterCharacters(ctx, gs) {
 
   // ── Dog ─────────────────────────────────────────────────────────────────────
   if (gs.dog && gs.dog.alive) {
-    drawDog(ctx, Math.round(cpx + 22), groundY, 2, 1, ch.animFrame);
+    drawDog(ctx, Math.round((chPose === 'sleep' ? cStandX : drawCX) + 22), groundY, 2, ch.facing || 1, ch.animFrame, chPose === 'walk');
   }
 
   // ── Survivors ───────────────────────────────────────────────────────────────

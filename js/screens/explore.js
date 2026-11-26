@@ -1261,10 +1261,9 @@ function renderOutdoor(ctx, gs, es) {
   }
 
   // Bodies, enemies, player (incl. combat reactions)
-  const _outSearching = es.containers.some(c => c.searching);
   drawExploreActors(ctx, gs, es, {
     px: es.px, facing: es.facing, animFrame: es.animFrame,
-    pose: Math.abs(es.velX) > 0.1 ? 'run' : (_outSearching ? 'back' : 'front'),
+    pose: playerPose(gs, es.containers, Math.abs(es.velX) > 0.1),
     encounters: es.encounters, patrolAmp: 35, where: 'out',
   });
 
@@ -1475,10 +1474,9 @@ function renderBuildingInterior(ctx, gs, es) {
   }
 
   // Bodies, enemies, player
-  const searching = area.containers.some(c => c.searching);
   drawExploreActors(ctx, gs, es, {
     px: bi.px, facing: bi.facing, animFrame: bi.animFrame || 0,
-    pose: Math.abs(bi.velX) > 0.1 ? 'run' : (searching ? 'back' : 'front'),
+    pose: playerPose(gs, area.containers, Math.abs(bi.velX) > 0.1),
     encounters: area.encounters || [], patrolAmp: 18, where: areaKey(es),
   });
 
@@ -1530,6 +1528,18 @@ function _drawPadlock(ctx, x, y) {
   ctx.strokeStyle = '#b89a48'; ctx.lineWidth = 1;
   ctx.strokeRect(x - 1.5, y - 3.5, 4, 4);
   ctx.restore();
+}
+
+// How the player stands: crouched when sneaking or rummaging in something low,
+// reaching into tall furniture with their back to you, otherwise upright.
+const LOW_CONTAINERS = ['box', 'crate', 'chest', 'bag', 'barrel', 'tent', 'body'];
+function playerPose(gs, containers, moving) {
+  if (gs.inCombat) return 'front';
+  const sneaking = !!gs.parent.sneaking;
+  if (moving) return sneaking ? 'sneak' : 'run';
+  const c = (containers || []).find(k => k.searching);
+  if (c) return (!c.furnitureKey && LOW_CONTAINERS.includes(c.type)) ? 'rummage' : 'back';
+  return sneaking ? 'crouch' : 'front';
 }
 
 // ── HUD ───────────────────────────────────────────────────────────────────────
@@ -2530,8 +2540,7 @@ function _drawCompanion(ctx, gs, px, facing, animFrame, moving) {
     const st = exploreState && exploreState._comp;
     const cx = st ? st.x : px - facing * 22;
     const f = st ? st.facing : facing;
-    const bob = st && st.moving ? Math.round(Math.abs(Math.sin(Date.now() / 90))) : 0;
-    if (!drawCharSprite(ctx, key, cx, PLAYER_FOOT - bob, 2, f, 48, wpn ? { id: wpn, t0: 0 } : null)) {
+    if (!drawCharSprite(ctx, key, cx, PLAYER_FOOT, 2, f, 48, wpn ? { id: wpn, t0: 0 } : null, !!(st && st.moving))) {
       drawSurvivor(ctx, cx, PLAYER_FOOT, 2, f, animFrame, compIdx, st && st.moving ? 'side' : 'front');
     }
     if (st && st.mode === 'search') drawSearchBar(ctx, cx, PLAYER_FOOT - 52, 1 - st.t / st.dur);

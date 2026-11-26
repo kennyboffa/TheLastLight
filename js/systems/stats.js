@@ -34,8 +34,10 @@ function tickStats(gs, dt) {
   const hrs  = mins / 60;
 
   // ── Advance time ────────────────────────────────────────────────────────────
+  if (gs.dayFade && gs.dayFade.active) return;        // the night is already falling
   gs.time += mins;
   if (gs.time >= CFG.DAY_END) {
+    gs.time = CFG.DAY_END;
     if (gs.screen === 'explore') {
       // Late return: player didn't make it back before nightfall
       const pName = gs.parent.name;
@@ -48,8 +50,9 @@ function tickStats(gs, dt) {
         ? `\nAt least ${gs.child.name} was comforted by ${comfortName}.`
         : '';
       gs.dayFade.message  = `${pName} didn't return before nightfall.\n${gs.child.name} spent the night alone and terrified.${comfortLine}`;
-      endExploration(gs);
-      notify(`${pName} didn't return in time — ${gs.child.name} is scared!`, 'danger');
+      // fade out over the area first; the move home happens once it's black
+      gs.dayFade.endExplore = true;
+      notify(`Night has fallen — ${pName} didn't make it back!`, 'danger');
     }
     startDayTransition(gs);
     return;

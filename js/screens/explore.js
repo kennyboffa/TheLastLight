@@ -428,6 +428,7 @@ function startExploration(gs, loc, arrived) {
 
 function updateExplore(gs, dt) {
   if (!exploreState) return;
+  if (gs.dayFade && gs.dayFade.active) { gs.keys = {}; return; }   // night falling: everything stops
   _tickFlashlight(gs, dt);
   _exploreHints(gs);
   _companionField(gs, dt);

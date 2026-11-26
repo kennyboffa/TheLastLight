@@ -440,6 +440,12 @@ function drawDayTransition(ctx, gs) {
     if (df.alpha >= 1) {
       df.phase = 'text';
       df.timer = 0;
+      // stranded out at nightfall: leave the area now that the screen is dark
+      if (df.endExplore) {
+        df.endExplore = false;
+        if (typeof endExploration === 'function') endExploration(gs);
+        notify(`${gs.parent.name} didn't return in time — ${gs.child.name} is scared!`, 'danger');
+      }
       advanceDay(gs);
       // Autosave the finished morning: overnight hunger, healing and wake-ups included,
       // so retrying after a death really starts from this morning
